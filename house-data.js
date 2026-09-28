@@ -40,6 +40,12 @@ window.HOUSE_PIECES = [
     notes: 'JYSK ADSLEV with armrests, cream/beige fabric with vertical channel stitching, natural oak-colour legs with black caps. 59 x 59 x 82 (JYSK listing). 4 owned (listed for sale in Dec 2024, kept).'
   },
   {
+    id: 'rivery-nightstand', type: 'cabinet', style: 'rivery', name: 'Rivery bedside chest',
+    w: 46, d: 35, h: 52, color: '#F4F2EC', status: 'own',
+    link: 'https://www.home24.de/produkt/nachtkommode-rivery-kiefer-massiv',
+    notes: 'home24 (Maison Belfort), Sep 2024, 2 bought (€109.98). Solid pine, white, honey pine top, 2 drawers, brass-coloured handles. 46 x 35 x 52.'
+  },
+  {
     id: 'q8-desk', type: 'desk', style: 'standing', name: 'FlexiSpot Q8 standing desk',
     w: 140, d: 70, h: 75, color: '#D2A56C', status: 'own',
     link: 'https://www.flexispot.de/bambus-schreibtisch-q8.html',
@@ -824,70 +830,6 @@ window.HOUSE_ROOMS = [
     ]
   },
   {
-    "id": "attic",
-    "rev": 6,
-    "resize": true,
-    "ensure": true,
-    "name": "Storage room",
-    "match": [
-      "attic",
-      "dachzimmer",
-      "estrich",
-      "loft",
-      "abstellraum",
-      "attic room"
-    ],
-    "level": "Attic",
-    "width": 691,
-    "length": 207,
-    "height": 225,
-    "floor": "#E4D3B5",
-    "floorFinish": "wood",
-    "wallFinish": {
-      "n": "panelling",
-      "e": "panelling",
-      "s": "panelling",
-      "w": "panelling"
-    },
-    "notes": "Size from the architect plan (Haus 53), BF 17.88 m². 17.7 m² (part under 1.5 m headroom). Sloped timber roof, open stair up to a gallery; the stair bay to the north is not drawn.",
-    "openings": [
-      {
-        "type": "door",
-        "wall": "n",
-        "offset": 320,
-        "width": 178,
-        "height": 200,
-        "leaf": false
-      }
-    ],
-    "tourPhotos": [
-      {
-        "src": "photos/tour/11_attic_view1.jpg",
-        "label": "Attic room, looking south-east (tour photo)"
-      },
-      {
-        "src": "photos/tour/11_attic_view2.jpg",
-        "label": "Attic room, looking south (tour photo)"
-      },
-      {
-        "src": "photos/tour/11_attic_view3.jpg",
-        "label": "Attic room, looking south-west (tour photo)"
-      },
-      {
-        "src": "photos/tour/11_attic_view4.jpg",
-        "label": "Attic room, looking north-west (tour photo)"
-      },
-      {
-        "src": "photos/tour/11_attic_view5.jpg",
-        "label": "Attic room, looking north (tour photo)"
-      },
-      {
-        "src": "photos/tour/11_attic_view6.jpg",
-        "label": "Attic room, looking north-east (tour photo)"
-      }
-    ]
-  },
-  {
     "id": "ensuite",
     "rev": 6,
     "resize": true,
@@ -921,40 +863,16 @@ window.HOUSE_ROOMS = [
         "radiator": false
       }
     ]
-  },
-  {
-    "id": "loft",
-    "rev": 6,
-    "resize": true,
-    "ensure": true,
-    "name": "Loft (Estrich)",
-    "match": [
-      "estrich",
-      "loft",
-      "dachboden"
-    ],
-    "level": "Loft",
-    "width": 1040,
-    "length": 290,
-    "height": 180,
-    "floor": "#C8A77E",
-    "floorFinish": "wood",
-    "wallFinish": {
-      "n": "panelling",
-      "e": "panelling",
-      "s": "panelling",
-      "w": "panelling"
-    },
-    "notes": "Size from the architect plan (Haus 53), BF 30.16 m². Unheated roof space under the ridge, reached by a ladder stair; low sloped ceiling.",
-    "openings": []
   }
 ];
 
 // Pieces to place once in a room (matched by name, else created from HOUSE_ROOMS). x, y = centre in cm; rot 270 = back against the left wall.
 // Starter rooms taken out of the house; removed from browsers that already have them
-window.HOUSE_RETIRED_ROOMS = ['annexoffice', 'basementbath', 'commonroom'];
+window.HOUSE_RETIRED_ROOMS = ['annexoffice', 'basementbath', 'commonroom', 'attic', 'loft'];
 
 window.HOUSE_PLACEMENTS = [
+  { id: 'bed-nightstand-l', room: 'bedroom', catalogId: 'rivery-nightstand', x: 26, y: 368, rot: 180 },
+  { id: 'bed-nightstand-r', room: 'bedroom', catalogId: 'rivery-nightstand', x: 280, y: 368, rot: 180 },
   // Basement, attic en-suite and loft, from the architect plans
   { id: 'ug-stairs', builtin: true, room: 'laundry', x: 320, y: 60, item: { type: 'stairs', name: 'Stairs up', w: 75, d: 110, h: 210, color: '#9A6B3F' } },
   { id: 'ug-washer', room: 'laundry', x: 60, y: 196, rot: 270, item: { type: 'appliance', name: 'Washing machine', w: 60, d: 60, h: 85, color: '#F2F2F0' } },
@@ -963,7 +881,6 @@ window.HOUSE_PLACEMENTS = [
   { id: 'en-bath', builtin: true, room: 'ensuite', x: 237, y: 38, item: { type: 'bath', name: 'Bathtub', w: 175, d: 72, h: 58, color: '#FAFAF8' } },
   { id: 'en-wc', builtin: true, room: 'ensuite', x: 28, y: 180, rot: 270, item: { type: 'toilet', name: 'WC', w: 37, d: 54, h: 42, color: '#FAFAF8' } },
   { id: 'bed-basin', builtin: true, room: 'bedroom', x: 24, y: 57, rot: 270, item: { type: 'vanity', name: 'Basin', w: 60, d: 45, h: 85, color: '#1E1E1E' } },
-  { id: 'loft-stairs', builtin: true, room: 'loft', x: 515, y: 235, item: { type: 'stairs', name: 'Ladder stair down', w: 60, d: 100, h: 180, color: '#C8A77E' } },
   // rev 3: rooms measured from the tour; `from` is where the piece was put before, so only untouched pieces move
   { id: 'office-desk', rev: 4, from: [{ x: 116, y: 317 }, { x: 190, y: 38 }], room: 'office', catalogId: 'q8-desk', x: 126, y: 308, rot: 180 },
   { id: 'office-billy', rev: 3, from: { x: 16, y: 190 }, room: 'office', catalogId: 'billy-hoegadal', x: 16, y: 150, rot: 270 },

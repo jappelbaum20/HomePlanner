@@ -467,8 +467,22 @@
     for (let i = 0; i < n; i++) { const y = legH + 1 + dh * (i + 0.5); part(g, steel, half, dh - 1, 0.8, w / 4 + 0.5, y, d / 2 - 1); part(g, pine, 14, 1.8, 2, w / 4 + 0.5, y + dh * 0.28, d / 2 + 0.6, 0.5); }
     part(g, pine, w / 2 - 6, 1.8, d - 10, -w / 4, legH + bodyH * 0.5, -3); // inner pine shelf behind the door
   };
+  // Rivery bedside chest: painted pine body on a low plinth, honey pine top, two drawers with brass handles
+  B.rivery = (g, w, d, h, c) => {
+    const body = mat(c, { rough: 0.6 }), top = wood('#C8923E', w, d), brass = mat('#B89559', { rough: 0.3, metal: 0.9 }), plinth = 5, topT = 2.5, bh = h - plinth - topT;
+    part(g, body, w - 3, plinth, d - 3, 0, plinth / 2, -0.5);
+    part(g, body, w, bh, d - 1, 0, plinth + bh / 2, -0.5, 0.4);
+    part(g, top, w + 1.5, topT, d + 1, 0, h - topT / 2, 0, 0.4);
+    const dh = (bh - 2) / 2;
+    for (let i = 0; i < 2; i++) {
+      const y = plinth + 1 + dh * (i + 0.5);
+      part(g, body, w - 3, dh - 1, 1.2, 0, y, d / 2 - 0.2, 0.3);
+      part(g, brass, 9, 1.2, 1.2, 0, y, d / 2 + 1.4, 0.4); cyl(g, brass, 0.5, 0.5, 1.6, -4, y, d / 2 + 0.8, 8).rotation.x = Math.PI / 2; cyl(g, brass, 0.5, 0.5, 1.6, 4, y, d / 2 + 0.8, 8).rotation.x = Math.PI / 2;
+    }
+  };
   B.cabinet = (g, w, d, h, c, it) => {
     if (it && it.style === 'fjallbo') return B.fjallbo(g, w, d, h, c);
+    if (it && it.style === 'rivery') return B.rivery(g, w, d, h, c);
     const m = wood(c, w, h), legH = h > 60 ? 10 : 6, bodyH = h - legH;
     legs(g, METAL_DARK(), w, d, legH, 5, 2.5, true);
     part(g, m, w, bodyH, d, 0, legH + bodyH / 2, 0, 1);
