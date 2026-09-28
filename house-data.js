@@ -28,10 +28,10 @@ window.HOUSE_PIECES = [
     notes: 'XXXLutz Ti\u2019me upholstered bed, 180 x 200, beige corduroy. Wide flat upholstered rim standing on the floor, lift-up slatted base with storage box, headboard of two large square cushions. Outer size 240 x 247 x 85, frame height 32, max. load 250 kg (XXXLutz product details).'
   },
   {
-    id: 'bed-livetastic', type: 'bed', style: 'metalbed', name: 'Livetastic bed 180 x 200 (light brown)',
-    w: 190, d: 212, h: 105, color: '#A57F5C', status: 'considering',
+    id: 'bed-livetastic', rev: 2, type: 'bed', style: 'cloe', name: 'Livetastic Cloe storage bed 180 x 200 (light brown cord)',
+    w: 222, d: 243, h: 73, color: '#A99682', status: 'considering',
     link: 'https://www.xxxlutz.ch/p/livetastic-polsterbett-200-200-cm-hellbraun-001073004152',
-    notes: 'XXXLutz Livetastic upholstered bed in light brown on metal feet. The link is the 200 x 200 version; shown as 180 x 200. XXXLutz blocks automated access, so the outer size (190 x 212 x 105) and look are estimates: check the listing.'
+    notes: 'XXXLutz Livetastic Cloe upholstered bed, 180 x 200, light brown wide-rib corduroy (other fabrics available). Wide flat upholstered rim standing on the floor, lift-up slatted base with storage box, low headboard of two flat panels. Outer size 222 x 243 x 73, frame height 39, max. load 250 kg (XXXLutz product details). The link is the 200 x 200 listing; choose 180 x 200 when ordering.'
   },
   {
     id: 'bed-zen', type: 'bed', style: 'zen', name: 'ZEN bed 180 x 200 with side tables (ash)',

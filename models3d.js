@@ -491,14 +491,16 @@
   };
   // Ti'me storage bed: chunky beige cord, a wide flat rim standing straight on the floor (no visible feet) round a
   // lift-up slatted base with storage box, and a deep headboard block topped by two big square cushions
-  B.boxbed = (g, w, d, h, c) => {
-    const f = cord(c, w, d), fd = cord(shade(c, 0.94), w, d), frameH = 32, headD = 22, rim = Math.max(18, (w - 190) / 2), z0 = -d / 2;
-    // headboard: a base block the full width, two cushions side by side above it, a thin piped seam between them
+  // o: frameH (rim height), headD (headboard depth), cushion (radius of the headboard cushions' edges)
+  B.boxbed = (g, w, d, h, c, o) => {
+    o = o || {};
+    const f = cord(c, w, d), fd = cord(shade(c, 0.94), w, d), frameH = o.frameH || 32, headD = o.headD || 22, rim = Math.max(18, (w - 190) / 2), z0 = -d / 2;
+    // headboard: a base block the full width, two cushions side by side above it
     const blockH = frameH + 4;
     part(g, fd, w, blockH, headD, 0, blockH / 2, z0 + headD / 2, 2.5);
     const cw = (w - 4) / 2, ch = h - blockH + 10;
     for (const sx of [-1, 1]) {
-      part(g, f, cw - 1, ch, headD - 4, sx * (cw / 2 + 0.5), blockH - 10 + ch / 2, z0 + headD / 2 + 1, 5); // square cushion
+      part(g, f, cw - 1, ch, headD - 4, sx * (cw / 2 + 0.5), blockH - 10 + ch / 2, z0 + headD / 2 + 1, o.cushion || 5); // square cushion
     }
     // frame: side rails and foot rail as thick upholstered slabs, flush to the floor
     const fl = d - headD, fz = z0 + headD + fl / 2;
@@ -507,15 +509,6 @@
     part(g, mat('#2A2826', { rough: 0.8 }), w - 2 * rim, frameH - 8, fl - rim, 0, (frameH - 8) / 2, z0 + headD + (fl - rim) / 2); // storage box
     part(g, wood('#D9BC8C', w, d), w - 2 * rim - 2, 2, fl - rim - 2, 0, frameH - 7, z0 + headD + (fl - rim) / 2, 0.3); // slats
     bedding(g, w - 2 * rim - 4, z0 + headD + 1, d / 2 - rim - 1, frameH - 12, 20, c);
-  };
-  // Upholstered bed on slim black metal legs with a softly padded, piped headboard (Livetastic)
-  B.metalbed = (g, w, d, h, c) => {
-    const f = fabric(c, w, d), fd = fabric(shade(c, 0.9), w, d), legH = 12, frameH = 34, headD = 10, metal = METAL_DARK();
-    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) part(g, metal, 2.5, legH, 2.5, sx * (w / 2 - 8), legH / 2, sz * (d / 2 - 8) + (sz < 0 ? headD : 0));
-    part(g, fd, w, frameH - legH, d - headD, 0, legH + (frameH - legH) / 2, headD / 2, 3);
-    part(g, fd, w, h - legH + 4, headD, 0, legH - 4 + (h - legH + 4) / 2, -d / 2 + headD / 2, headD * 0.45);
-    pillow(g, f, w - 10, 6, h - frameH - 6, 0, frameH + (h - frameH) / 2, -d / 2 + headD + 1, 1.8).rotation.x = Math.PI / 2;
-    bedding(g, w - 14, -d / 2 + headD + 4, d / 2 - 5, frameH - 8, 24, c);
   };
   // ZEN: low ash platform on short legs, wide headboard with bouclé panels framed in wood, two flat side tables
   B.zen = (g, w, d, h, c) => {
@@ -539,7 +532,7 @@
     const st = it && it.style;
     if (st === 'vinay') return B.vinay(g, w, d, h, c);
     if (st === 'boxbed') return B.boxbed(g, w, d, h, c);
-    if (st === 'metalbed') return B.metalbed(g, w, d, h, c);
+    if (st === 'cloe') return B.boxbed(g, w, d, h, c, { frameH: 39, headD: 16, cushion: 2.5 }); // Livetastic Cloe: same build, lower and squarer
     if (st === 'zen') return B.zen(g, w, d, h, c);
     const top = h > 80 ? Math.min(55, h * 0.48) : h, headH = h > 80 ? h : h + 45;
     const frame = fabric(shade(c, 0.92), w, d), feetM = wood('#6B4A2E', 5, 15), feetH = Math.min(15, top * 0.3);
