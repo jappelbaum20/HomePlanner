@@ -179,7 +179,8 @@
     if (type === 'cornersofa') o.side = it.side === 'left' ? 'left' : 'right';
     if (type === 'shelf') { o.doors = SHELF_DOORS[it.doors] ? it.doors : 'none'; o.books = it.books !== false; }
     if (it.style) o.style = String(it.style);
-    if (it.fixed) o.fixed = true; // built into the house: cannot be moved, resized, rotated or removed
+    if (it.fixed) o.fixed = true;
+    if (it.seedPl) o.seedPl = String(it.seedPl); // which house-data placement made it // built into the house: cannot be moved, resized, rotated or removed
     if (type === 'art') { o.frame = ART_FRAMES[it.frame] ? it.frame : 'black'; o.mat = it.mat !== false && !['none', 'oakpanel'].includes(o.frame); if (it.image) o.image = String(it.image); }
     if (isLight(type)) { o.kelvin = KELVIN[it.kelvin] ? Number(it.kelvin) : 2700; o.power = POWER[it.power] ? it.power : 'medium'; }
     return o;
@@ -283,8 +284,19 @@
     });
     // Placements Claude adds to house-data.js are made once. A placement with a `rev` and `from` moves the piece
     // it made earlier, but only if it is still where it was put (anything you moved stays put).
+    // Built-in fittings (builtin: true) always match house-data.js: same model, size, position and lock,
+    // whatever the saved copy says. Matched by the placement that made them, else by type in that room.
+    (window.HOUSE_PLACEMENTS || []).filter((pl) => pl.builtin).forEach((pl) => {
+      const r = findRoom(pl.room); if (!r) return;
+      const spec = Object.assign({}, pl.item || {}, pl.extra || {}, { x: pl.x, y: pl.y, rot: pl.rot || 0, fixed: true, seedPl: pl.id });
+      let it = r.items.find((i) => i.seedPl === pl.id);
+      if (!it) it = r.items.find((i) => !i.seedPl && i.type === spec.type && (!spec.style || !i.style || i.style === spec.style) && !i.catalogId);
+      const n = normItem(Object.assign({}, spec, { id: it ? it.id : undefined }), r);
+      if (it) r.items[r.items.indexOf(it)] = n; else r.items.push(n);
+      if (!o.placedSeeds.includes(pl.id)) o.placedSeeds.push(pl.id);
+    });
     (window.HOUSE_PLACEMENTS || []).forEach((pl) => {
-      if (!pl.id) return;
+      if (!pl.id || pl.builtin) return;
       const mark = pl.rev ? pl.id + '@' + pl.rev : null;
       if (o.placedSeeds.includes(pl.id)) {
         if (!mark || o.placedSeeds.includes(mark)) return;
