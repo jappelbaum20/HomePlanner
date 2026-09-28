@@ -203,7 +203,9 @@
         offset: num(p.offset, 0, 3000, 20), width: num(p.width, 20, 1000, type === 'door' ? 90 : 120),
         height: num(p.height, 20, 800, type === 'door' ? 205 : 130), sill: type === 'door' ? 0 : num(p.sill, 0, 800, 90),
         color: hex(p.color, '#F7F6F2'), radiator: type === 'window' && (p.radiator != null ? !!p.radiator : num(p.sill, 0, 800, 90) >= 50),
-        leaf: type === 'door' ? p.leaf !== false : false };
+        leaf: type === 'door' ? p.leaf !== false : false,
+        swing: p.swing === 'out' ? 'out' : 'in', // door opens into this room ('in') or into the room next door ('out')
+        niche: type === 'window' ? num(p.niche, 0, 100, 0) : 0, nicheShelf: type === 'window' && !!p.nicheShelf };
     });
     o.items = (r.items || []).map((it) => normItem(it, o));
     return o;
@@ -348,6 +350,20 @@
     const hw = (it.w * c + it.d * s) / 2, hd = (it.w * s + it.d * c) / 2;
     return { x0: it.x - hw, x1: it.x + hw, y0: it.y - hd, y1: it.y + hd, z0: it.elev || 0, z1: (it.elev || 0) + it.h };
   }
+  // Area a door sweeps when it opens into the room (a square of its width against the wall)
+  function doorZones(r) {
+    return r.openings.filter((o) => o.type === 'door' && o.leaf !== false && o.swing !== 'out').map((o) => {
+      const a = o.offset, b = o.offset + o.width, w = o.width;
+      return { n: { x0: a, x1: b, y0: 0, y1: w }, s: { x0: a, x1: b, y0: r.length - w, y1: r.length }, w: { x0: 0, x1: w, y0: a, y1: b }, e: { x0: r.width - w, x1: r.width, y0: a, y1: b } }[o.wall];
+    });
+  }
+  // Rugs, wall art and anything mounted above door height can sit in a door's swing; everything else must not
+  const inSwing = (it, zones) => {
+    if (it.type === 'rug' || it.type === 'art' || (it.elev || 0) >= 200) return false;
+    const b = aabb(it); // 6 cm of tolerance: a leaf clears things it only grazes
+    return zones.some((z) => Math.min(b.x1, z.x1) - Math.max(b.x0, z.x0) > 6 && Math.min(b.y1, z.y1) - Math.max(b.y0, z.y0) > 6);
+  };
+  function swingClashes(r) { const z = doorZones(r); return new Set(r.items.filter((it) => inSwing(it, z)).map((it) => it.id)); }
   function clashes(r) {
     const out = new Set(), solids = r.items.filter((i) => i.type !== 'rug').map((i) => ({ i, b: aabb(i) }));
     for (const { i, b } of solids) if (b.x0 < -0.5 || b.y0 < -0.5 || b.x1 > r.width + 0.5 || b.y1 > r.length + 0.5 || b.z1 > r.height + 0.5) out.add(i.id);
@@ -359,6 +375,7 @@
       if (tuck(tA, tB) || tuck(tB, tA)) continue;
       if (ov(A.x0, A.x1, B.x0, B.x1) && ov(A.y0, A.y1, B.y0, B.y1) && ov(A.z0, A.z1, B.z0, B.z1)) { out.add(solids[a].i.id); out.add(solids[z].i.id); }
     }
+    swingClashes(r).forEach((id) => out.add(id));
     return out;
   }
   function wallLength(r, k) { return (k === 'n' || k === 's') ? r.width : r.length; }
@@ -508,8 +525,11 @@
           <label class="field"><span>Height, cm</span><input type="number" data-op="height" value="${op.height}"></label>
           ${isWin ? `<label class="field"><span>Sill height, cm</span><input type="number" data-op="sill" value="${op.sill}"></label>` : '<span></span>'}
         </div>
-        ${isWin ? `<label class="check"><input type="checkbox" data-op="radiator" ${op.radiator ? 'checked' : ''}> Radiator below</label>`
+        ${isWin ? `<div class="row2"><label class="field"><span>Niche depth, cm</span><input type="number" data-op="niche" value="${op.niche || 0}" title="A recess in the wall under and around the window (0 = none)"></label>
+            <label class="check" style="margin-top:22px"><input type="checkbox" data-op="nicheShelf" ${op.nicheShelf ? 'checked' : ''} ${op.niche > 0 ? '' : 'disabled'}> Shelf in niche</label></div>
+          <label class="check"><input type="checkbox" data-op="radiator" ${op.radiator ? 'checked' : ''}> Radiator below</label>`
           : `<label class="check"><input type="checkbox" data-op="leaf" ${op.leaf !== false ? 'checked' : ''}> Door leaf (untick for an open passage)</label>
+             ${op.leaf !== false ? `<label class="check"><input type="checkbox" data-op="swingIn" ${op.swing !== 'out' ? 'checked' : ''}> Opens into this room (keeps the swing area clear)</label>` : ''}
              ${op.leaf !== false ? `<div class="wallrow"><input type="color" data-op="color" value="${op.color}" aria-label="Door color"><span>Door color</span><code>${op.color.toUpperCase()}</code></div>` : ''}`}
         <p class="note">Offset is from the top corner on side walls, or the left corner on top and bottom walls.</p>
         <div class="btnrow" style="margin-top:12px"><button class="btn danger" data-act="delete">Remove</button></div>`;
@@ -701,14 +721,17 @@
     const r = room(), W = r.width, L = r.length, svg = $('#plan'), fs = Math.max(W, L) / 36, pad = T + fs * 3.2;
     svg.setAttribute('viewBox', `${-pad} ${-pad} ${W + 2 * pad} ${L + 2 * pad}`);
     const bad = clashes(r);
-    let h = `<defs><pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M50 0H0V50" fill="none" stroke="rgba(0,0,0,.09)" stroke-width="1" vector-effect="non-scaling-stroke"/></pattern></defs>`;
+    let h = `<defs><pattern id="swingHatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="rgba(210,60,40,.06)"/><line x1="0" y1="0" x2="0" y2="8" stroke="rgba(190,60,40,.35)" stroke-width="1.5" vector-effect="non-scaling-stroke"/></pattern><pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M50 0H0V50" fill="none" stroke="rgba(0,0,0,.09)" stroke-width="1" vector-effect="non-scaling-stroke"/></pattern></defs>`;
     h += `<rect x="0" y="0" width="${W}" height="${L}" fill="${r.floor}"/><rect x="0" y="0" width="${W}" height="${L}" fill="url(#grid)"/>`;
     const polys = { n: `${-T},${-T} ${W + T},${-T} ${W},0 0,0`, e: `${W + T},${-T} ${W + T},${L + T} ${W},${L} ${W},0`, s: `0,${L} ${W},${L} ${W + T},${L + T} ${-T},${L + T}`, w: `${-T},${-T} 0,0 0,${L} ${-T},${L + T}` };
     for (const [k] of WALLS) h += `<polygon class="wall ${wallTarget === k ? 'target' : ''}" data-wall="${k}" points="${polys[k]}" fill="${r.walls[k]}"/>`;
     const M = { n: 'matrix(1 0 0 1 0 0)', e: `matrix(0 1 -1 0 ${W} 0)`, s: `matrix(1 0 0 -1 0 ${L})`, w: 'matrix(0 1 1 0 0 0)' };
     for (const o of r.openings) {
       let g = `<rect x="${o.offset}" y="${-T - 1}" width="${o.width}" height="${T + 2}" fill="${r.floor}"/>`;
-      if (o.type === 'door' && o.leaf !== false) g += `<rect x="${o.offset}" y="0" width="${o.width}" height="${o.width}" fill="transparent"/><path class="line" d="M${o.offset} 0L${o.offset} ${o.width}M${o.offset + o.width} 0A${o.width} ${o.width} 0 0 1 ${o.offset} ${o.width}"/>`;
+      if (o.niche > 0) g += `<rect class="niche" x="${o.offset}" y="${-o.niche}" width="${o.width}" height="${o.niche}" fill="${r.floor}"/>`;
+      if (o.type === 'door' && o.leaf !== false && o.swing !== 'out') g += `<rect class="swing" x="${o.offset}" y="0" width="${o.width}" height="${o.width}" fill="url(#swingHatch)"/>`;
+      if (o.type === 'door' && o.leaf !== false && o.swing === 'out') g += `<line class="line" x1="${o.offset}" x2="${o.offset + o.width}" y1="${-T / 2}" y2="${-T / 2}" stroke-dasharray="4 3"/>`;
+      else if (o.type === 'door' && o.leaf !== false) g += `<rect x="${o.offset}" y="0" width="${o.width}" height="${o.width}" fill="transparent"/><path class="line" d="M${o.offset} 0L${o.offset} ${o.width}M${o.offset + o.width} 0A${o.width} ${o.width} 0 0 1 ${o.offset} ${o.width}"/>`;
       else g += `<rect class="glass" x="${o.offset}" y="${-T}" width="${o.width}" height="${T}"/><line class="line" x1="${o.offset}" x2="${o.offset + o.width}" y1="${-T / 2}" y2="${-T / 2}"/>`;
       if (selected && selected.id === o.id) g += `<rect class="sel-outline" x="${o.offset - 3}" y="${-T - 3}" width="${o.width + 6}" height="${(o.type === 'door' ? o.width + T : T) + 6}"/>`;
       h += `<g class="opening" data-opening="${o.id}" transform="${M[o.wall]}">${g}</g>`;
@@ -731,10 +754,10 @@
   }
 
   function renderStatus() {
-    const r = room(), bad = clashes(r).size;
+    const r = room(), bad = clashes(r).size, sw = swingClashes(r).size;
     $('#status').innerHTML = `<span>${esc(r.name)}: ${(r.width / 100).toFixed(2)} x ${(r.length / 100).toFixed(2)} m, ceiling ${(r.height / 100).toFixed(2)} m</span>
       <span>${plural(r.items.length, 'item')}</span>
-      ${bad ? `<span class="warn">${plural(bad, 'item')} overlap or extend past a wall (dashed red)</span>` : ''}<span>${esc(saveNote)}</span>`;
+      ${bad ? `<span class="warn">${plural(bad, 'item')} overlap, extend past a wall${sw ? ' or block a door' : ''} (dashed red)</span>` : ''}<span>${esc(saveNote)}</span>`;
   }
   function renderView() {
     $('#stage').dataset.view = view;
@@ -787,12 +810,22 @@
     }
   }
   // Fit the room's bounding sphere in view, looking down from the front-right corner
+  // The camera looks over two walls (the ones nearest it fade out), so start from the corner that hides the fewest
+  // wall-standing pieces: kitchens, shelves, wardrobes, artwork, beds' headboards and so on
+  function bestCorner(r) {
+    const along = (it) => { const k = artWall(it), b = aabb(it); return ({ n: b.y0 < 15, s: b.y1 > r.length - 15, w: b.x0 < 15, e: b.x1 > r.width - 15 })[k] ? k : null; };
+    const weight = { n: 0, e: 0, s: 0, w: 0 };
+    r.items.forEach((it) => { const k = [0, 90, 180, 270].includes(it.rot) && along(it); if (k) weight[k] += it.w * Math.max(it.h, 40) * (it.type === 'counter' || it.type === 'art' ? 3 : 1); });
+    const corners = [['s', 'e', [0.5, 0.75]], ['s', 'w', [-0.5, 0.75]], ['n', 'e', [0.5, -0.75]], ['n', 'w', [-0.5, -0.75]]];
+    return corners.sort((a, b) => (weight[a[0]] + weight[a[1]]) - (weight[b[0]] + weight[b[1]]))[0][2];
+  }
   function fitCamera() {
     const r = room(), W = r.width, L = r.length, H = r.height, cam = three.camera;
     const rad = Math.sqrt(W * W + L * L + H * H) / 2, vf = cam.fov * Math.PI / 360;
     const hf = Math.atan(Math.tan(vf) * Math.max(cam.aspect || 1, 0.4)), dist = rad / Math.sin(Math.min(vf, hf)) * 0.92;
     three.controls.target.set(W / 2, H * 0.25, L / 2);
-    cam.position.copy(three.controls.target).addScaledVector(new THREE.Vector3(0.5, 0.78, 0.75).normalize(), dist);
+    const [dx, dz] = bestCorner(r);
+    cam.position.copy(three.controls.target).addScaledVector(new THREE.Vector3(dx, 0.78, dz).normalize(), dist);
     three.controls.update();
   }
   // Artwork pictures live in IndexedDB; load on first use, then rebuild the 3D view
@@ -840,33 +873,41 @@
         if (s.axis === 'x') add(mesh, mid, y0 + hh / 2, o); else add(mesh, o, y0 + hh / 2, mid);
         if (!mats.includes(m)) mats.push(m); return mesh;
       };
-      const ops = r.openings.filter((o) => o.wall === k).map((o) => ({ a: o.offset, b: o.offset + o.width, sill: o.sill, top: Math.min(o.sill + o.height, H), type: o.type, radiator: o.radiator, color: o.color, leaf: o.leaf })).sort((p, q) => p.a - q.a);
+      const ops = r.openings.filter((o) => o.wall === k).map((o) => ({ a: o.offset, b: o.offset + o.width, sill: o.sill, top: Math.min(o.sill + o.height, H), type: o.type, radiator: o.radiator, color: o.color, leaf: o.leaf, niche: o.niche || 0, nicheShelf: o.nicheShelf })).sort((p, q) => p.a - q.a);
       let cur = s.start;
       const skirt = (a, b) => along(Math.max(a, 0), Math.min(b, s.axis === 'x' ? W : L), 0, 8, 1.5, T / 2 + 0.75, skirtM);
       for (const o of ops) {
         const a = Math.max(o.a, cur);
         along(cur, a, 0, H, T, 0, wm); skirt(cur, a);
-        along(a, o.b, 0, o.sill, T, 0, wm); along(a, o.b, o.top, H, T, 0, wm);
+        const nd = o.type === 'window' ? o.niche : 0, back = T / 2 - nd; // room-side face of the niche back (0 niche = normal wall)
+        if (nd > 0) {
+          along(a, o.b, 0, o.sill, 2, back - 1, wm);                                 // back of the niche below the window
+          along(a - 2, a, 0, o.top, nd, T / 2 - nd / 2, wm); along(o.b, o.b + 2, 0, o.top, nd, T / 2 - nd / 2, wm); // side returns
+          along(a, o.b, -4, 0, nd, T / 2 - nd / 2, HM.floorMaterial(r.floor, r.floorFinish, o.b - a, nd)); // niche floor
+          along(a, o.b, o.top - 1, o.top + 1, nd, T / 2 - nd / 2, wm);               // niche head
+          if (o.nicheShelf) along(a, o.b, 72, 75, nd + 2, T / 2 - nd / 2 + 1, frameM);  // desk shelf in the niche
+        } else along(a, o.b, 0, o.sill, T, 0, wm);
+        along(a, o.b, o.top, H, T, 0, wm);
         if (o.b > a) {
           const fw = 5;
           along(a - fw, a, o.sill, o.top + (o.type === 'door' ? fw : 0), T + 2, 0, frameM); along(o.b, o.b + fw, o.sill, o.top + (o.type === 'door' ? fw : 0), T + 2, 0, frameM);
           along(a - (o.type === 'door' ? fw : 0), o.b + (o.type === 'door' ? fw : 0), o.top, o.top + fw, T + 2, 0, frameM);
           if (o.type === 'window') {
-            along(a - 3, o.b + 3, o.sill - 3, o.sill, T + 6, 3, frameM); // sill
+            along(a - 3, o.b + 3, o.sill - 3, o.sill, nd ? 8 : T + 6, nd ? back + 3 : 3, frameM); // sill
             const glass = HM.mat(evening ? '#101820' : '#CFE3EE', { rough: 0.02, metal: 0.1, transparent: true, opacity: evening ? 0.85 : 0.18 });
             glass.userData.opacity = glass.opacity;
-            along(a, o.b, o.sill, o.top, 1, 0, glass);
+            along(a, o.b, o.sill, o.top, 1, nd ? back - T / 2 : 0, glass);
             // casement sashes: two above 80 cm wide, each with its own frame and a handle
             const nS = o.b - a > 80 ? 2 : 1, sw = (o.b - a) / nS, sashM = HM.mat('#FAFAF8', { rough: 0.4 }), hM = HM.mat('#DADCDD', { rough: 0.3, metal: 0.8 });
             for (let i = 0; i < nS; i++) {
-              const x0 = a + i * sw, x1 = x0 + sw, fz = T / 2 - 3;
+              const x0 = a + i * sw, x1 = x0 + sw, fz = (nd ? back : T / 2) - 3;
               along(x0, x0 + 4, o.sill, o.top, 5, fz, sashM); along(x1 - 4, x1, o.sill, o.top, 5, fz, sashM);
               along(x0, x1, o.sill, o.sill + 5, 5, fz, sashM); along(x0, x1, o.top - 4, o.top, 5, fz, sashM);
               const hx = i === 0 && nS === 2 ? x1 - 3 : x0 + 3; along(hx - 1, hx + 1, (o.sill + o.top) / 2 - 6, (o.sill + o.top) / 2 + 6, 3, fz + 3, hM);
             }
             if (o.radiator && o.sill >= 40) {
-              const rw = Math.max(40, (o.b - a) * 0.9), rh = Math.min(60, o.sill - 22), rad = HM.radiator(rw, rh, 12);
-              const c = (a + o.b) / 2, inset = T / 2 + 6;
+              const rw = Math.max(40, (o.b - a) * 0.9), rh = Math.min(o.nicheShelf ? 45 : 60, (o.nicheShelf ? 70 : o.sill) - 22), rad = HM.radiator(rw, rh, 12);
+              const c = (a + o.b) / 2, inset = (nd ? back : T / 2) + 6;
               if (s.axis === 'x') rad.position.set(c, 0, s.fixed + s.inward * inset); else { rad.position.set(s.fixed + s.inward * inset, 0, c); rad.rotation.y = Math.PI / 2; }
               if (s.inward < 0) rad.rotation.y += Math.PI;
               g.add(rad); rad.traverse((m) => { if (m.material && !mats.includes(m.material)) mats.push(m.material); });
@@ -1271,6 +1312,9 @@
       else if (f === 'wall') op.wall = t.value;
       else if (f === 'radiator') op.radiator = t.checked;
       else if (f === 'leaf') op.leaf = t.checked;
+      else if (f === 'swingIn') op.swing = t.checked ? 'in' : 'out';
+      else if (f === 'nicheShelf') op.nicheShelf = t.checked;
+      else if (f === 'niche') op.niche = num(t.value, 0, 100, 0);
       else if (f === 'color') op.color = hex(t.value, op.color);
       else op[f] = num(t.value, 0, 3000, op[f]);
       commit();
@@ -1327,7 +1371,7 @@
     const r = room(), ig = e.target.closest('.item'), og = e.target.closest('.opening'), wg = e.target.closest('.wall');
     if (ig) {
       const it = r.items.find((i) => i.id === ig.dataset.item), p = svgPoint(e);
-      selected = { kind: 'item', id: it.id }; drag = { it, dx: p.x - it.x, dy: p.y - it.y, moved: false };
+      selected = { kind: 'item', id: it.id }; drag = { it, dx: p.x - it.x, dy: p.y - it.y, moved: false, x0: it.x, y0: it.y, rot0: it.rot };
       svg.setPointerCapture(e.pointerId); renderInspector(); renderPlan();
     } else if (og) { selected = { kind: 'opening', id: og.dataset.opening }; renderRoomPanel(); renderInspector(); renderPlan(); }
     else if (wg) { wallTarget = wg.dataset.wall; selected = null; roomTab = 'layout'; renderRoomPanel(); renderInspector(); renderPlan(); }
@@ -1341,7 +1385,16 @@
       drag.moved = true; renderPlan(); schedule3D();
     }
   });
-  const endDrag = () => { if (drag && drag.moved) { save(); renderInspector(); renderStatus(); } drag = null; };
+  const endDrag = () => {
+    if (drag && drag.moved) {
+      const r = room(), it = drag.it;
+      if (inSwing(it, doorZones(r)) && !inSwing(Object.assign({}, it, { x: drag.x0, y: drag.y0, rot: drag.rot0 }), doorZones(r))) {
+        it.x = drag.x0; it.y = drag.y0; it.rot = drag.rot0; renderPlan(); schedule3D(); toast('Keep the door swing clear: moved it back');
+      }
+      save(); renderInspector(); renderStatus();
+    }
+    drag = null;
+  };
   svg.addEventListener('pointerup', endDrag); svg.addEventListener('pointercancel', endDrag);
 
   document.addEventListener('keydown', (e) => {

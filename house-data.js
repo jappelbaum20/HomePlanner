@@ -78,7 +78,7 @@ window.HOUSE_PIECES = [
 window.HOUSE_ROOMS = [
   {
     "id": "hall0",
-    "rev": 4,
+    "rev": 5,
     "resize": true,
     "ensure": true,
     "name": "Entrance hall",
@@ -104,21 +104,24 @@ window.HOUSE_ROOMS = [
         "offset": 92,
         "width": 89,
         "height": 210,
-        "color": "#1E4B57"
+        "color": "#1E4B57",
+        "swing": "out"
       },
       {
         "type": "door",
         "wall": "s",
         "offset": 105,
         "width": 69,
-        "height": 200
+        "height": 200,
+        "swing": "out"
       },
       {
         "type": "door",
         "wall": "w",
         "offset": 352,
         "width": 73,
-        "height": 200
+        "height": 200,
+        "swing": "out"
       }
     ],
     "tourPhotos": [
@@ -174,7 +177,7 @@ window.HOUSE_ROOMS = [
   },
   {
     "id": "living",
-    "rev": 3,
+    "rev": 5,
     "resize": true,
     "ensure": true,
     "name": "Living room",
@@ -195,7 +198,7 @@ window.HOUSE_ROOMS = [
       "s": "panelling",
       "w": "panelling"
     },
-    "notes": "Measured from the Giraffe360 tour floor plan (about ±4 %). 23.0 m². White wood panelling, oak 3D feature panel on the north wall, beamed ceiling, glazed door to the hall.",
+    "notes": "Measured from the Giraffe360 tour floor plan (about ±4 %). 23.0 m². White wood panelling, oak 3D feature panel on the north wall, beamed ceiling, glazed door to the hall. South windows sit in floor-to-top niches with the radiators; the west window has no radiator.",
     "openings": [
       {
         "type": "window",
@@ -203,7 +206,8 @@ window.HOUSE_ROOMS = [
         "offset": 22,
         "width": 171,
         "height": 130,
-        "sill": 85
+        "sill": 85,
+        "niche": 29
       },
       {
         "type": "window",
@@ -211,7 +215,8 @@ window.HOUSE_ROOMS = [
         "offset": 276,
         "width": 166,
         "height": 130,
-        "sill": 85
+        "sill": 85,
+        "niche": 29
       },
       {
         "type": "window",
@@ -219,7 +224,8 @@ window.HOUSE_ROOMS = [
         "offset": 206,
         "width": 181,
         "height": 130,
-        "sill": 85
+        "sill": 85,
+        "radiator": false
       },
       {
         "type": "door",
@@ -258,7 +264,7 @@ window.HOUSE_ROOMS = [
   },
   {
     "id": "kitchen",
-    "rev": 4,
+    "rev": 5,
     "resize": true,
     "ensure": true,
     "name": "Kitchen",
@@ -274,7 +280,7 @@ window.HOUSE_ROOMS = [
     "floor": "#ECE9E3",
     "floorFinish": "marble",
     "wallFinish": {},
-    "notes": "Measured from the Giraffe360 tour floor plan (about ±4 %). 9.8 m². Marble floor and splashback, white gloss units with a dark granite top, dark oak tall units with ovens.",
+    "notes": "Measured from the Giraffe360 tour floor plan (about ±4 %). 9.8 m². Marble floor and splashback, white gloss units with a dark granite top, dark oak tall units with ovens. Window in a deep niche with a desk shelf and the radiator below.",
     "openings": [
       {
         "type": "window",
@@ -282,7 +288,9 @@ window.HOUSE_ROOMS = [
         "offset": 104,
         "width": 126,
         "height": 110,
-        "sill": 95
+        "sill": 100,
+        "niche": 48,
+        "nicheShelf": true
       },
       {
         "type": "door",
@@ -321,7 +329,7 @@ window.HOUSE_ROOMS = [
   },
   {
     "id": "landing1",
-    "rev": 3,
+    "rev": 5,
     "resize": true,
     "ensure": true,
     "name": "Landing",
@@ -344,21 +352,24 @@ window.HOUSE_ROOMS = [
         "wall": "w",
         "offset": 278,
         "width": 73,
-        "height": 200
+        "height": 200,
+        "swing": "out"
       },
       {
         "type": "door",
         "wall": "w",
         "offset": 479,
         "width": 62,
-        "height": 200
+        "height": 200,
+        "swing": "out"
       },
       {
         "type": "door",
         "wall": "s",
         "offset": 50,
         "width": 83,
-        "height": 200
+        "height": 200,
+        "swing": "out"
       }
     ],
     "tourPhotos": [
@@ -534,7 +545,7 @@ window.HOUSE_ROOMS = [
   },
   {
     "id": "bathroom",
-    "rev": 3,
+    "rev": 5,
     "resize": true,
     "ensure": true,
     "name": "Bathroom",
@@ -563,7 +574,8 @@ window.HOUSE_ROOMS = [
         "offset": 54,
         "width": 85,
         "height": 90,
-        "sill": 110
+        "sill": 110,
+        "niche": 28
       },
       {
         "type": "door",
@@ -602,7 +614,7 @@ window.HOUSE_ROOMS = [
   },
   {
     "id": "landing2",
-    "rev": 4,
+    "rev": 5,
     "resize": true,
     "ensure": true,
     "name": "Attic landing",
@@ -629,14 +641,16 @@ window.HOUSE_ROOMS = [
         "wall": "w",
         "offset": 349,
         "width": 83,
-        "height": 200
+        "height": 200,
+        "swing": "out"
       },
       {
         "type": "door",
         "wall": "s",
         "offset": 114,
         "width": 73,
-        "height": 200
+        "height": 200,
+        "swing": "out"
       }
     ],
     "tourPhotos": [
@@ -822,10 +836,10 @@ window.HOUSE_PLACEMENTS = [
   { id: 'living-art', rev: 3, from: { x: 618.5, y: 340 }, room: 'living', x: 481, y: 230, item: { type: 'art', name: 'Artwork above the sofa', w: 100, d: 3, h: 70, frame: 'oak', mat: true, elev: 115 } },
   { id: 'living-oakpanel', rev: 3, from: { x: 305, y: 479 }, room: 'living', x: 178, y: 0, extra: { w: 208, h: 205, elev: 10 },
     item: { type: 'art', name: 'Oak 3D wall panel', w: 208, d: 2, h: 205, frame: 'oakpanel', mat: false, elev: 10 } },
-  { id: 'bedroom-bed', rev: 3, from: { x: 210, y: 108 }, room: 'bedroom', catalogId: 'mattis-bed', x: 153, y: 277, rot: 180 },
+  { id: 'bedroom-bed', rev: 4, from: { x: 153, y: 277 }, room: 'bedroom', catalogId: 'mattis-bed', x: 115, y: 277, rot: 180 }, // clear of the door swing
   // rev 4: the kitchen as in the tour (fitted run with sink, hob and wall units; dark oak tall units with two ovens)
-  { id: 'kitchen-counter', rev: 4, from: { x: 110, y: 287 }, room: 'kitchen', x: 110, y: 287, rot: 180, extra: { w: 219, style: 'fitted', name: 'Kitchen run' },
-    item: { type: 'counter', style: 'fitted', name: 'Kitchen run', w: 219, d: 60, h: 90, color: '#F4F4F2' } },
+  { id: 'kitchen-counter', rev: 5, from: { x: 110, y: 287 }, room: 'kitchen', x: 105, y: 287, rot: 180, extra: { w: 210, style: 'fitted', name: 'Kitchen run' },
+    item: { type: 'counter', style: 'fitted', name: 'Kitchen run', w: 210, d: 60, h: 90, color: '#F4F4F2' } },
   { id: 'kitchen-tall', rev: 4, from: { x: 30, y: 52 }, room: 'kitchen', x: 30, y: 52, rot: 270, extra: { w: 100, d: 60, h: 225, color: '#4A4440', style: 'tallovens', name: 'Tall units with ovens' },
     item: { type: 'appliance', style: 'tallovens', name: 'Tall units with ovens', w: 100, d: 60, h: 225, color: '#4A4440' } },
   { id: 'bath-toilet', room: 'bathroom', x: 30, y: 27, item: { type: 'toilet', name: 'Wall-hung WC', w: 37, d: 54, h: 42, color: '#FAFAF8' } },
