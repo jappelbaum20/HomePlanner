@@ -24,17 +24,18 @@
       <button data-view="3d" aria-pressed="false">3D</button>
       <button data-view="both" aria-pressed="false">Both</button>
     </div>
+    <span id="saveState" class="save-state" aria-live="polite">Saved</span>
+    <button id="saveBtn" class="btn top">Save and versions</button>
     <button id="handoffBtn" class="btn mark">Claude handoff</button>
   </header>
 
   <main class="layout">
     <aside class="panel left">
       <section>
-        <div class="sec-head"><h2>Rooms</h2><button id="addRoom" class="btn small">New room</button></div>
+        <div class="sec-head"><h2>Rooms</h2></div>
         <div id="roomList"></div>
       </section>
       <section id="roomPanel"></section>
-      <section id="savePanel"></section>
     </aside>
 
     <div class="stage" id="stage">
@@ -61,6 +62,7 @@
   <footer class="status" id="status" aria-live="polite"></footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <dialog id="saveDlg" class="save-dlg"><section id="savePanel"></section></dialog>
   <dialog id="modal"><div class="modal-inner" id="modalBody"></div></dialog>
   <dialog id="lightbox" class="lightbox">
     <div class="modal-inner">

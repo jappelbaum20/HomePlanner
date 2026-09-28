@@ -255,7 +255,7 @@
       if (!tpl || (r.seedRev || 1) >= (tpl.rev || 1)) return;
       const n = normRoom(tpl.resize ? tpl : Object.assign({}, tpl, { width: r.width, length: r.length, height: r.height }));
       r.openings = n.openings; r.wallFinish = n.wallFinish; r.notes = n.notes; r.seedRev = tpl.rev;
-      if (tpl.resize) { Object.assign(r, { width: n.width, length: n.length, height: n.height, level: n.level, floor: n.floor, floorFinish: n.floorFinish }); resized.push(r); }
+      if (tpl.resize) { Object.assign(r, { name: n.name, width: n.width, length: n.length, height: n.height, level: n.level, floor: n.floor, floorFinish: n.floorFinish }); resized.push(r); }
     });
     // Tour photos listed on a starter room are added once, with their label; a photo you delete stays deleted
     o.removedPhotos = Array.isArray(s.removedPhotos) ? s.removedPhotos.slice() : [];
@@ -290,8 +290,9 @@
       const r = findRoom(pl.room); if (!r) return;
       const spec = Object.assign({}, pl.item || {}, pl.extra || {}, { x: pl.x, y: pl.y, rot: pl.rot || 0, fixed: true, seedPl: pl.id });
       let it = r.items.find((i) => i.seedPl === pl.id);
-      if (!it) it = r.items.find((i) => !i.seedPl && i.type === spec.type && (!spec.style || !i.style || i.style === spec.style) && !i.catalogId);
+      if (!it) it = r.items.find((i) => !i.seedPl && i.type === spec.type && (!spec.style || !i.style || i.style === spec.style) && (!spec.frame || i.frame === spec.frame) && !i.catalogId);
       const n = normItem(Object.assign({}, spec, { id: it ? it.id : undefined }), r);
+      if (n.type === 'art') snapArt(n, r);
       if (it) r.items[r.items.indexOf(it)] = n; else r.items.push(n);
       if (!o.placedSeeds.includes(pl.id)) o.placedSeeds.push(pl.id);
     });
@@ -427,13 +428,19 @@
   }
   function refreshStrips(owner) { $$(`.photos[data-owner="${owner}"]`).forEach((el) => { el.outerHTML = photoStrip(ownerPhotos(owner), owner); }); hydratePhotos(); }
   const levels = () => [...new Set(state.rooms.map((r) => r.level))];
-  const byLevel = () => { const m = new Map(); state.rooms.forEach((r) => { if (!m.has(r.level)) m.set(r.level, []); m.get(r.level).push(r); }); return m; };
+  // Floors listed bottom to top; any other level name follows in the order it first appears
+  const LEVEL_ORDER = ['Basement', 'Ground floor', 'First floor', 'Attic', 'Loft'];
+  const byLevel = () => {
+    const m = new Map(), rank = (lv) => { const i = LEVEL_ORDER.indexOf(lv); return i < 0 ? 99 : i; };
+    [...state.rooms].sort((a, b) => rank(a.level) - rank(b.level)).forEach((r) => { if (!m.has(r.level)) m.set(r.level, []); m.get(r.level).push(r); });
+    return m;
+  };
 
   // ================= Render: top bar + rooms =================
   function renderRooms() {
     $('#projectName').value = state.name || '';
     const cur = room().id, groups = byLevel();
-    $('#roomSwitch').innerHTML = [...groups].map(([lv, rs]) => `<optgroup label="${esc(lv)}">${rs.map((r) => `<option value="${r.id}" ${r.id === cur ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</optgroup>`).join('') + '<option value="__new">New room…</option>';
+    $('#roomSwitch').innerHTML = [...groups].map(([lv, rs]) => `<optgroup label="${esc(lv)}">${rs.map((r) => `<option value="${r.id}" ${r.id === cur ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</optgroup>`).join('');
     $('#roomList').innerHTML = [...groups].map(([lv, rs]) => `
       <p class="level">${esc(lv)}</p>
       <ul class="rooms">${rs.map((r) => `<li><button data-room-id="${r.id}" aria-current="${r.id === cur}">
@@ -487,12 +494,9 @@
       </div>
       <div class="swatches" data-kind="floor" style="margin-top:8px">${FLOOR_SWATCHES.map(([n, h, f]) => `<button class="sw" data-hex="${h}" data-finish="${f}" style="--c:${h}"><i></i>${n}</button>`).join('')}</div>
       <h3>Doors and windows</h3>
-      <div class="btnrow"><button class="btn light" data-add-opening="door">Add door</button><button class="btn light" data-add-opening="window">Add window</button></div>
+      ${r.seedId ? '<p class="note" style="margin-top:0">Built into the house, so they are locked. Tap one to see its details.</p>' : '<div class="btnrow"><button class="btn light" data-add-opening="door">Add door</button><button class="btn light" data-add-opening="window">Add window</button></div>'}
       <ul class="openings">${r.openings.map((o) => `<li><button data-select-opening="${o.id}" class="${selected && selected.id === o.id ? 'on' : ''}">
-        ${o.type === 'door' ? 'Door' : 'Window'}, ${wallName(o.wall)} wall, ${o.width} cm wide</button></li>`).join('') || '<li class="empty">No doors or windows yet.</li>'}</ul>
-      <h3>This room</h3>
-      <div class="btnrow"><button class="btn light" id="dupRoom">Duplicate room</button>
-        <button class="btn danger" id="delRoom" ${state.rooms.length < 2 ? 'disabled' : ''}>Delete room</button></div>`;
+        ${o.type === 'door' ? 'Door' : 'Window'}, ${wallName(o.wall)} wall, ${o.width} cm wide</button></li>`).join('') || '<li class="empty">No doors or windows yet.</li>'}</ul>`;
   }
 
   // ================= Render: inspector =================
@@ -539,6 +543,12 @@
           <button class="btn danger" data-act="delete">Remove</button>
         </div>`;
       hydratePhotos(el);
+    } else if (op && room().seedId) {
+      const isWin = op.type === 'window', facts = [`${wallName(op.wall)} wall, ${op.offset} cm from the corner`, `${op.width} x ${op.height} cm`];
+      if (isWin) facts.push(`Sill ${op.sill} cm`, op.niche ? `Niche ${op.niche} cm deep${op.nicheShelf ? ' with a shelf' : ''}` : 'No niche', op.radiator ? 'Radiator below' : 'No radiator');
+      else facts.push(op.leaf === false ? 'Open passage' : op.swing === 'out' ? 'Opens into the next room' : 'Opens into this room');
+      el.innerHTML = `<h2>${isWin ? 'Window' : 'Door'}</h2><ul class="facts">${facts.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>
+        <p class="note">Part of the house, so it is locked.</p>`;
     } else if (op) {
       const isWin = op.type === 'window';
       el.innerHTML = `<h2>${isWin ? 'Window' : 'Door'}</h2>
@@ -661,7 +671,7 @@
   // ================= Render: save panel =================
   async function renderSavePanel() {
     const el = $('#savePanel');
-    el.innerHTML = `<h2>Save</h2>
+    el.innerHTML = `<div class="sec-head"><h2>Save</h2><button class="btn light small" data-close-save>Close</button></div>
       <p class="note" style="margin:0 0 10px">Everything autosaves in this browser. Save a version to keep a snapshot you can return to, for example before trying a new color scheme.</p>
       <div class="version-add"><input id="versionName" placeholder="Version name, e.g. Sage living room" aria-label="Version name"><button class="btn small" id="saveVersion">Save version</button></div>
       <ul class="versions" id="versionList"><li><span class="note">Loading versions…</span></li></ul>
@@ -782,7 +792,13 @@
     svg.innerHTML = h;
   }
 
+  function renderSaveChip() {
+    const c = $('#saveState'); if (!c) return;
+    const busy = /Saving/.test(saveNote), bad = /unavailable/.test(saveNote);
+    c.textContent = busy ? 'Saving…' : bad ? 'Not saved' : 'Saved'; c.className = 'save-state' + (busy ? ' busy' : bad ? ' bad' : ''); c.title = saveNote;
+  }
   function renderStatus() {
+    renderSaveChip();
     const r = room(), bad = clashes(r).size, sw = swingClashes(r).size;
     $('#status').innerHTML = `<span>${esc(r.name)}: ${(r.width / 100).toFixed(2)} x ${(r.length / 100).toFixed(2)} m, ceiling ${(r.height / 100).toFixed(2)} m</span>
       <span>${plural(r.items.length, 'item')}</span>
@@ -1199,6 +1215,7 @@
   const lockedMsg = () => toast('Built into the house: locked in place');
   function deleteSelected() {
     const r = room(); if (!selected) return;
+    if (selected.kind === 'opening' && r.seedId) return lockedMsg();
     if (selItem() && selItem().fixed) return lockedMsg();
     if (selected.kind === 'item') r.items = r.items.filter((i) => i.id !== selected.id); else r.openings = r.openings.filter((o) => o.id !== selected.id);
     selected = null; commit();
@@ -1234,15 +1251,14 @@
       if (!confirm('Replace the current plan with this backup? A version of the current plan is saved first.')) return;
       await saveVersion(`Before import, ${new Date().toLocaleString()}`);
       for (const [id, url] of Object.entries(data.photos || {})) { photoCache.set(id, url); try { await Store.putPhoto(id, url); } catch (e) { /* session only */ } }
-      state = normState(s); selected = null; three.lastRoom = null; commit(); toast('Backup imported');
+      state = normState(s); selected = null; three.lastRoom = null; commit(); toast('Backup imported'); if ($('#saveDlg').open) $('#saveDlg').close();
     } catch (err) { alert(`Import failed: ${err.message}`); }
   }
 
   // ================= Events =================
   $$('.seg button').forEach((b) => b.addEventListener('click', () => { view = b.dataset.view; renderView(); }));
   $('#projectName').addEventListener('input', (e) => { state.name = e.target.value; save(); });
-  $('#roomSwitch').addEventListener('change', (e) => { if (e.target.value === '__new') { renderRooms(); newRoomDialog(); } else switchRoom(e.target.value); });
-  $('#addRoom').addEventListener('click', newRoomDialog);
+  $('#roomSwitch').addEventListener('change', (e) => switchRoom(e.target.value));
   $('#handoffBtn').addEventListener('click', handoffDialog);
   $('#roomList').addEventListener('click', (e) => { const b = e.target.closest('[data-room-id]'); if (b) switchRoom(b.dataset.roomId); });
   $('#eveningBtn').addEventListener('click', (e) => { evening = !evening; e.currentTarget.setAttribute('aria-pressed', String(evening)); build3D(); });
@@ -1388,11 +1404,15 @@
       const v = (await Store.listVersions()).find((x) => x.id === rs.dataset.restore); if (!v) return;
       if (!confirm(`Restore "${v.name}"? The current plan is saved as a version first.`)) return;
       await saveVersion(`Before restore, ${new Date().toLocaleString()}`);
-      state = normState(v.data); selected = null; three.lastRoom = null; commit(); toast(`Restored "${v.name}"`); return;
+      state = normState(v.data); selected = null; three.lastRoom = null; commit(); toast(`Restored "${v.name}"`); $('#saveDlg').close(); return;
     }
     const dv = t.closest('[data-del-version]');
     if (dv && confirm('Delete this saved version?')) { await Store.delVersion(dv.dataset.delVersion); renderSavePanel(); }
   });
+  const saveDlg = $('#saveDlg');
+  $('#saveBtn').addEventListener('click', () => { renderSavePanel(); saveDlg.showModal(); });
+  saveDlg.addEventListener('click', (e) => { if (e.target === saveDlg || e.target.closest('[data-close-save]')) saveDlg.close(); });
+  document.addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { e.preventDefault(); flushSave(); renderSavePanel(); if (!saveDlg.open) saveDlg.showModal(); } });
   $('#savePanel').addEventListener('keydown', (e) => { if (e.target.id === 'versionName' && e.key === 'Enter') $('#saveVersion').click(); });
   $('#importInput').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) importBackup(f); });
 

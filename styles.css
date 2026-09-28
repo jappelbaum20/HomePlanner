@@ -225,3 +225,14 @@ dialog::backdrop { background: rgba(29,33,36,.55); }
 /* Door swing areas and window niches on the plan */
 #plan .swing { stroke: rgba(190,60,40,.45); stroke-width: 1; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; pointer-events: none; }
 #plan .niche { stroke: rgba(0,0,0,.35); stroke-width: 1; vector-effect: non-scaling-stroke; }
+
+/* Saving in the top bar */
+.save-state { font-size: 12.5px; color: #B9C2B8; display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.save-state::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #6FBF73; }
+.save-state.busy::before { background: var(--mark); }
+.save-state.bad { color: #F2A38F; } .save-state.bad::before { background: #E0604A; }
+.btn.top { background: transparent; color: #F7F8F5; border: 1px solid #5A6066; flex: none; }
+.btn.top:hover { border-color: #F7F8F5; }
+.save-dlg { border: 0; border-radius: 10px; padding: 18px; width: min(460px, calc(100vw - 32px)); box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+.save-dlg::backdrop { background: rgba(20,24,28,.45); }
+.facts { margin: 4px 0 8px; padding-left: 18px; font-size: 13.5px; line-height: 1.6; }

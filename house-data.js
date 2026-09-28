@@ -77,8 +77,198 @@ window.HOUSE_PIECES = [
 // sizes, doors and windows to browsers that already have the room.
 window.HOUSE_ROOMS = [
   {
+    "id": "laundry",
+    "rev": 6,
+    "resize": true,
+    "ensure": true,
+    "name": "Laundry and cellar",
+    "match": [
+      "waschraum",
+      "keller",
+      "cellar",
+      "laundry"
+    ],
+    "level": "Basement",
+    "width": 468,
+    "length": 405,
+    "height": 210,
+    "floor": "#A3A39E",
+    "floorFinish": "concrete",
+    "wallFinish": {},
+    "notes": "Size from the architect plan (Haus 53), BF 18.94 m² (Haus 53 only). Washing machine and dryer, utility sink, stairs up.",
+    "openings": [
+      {
+        "type": "window",
+        "wall": "w",
+        "offset": 135,
+        "width": 72,
+        "height": 60,
+        "sill": 150,
+        "niche": 35,
+        "radiator": false
+      },
+      {
+        "type": "door",
+        "wall": "s",
+        "offset": 249,
+        "width": 80,
+        "height": 200
+      }
+    ]
+  },
+  {
+    "id": "boiler",
+    "rev": 6,
+    "resize": true,
+    "ensure": true,
+    "name": "Boiler room",
+    "match": [
+      "heizung",
+      "boiler"
+    ],
+    "level": "Basement",
+    "width": 462,
+    "length": 143,
+    "height": 210,
+    "floor": "#A3A39E",
+    "floorFinish": "concrete",
+    "wallFinish": {},
+    "notes": "Size from the architect plan (Haus 53), BF 6.60 m². Heating.",
+    "openings": [
+      {
+        "type": "door",
+        "wall": "s",
+        "offset": 336,
+        "width": 85,
+        "height": 200
+      }
+    ]
+  },
+  {
+    "id": "commonroom",
+    "rev": 6,
+    "resize": true,
+    "ensure": true,
+    "name": "Common room with sauna",
+    "match": [
+      "gemeinschaftsraum",
+      "common room"
+    ],
+    "level": "Basement",
+    "width": 556,
+    "length": 240,
+    "height": 210,
+    "floor": "#BCBCB6",
+    "floorFinish": "tile",
+    "wallFinish": {},
+    "notes": "Size from the architect plan (Haus 53), BF 13.28 m², shared with Haus 55. Sauna, double doors to the garden.",
+    "openings": [
+      {
+        "type": "door",
+        "wall": "n",
+        "offset": 168,
+        "width": 88,
+        "height": 200
+      },
+      {
+        "type": "door",
+        "wall": "n",
+        "offset": 354,
+        "width": 88,
+        "height": 200,
+        "swing": "out"
+      },
+      {
+        "type": "door",
+        "wall": "e",
+        "offset": 25,
+        "width": 90,
+        "height": 200,
+        "swing": "out"
+      },
+      {
+        "type": "door",
+        "wall": "w",
+        "offset": 20,
+        "width": 75,
+        "height": 200,
+        "swing": "out"
+      },
+      {
+        "type": "door",
+        "wall": "s",
+        "offset": 228,
+        "width": 180,
+        "height": 210,
+        "color": "#6B5F55"
+      }
+    ]
+  },
+  {
+    "id": "basementbath",
+    "rev": 6,
+    "resize": true,
+    "ensure": true,
+    "name": "Basement bathroom",
+    "match": [
+      "bad ug",
+      "basement bathroom"
+    ],
+    "level": "Basement",
+    "width": 169,
+    "length": 240,
+    "height": 210,
+    "floor": "#9A9C9E",
+    "floorFinish": "stone",
+    "wallFinish": {
+      "n": "tiles",
+      "e": "tiles",
+      "s": "tiles",
+      "w": "tiles"
+    },
+    "notes": "Size from the architect plan (Haus 53), BF 3.83 m², shared with Haus 55. WC, basin and shower.",
+    "openings": []
+  },
+  {
+    "id": "annexoffice",
+    "rev": 6,
+    "resize": true,
+    "ensure": true,
+    "name": "Annex office (Büro)",
+    "match": [
+      "büro",
+      "buero ug",
+      "annex"
+    ],
+    "level": "Basement",
+    "width": 198,
+    "length": 291,
+    "height": 210,
+    "floor": "#D9B98A",
+    "floorFinish": "parquet",
+    "wallFinish": {},
+    "notes": "5.78 m², the separate office unit beside Haus 53 (own entrance).",
+    "openings": [
+      {
+        "type": "window",
+        "wall": "w",
+        "offset": 63,
+        "width": 63,
+        "height": 90,
+        "sill": 100
+      },
+      {
+        "type": "door",
+        "wall": "w",
+        "offset": 194,
+        "width": 80,
+        "height": 200
+      }
+    ]
+  },
+  {
     "id": "hall0",
-    "rev": 5,
+    "rev": 6,
     "resize": true,
     "ensure": true,
     "name": "Entrance hall",
@@ -90,18 +280,18 @@ window.HOUSE_ROOMS = [
       "flur"
     ],
     "level": "Ground floor",
-    "width": 181,
-    "length": 457,
+    "width": 175,
+    "length": 416,
     "height": 225,
     "floor": "#D9B98A",
     "floorFinish": "parquet",
     "wallFinish": {},
-    "notes": "Measured from the Giraffe360 tour floor plan (about ±4 %). Stairs up along the west wall, front door at the north end. Front door dark teal; stairs with dark wood treads, white risers and a glass balustrade.",
+    "notes": "Size from the architect plan (Haus 53), BF 7.29 m². Stairs up along the west wall, front door at the north end. Front door dark teal; stairs with dark wood treads, white risers and a glass balustrade.",
     "openings": [
       {
         "type": "door",
         "wall": "n",
-        "offset": 92,
+        "offset": 86,
         "width": 89,
         "height": 210,
         "color": "#1E4B57",
@@ -110,7 +300,7 @@ window.HOUSE_ROOMS = [
       {
         "type": "door",
         "wall": "s",
-        "offset": 105,
+        "offset": 102,
         "width": 69,
         "height": 200,
         "swing": "out"
@@ -118,7 +308,7 @@ window.HOUSE_ROOMS = [
       {
         "type": "door",
         "wall": "w",
-        "offset": 352,
+        "offset": 320,
         "width": 73,
         "height": 200,
         "swing": "out"
@@ -177,7 +367,7 @@ window.HOUSE_ROOMS = [
   },
   {
     "id": "living",
-    "rev": 5,
+    "rev": 6,
     "resize": true,
     "ensure": true,
     "name": "Living room",
@@ -188,8 +378,8 @@ window.HOUSE_ROOMS = [
       "lounge"
     ],
     "level": "Ground floor",
-    "width": 481,
-    "length": 435,
+    "width": 476,
+    "length": 440,
     "height": 225,
     "floor": "#D9B98A",
     "floorFinish": "parquet",
@@ -198,13 +388,13 @@ window.HOUSE_ROOMS = [
       "s": "panelling",
       "w": "panelling"
     },
-    "notes": "Measured from the Giraffe360 tour floor plan (about ±4 %). 23.0 m². White wood panelling, oak 3D feature panel on the north wall, beamed ceiling, glazed door to the hall. South windows sit in floor-to-top niches with the radiators; the west window has no radiator.",
+    "notes": "Size from the architect plan (Haus 53), BF 21.87 m². 23.0 m². White wood panelling, oak 3D feature panel on the north wall, beamed ceiling, glazed door to the hall. South windows sit in floor-to-top niches with the radiators; the west window has no radiator.",
     "openings": [
       {
         "type": "window",
         "wall": "s",
         "offset": 22,
-        "width": 171,
+        "width": 169,
         "height": 130,
         "sill": 85,
         "niche": 29
@@ -212,8 +402,8 @@ window.HOUSE_ROOMS = [
       {
         "type": "window",
         "wall": "s",
-        "offset": 276,
-        "width": 166,
+        "offset": 273,
+        "width": 164,
         "height": 130,
         "sill": 85,
         "niche": 29
@@ -221,8 +411,8 @@ window.HOUSE_ROOMS = [
       {
         "type": "window",
         "wall": "w",
-        "offset": 206,
-        "width": 181,
+        "offset": 208,
+        "width": 183,
         "height": 130,
         "sill": 85,
         "radiator": false
@@ -230,7 +420,7 @@ window.HOUSE_ROOMS = [
       {
         "type": "door",
         "wall": "n",
-        "offset": 404,
+        "offset": 400,
         "width": 69,
         "height": 200
       }
@@ -264,7 +454,7 @@ window.HOUSE_ROOMS = [
   },
   {
     "id": "kitchen",
-    "rev": 5,
+    "rev": 6,
     "resize": true,
     "ensure": true,
     "name": "Kitchen",
@@ -274,18 +464,18 @@ window.HOUSE_ROOMS = [
       "kochen"
     ],
     "level": "Ground floor",
-    "width": 285,
-    "length": 317,
+    "width": 289,
+    "length": 326,
     "height": 225,
     "floor": "#ECE9E3",
     "floorFinish": "marble",
     "wallFinish": {},
-    "notes": "Measured from the Giraffe360 tour floor plan (about ±4 %). 9.8 m². Marble floor and splashback, white gloss units with a dark granite top, dark oak tall units with ovens. Window in a deep niche with a desk shelf and the radiator below.",
+    "notes": "Size from the architect plan (Haus 53), BF 9.43 m². 9.8 m². Marble floor and splashback, white gloss units with a dark granite top, dark oak tall units with ovens. Window in a deep niche with a desk shelf and the radiator below.",
     "openings": [
       {
         "type": "window",
         "wall": "w",
-        "offset": 104,
+        "offset": 107,
         "width": 126,
         "height": 110,
         "sill": 100,
@@ -295,7 +485,7 @@ window.HOUSE_ROOMS = [
       {
         "type": "door",
         "wall": "e",
-        "offset": 234,
+        "offset": 241,
         "width": 73,
         "height": 200
       }
@@ -329,7 +519,7 @@ window.HOUSE_ROOMS = [
   },
   {
     "id": "landing1",
-    "rev": 5,
+    "rev": 6,
     "resize": true,
     "ensure": true,
     "name": "Landing",
@@ -339,18 +529,18 @@ window.HOUSE_ROOMS = [
       "flur oben"
     ],
     "level": "First floor",
-    "width": 178,
-    "length": 552,
+    "width": 182,
+    "length": 540,
     "height": 213,
     "floor": "#D9B98A",
     "floorFinish": "parquet",
     "wallFinish": {},
-    "notes": "Measured from the Giraffe360 tour floor plan (about ±4 %). Stairs up to the attic, built-in cupboard on the east wall.",
+    "notes": "Size from the architect plan (Haus 53), BF 9.86 m². Stairs up to the attic, built-in cupboard on the east wall.",
     "openings": [
       {
         "type": "door",
         "wall": "w",
-        "offset": 278,
+        "offset": 272,
         "width": 73,
         "height": 200,
         "swing": "out"
@@ -358,7 +548,7 @@ window.HOUSE_ROOMS = [
       {
         "type": "door",
         "wall": "w",
-        "offset": 479,
+        "offset": 469,
         "width": 62,
         "height": 200,
         "swing": "out"
@@ -366,7 +556,7 @@ window.HOUSE_ROOMS = [
       {
         "type": "door",
         "wall": "s",
-        "offset": 50,
+        "offset": 51,
         "width": 83,
         "height": 200,
         "swing": "out"
@@ -401,7 +591,7 @@ window.HOUSE_ROOMS = [
   },
   {
     "id": "office",
-    "rev": 3,
+    "rev": 6,
     "resize": true,
     "ensure": true,
     "name": "Office",
@@ -413,34 +603,34 @@ window.HOUSE_ROOMS = [
       "study"
     ],
     "level": "First floor",
-    "width": 492,
-    "length": 352,
+    "width": 485,
+    "length": 345,
     "height": 213,
     "floor": "#D9B98A",
     "floorFinish": "parquet",
     "wallFinish": {},
-    "notes": "Measured from the Giraffe360 tour floor plan (about ±4 %). 16.4 m². Painted walls, beamed ceiling, two windows with a lake view, glazed door.",
+    "notes": "Size from the architect plan (Haus 53), BF 16.74 m². 16.4 m². Painted walls, beamed ceiling, two windows with a lake view, glazed door.",
     "openings": [
       {
         "type": "window",
         "wall": "s",
-        "offset": 36,
-        "width": 161,
+        "offset": 35,
+        "width": 159,
         "height": 125,
         "sill": 85
       },
       {
         "type": "window",
         "wall": "s",
-        "offset": 287,
-        "width": 161,
+        "offset": 283,
+        "width": 159,
         "height": 125,
         "sill": 85
       },
       {
         "type": "door",
         "wall": "n",
-        "offset": 364,
+        "offset": 359,
         "width": 83,
         "height": 200
       }
@@ -474,7 +664,7 @@ window.HOUSE_ROOMS = [
   },
   {
     "id": "bedroom2",
-    "rev": 3,
+    "rev": 6,
     "resize": true,
     "ensure": true,
     "name": "Second bedroom",
@@ -487,8 +677,8 @@ window.HOUSE_ROOMS = [
       "kinderzimmer"
     ],
     "level": "First floor",
-    "width": 307,
-    "length": 350,
+    "width": 303,
+    "length": 357,
     "height": 213,
     "floor": "#D9B98A",
     "floorFinish": "parquet",
@@ -498,12 +688,12 @@ window.HOUSE_ROOMS = [
       "s": "panelling",
       "w": "panelling"
     },
-    "notes": "Measured from the Giraffe360 tour floor plan (about ±4 %). 10.4 m². White wood panelling all round, beamed ceiling, small window with shutters.",
+    "notes": "Size from the architect plan (Haus 53), BF 10.83 m². 10.4 m². White wood panelling all round, beamed ceiling, small window with shutters.",
     "openings": [
       {
         "type": "window",
         "wall": "n",
-        "offset": 98,
+        "offset": 97,
         "width": 77,
         "height": 110,
         "sill": 90
@@ -511,7 +701,7 @@ window.HOUSE_ROOMS = [
       {
         "type": "door",
         "wall": "e",
-        "offset": 278,
+        "offset": 284,
         "width": 73,
         "height": 200
       }
@@ -545,7 +735,7 @@ window.HOUSE_ROOMS = [
   },
   {
     "id": "bathroom",
-    "rev": 5,
+    "rev": 6,
     "resize": true,
     "ensure": true,
     "name": "Bathroom",
@@ -555,8 +745,8 @@ window.HOUSE_ROOMS = [
       "bath"
     ],
     "level": "First floor",
-    "width": 307,
-    "length": 140,
+    "width": 310,
+    "length": 151,
     "height": 213,
     "floor": "#9A9C9E",
     "floorFinish": "stone",
@@ -566,12 +756,12 @@ window.HOUSE_ROOMS = [
       "s": "tiles",
       "w": "tiles"
     },
-    "notes": "Measured from the Giraffe360 tour floor plan (about ±4 %). 4.9 m². Grey stone floor, white wall tiles, bath, wall-hung WC, basin on a wood vanity.",
+    "notes": "Size from the architect plan (Haus 53), BF 4.95 m². 4.9 m². Grey stone floor, white wall tiles, bath, wall-hung WC, basin on a wood vanity.",
     "openings": [
       {
         "type": "window",
         "wall": "w",
-        "offset": 54,
+        "offset": 58,
         "width": 85,
         "height": 90,
         "sill": 110,
@@ -580,7 +770,7 @@ window.HOUSE_ROOMS = [
       {
         "type": "door",
         "wall": "e",
-        "offset": 74,
+        "offset": 80,
         "width": 62,
         "height": 200
       }
@@ -614,7 +804,7 @@ window.HOUSE_ROOMS = [
   },
   {
     "id": "landing2",
-    "rev": 5,
+    "rev": 6,
     "resize": true,
     "ensure": true,
     "name": "Attic landing",
@@ -623,8 +813,8 @@ window.HOUSE_ROOMS = [
       "dachgeschoss"
     ],
     "level": "Attic",
-    "width": 186,
-    "length": 444,
+    "width": 187,
+    "length": 451,
     "height": 225,
     "floor": "#E4D3B5",
     "floorFinish": "wood",
@@ -634,12 +824,12 @@ window.HOUSE_ROOMS = [
       "s": "panelling",
       "w": "panelling"
     },
-    "notes": "Measured from the Giraffe360 tour floor plan (about ±4 %).  White wood panelling, mirrored built-in wardrobe, light laminate floor.",
+    "notes": "Size from the architect plan (Haus 53), BF 7.68 m².  White wood panelling, mirrored built-in wardrobe, light laminate floor.",
     "openings": [
       {
         "type": "door",
         "wall": "w",
-        "offset": 349,
+        "offset": 355,
         "width": 83,
         "height": 200,
         "swing": "out"
@@ -682,7 +872,7 @@ window.HOUSE_ROOMS = [
   },
   {
     "id": "bedroom",
-    "rev": 3,
+    "rev": 6,
     "resize": true,
     "ensure": true,
     "name": "Bedroom",
@@ -692,8 +882,8 @@ window.HOUSE_ROOMS = [
       "master bedroom"
     ],
     "level": "Attic",
-    "width": 307,
-    "length": 385,
+    "width": 305,
+    "length": 386,
     "height": 225,
     "floor": "#D9B98A",
     "floorFinish": "parquet",
@@ -701,7 +891,7 @@ window.HOUSE_ROOMS = [
       "e": "panelling",
       "s": "panelling"
     },
-    "notes": "Measured from the Giraffe360 tour floor plan (about ±4 %). 11.9 m². Glass-walled en-suite with bath along the north side (drawn as a glass wall), white panelling.",
+    "notes": "Size from the architect plan (Haus 53), BF 11.77 m². 11.9 m². Glass-walled en-suite with bath along the north side (drawn as a glass wall), white panelling.",
     "openings": [
       {
         "type": "window",
@@ -722,7 +912,7 @@ window.HOUSE_ROOMS = [
         "type": "window",
         "wall": "n",
         "offset": 0,
-        "width": 307,
+        "width": 305,
         "height": 210,
         "sill": 0,
         "radiator": false
@@ -757,19 +947,21 @@ window.HOUSE_ROOMS = [
   },
   {
     "id": "attic",
-    "rev": 3,
+    "rev": 6,
     "resize": true,
     "ensure": true,
-    "name": "Attic room",
+    "name": "Storage room",
     "match": [
       "attic",
       "dachzimmer",
       "estrich",
-      "loft"
+      "loft",
+      "abstellraum",
+      "attic room"
     ],
     "level": "Attic",
-    "width": 694,
-    "length": 203,
+    "width": 691,
+    "length": 207,
     "height": 225,
     "floor": "#E4D3B5",
     "floorFinish": "wood",
@@ -779,13 +971,13 @@ window.HOUSE_ROOMS = [
       "s": "panelling",
       "w": "panelling"
     },
-    "notes": "Measured from the Giraffe360 tour floor plan (about ±4 %). 17.7 m² (part under 1.5 m headroom). Sloped timber roof, open stair up to a gallery; the stair bay to the north is not drawn.",
+    "notes": "Size from the architect plan (Haus 53), BF 17.88 m². 17.7 m² (part under 1.5 m headroom). Sloped timber roof, open stair up to a gallery; the stair bay to the north is not drawn.",
     "openings": [
       {
         "type": "door",
         "wall": "n",
-        "offset": 321,
-        "width": 179,
+        "offset": 320,
+        "width": 178,
         "height": 200,
         "leaf": false
       }
@@ -816,31 +1008,105 @@ window.HOUSE_ROOMS = [
         "label": "Attic room, looking north-east (tour photo)"
       }
     ]
+  },
+  {
+    "id": "ensuite",
+    "rev": 6,
+    "resize": true,
+    "ensure": true,
+    "name": "En-suite bathroom",
+    "match": [
+      "bad dg",
+      "en-suite",
+      "ensuite"
+    ],
+    "level": "Attic",
+    "width": 325,
+    "length": 224,
+    "height": 225,
+    "floor": "#D9B98A",
+    "floorFinish": "parquet",
+    "wallFinish": {
+      "n": "marble",
+      "e": "marble",
+      "w": "marble"
+    },
+    "notes": "Size from the architect plan (Haus 53), BF 7.31 m². Opens to the bedroom through a glass wall; marble walls, bath and WC.",
+    "openings": [
+      {
+        "type": "window",
+        "wall": "s",
+        "offset": 0,
+        "width": 325,
+        "height": 210,
+        "sill": 0,
+        "radiator": false
+      }
+    ]
+  },
+  {
+    "id": "loft",
+    "rev": 6,
+    "resize": true,
+    "ensure": true,
+    "name": "Loft (Estrich)",
+    "match": [
+      "estrich",
+      "loft",
+      "dachboden"
+    ],
+    "level": "Loft",
+    "width": 1040,
+    "length": 290,
+    "height": 180,
+    "floor": "#C8A77E",
+    "floorFinish": "wood",
+    "wallFinish": {
+      "n": "panelling",
+      "e": "panelling",
+      "s": "panelling",
+      "w": "panelling"
+    },
+    "notes": "Size from the architect plan (Haus 53), BF 30.16 m². Unheated roof space under the ridge, reached by a ladder stair; low sloped ceiling.",
+    "openings": []
   }
 ];
 
 // Pieces to place once in a room (matched by name, else created from HOUSE_ROOMS). x, y = centre in cm; rot 270 = back against the left wall.
 window.HOUSE_PLACEMENTS = [
+  // Basement, attic en-suite and loft, from the architect plans
+  { id: 'ug-stairs', builtin: true, room: 'laundry', x: 320, y: 60, item: { type: 'stairs', name: 'Stairs up', w: 75, d: 110, h: 210, color: '#9A6B3F' } },
+  { id: 'ug-washer', room: 'laundry', x: 60, y: 196, rot: 270, item: { type: 'appliance', name: 'Washing machine', w: 60, d: 60, h: 85, color: '#F2F2F0' } },
+  { id: 'ug-dryer', room: 'laundry', x: 60, y: 122, rot: 270, item: { type: 'appliance', name: 'Tumble dryer', w: 60, d: 60, h: 85, color: '#F2F2F0' } },
+  { id: 'ug-sink', builtin: true, room: 'laundry', x: 24, y: 339, rot: 270, item: { type: 'vanity', name: 'Utility sink', w: 70, d: 45, h: 85, color: '#DCDCD6' } },
+  { id: 'ug-sauna', builtin: true, room: 'commonroom', x: 90, y: 169, item: { type: 'box', style: 'sauna', name: 'Sauna', w: 156, d: 135, h: 200, color: '#B98A5A' } },
+  { id: 'ug-wc', builtin: true, room: 'basementbath', x: 28, y: 20, rot: 270, item: { type: 'toilet', name: 'WC', w: 37, d: 54, h: 42, color: '#FAFAF8' } },
+  { id: 'ug-basin', builtin: true, room: 'basementbath', x: 22, y: 170, rot: 270, item: { type: 'vanity', name: 'Basin', w: 55, d: 40, h: 85, color: '#EDEBE6' } },
+  { id: 'ug-shower', builtin: true, room: 'basementbath', x: 110, y: 195, item: { type: 'shower', name: 'Shower', w: 75, d: 85, h: 200, color: '#E6ECEF' } },
+  { id: 'en-bath', builtin: true, room: 'ensuite', x: 237, y: 38, item: { type: 'bath', name: 'Bathtub', w: 175, d: 72, h: 58, color: '#FAFAF8' } },
+  { id: 'en-wc', builtin: true, room: 'ensuite', x: 28, y: 180, rot: 270, item: { type: 'toilet', name: 'WC', w: 37, d: 54, h: 42, color: '#FAFAF8' } },
+  { id: 'bed-basin', builtin: true, room: 'bedroom', x: 24, y: 57, rot: 270, item: { type: 'vanity', name: 'Basin', w: 60, d: 45, h: 85, color: '#1E1E1E' } },
+  { id: 'loft-stairs', builtin: true, room: 'loft', x: 515, y: 235, item: { type: 'stairs', name: 'Ladder stair down', w: 60, d: 100, h: 180, color: '#C8A77E' } },
   // rev 3: rooms measured from the tour; `from` is where the piece was put before, so only untouched pieces move
-  { id: 'office-desk', rev: 3, from: { x: 190, y: 38 }, room: 'office', catalogId: 'q8-desk', x: 116, y: 317, rot: 180 },
+  { id: 'office-desk', rev: 4, from: [{ x: 116, y: 317 }, { x: 190, y: 38 }], room: 'office', catalogId: 'q8-desk', x: 126, y: 308, rot: 180 },
   { id: 'office-billy', rev: 3, from: { x: 16, y: 190 }, room: 'office', catalogId: 'billy-hoegadal', x: 16, y: 150, rot: 270 },
-  { id: 'office-hektar', rev: 3, from: { x: 330, y: 45 }, room: 'office', catalogId: 'hektar-floor', x: 45, y: 300, rot: 200 },
+  { id: 'office-hektar', rev: 4, from: [{ x: 45, y: 300 }, { x: 330, y: 45 }], room: 'office', catalogId: 'hektar-floor', x: 28, y: 300, rot: 200 },
   { id: 'living-billy-1', rev: 3, from: { x: 15, y: 260 }, room: 'living', catalogId: 'billy', x: 235, y: 421, rot: 180 },
   { id: 'living-billy-2', rev: 3, from: { x: 15, y: 341 }, room: 'living', catalogId: 'billy', x: 343, y: 14, rot: 0 },
-  { id: 'living-sofa', rev: 3, from: { x: 240, y: 300 }, room: 'living', catalogId: 'dellia-sofa', x: 390, y: 230, rot: 90 },
+  { id: 'living-sofa', rev: 4, from: [{ x: 390, y: 230 }, { x: 240, y: 300 }], room: 'living', catalogId: 'dellia-sofa', x: 384, y: 230, rot: 90 },
   { id: 'living-table', rev: 3, from: { x: 480, y: 150 }, room: 'living', catalogId: 'amburwood-table', x: 150, y: 230, rot: 0 },
   { id: 'living-chair-1', rev: 3, from: { x: 447, y: 88 }, room: 'living', catalogId: 'tub-chair', x: 117, y: 158, rot: 0 },
   { id: 'living-chair-2', rev: 3, from: { x: 513, y: 88 }, room: 'living', catalogId: 'tub-chair', x: 183, y: 158, rot: 0 },
   { id: 'living-chair-3', rev: 3, from: { x: 447, y: 212 }, room: 'living', catalogId: 'tub-chair', x: 117, y: 302, rot: 180 },
   { id: 'living-chair-4', rev: 3, from: { x: 513, y: 212 }, room: 'living', catalogId: 'tub-chair', x: 183, y: 302, rot: 180 },
   { id: 'living-art', rev: 3, from: { x: 618.5, y: 340 }, room: 'living', x: 481, y: 230, item: { type: 'art', name: 'Artwork above the sofa', w: 100, d: 3, h: 70, frame: 'oak', mat: true, elev: 115 } },
-  { id: 'living-oakpanel', rev: 3, from: { x: 305, y: 479 }, room: 'living', x: 178, y: 0, extra: { w: 208, h: 205, elev: 10 },
+  { id: 'living-oakpanel', builtin: true, rev: 3, from: { x: 305, y: 479 }, room: 'living', x: 178, y: 0, extra: { w: 208, h: 205, elev: 10 },
     item: { type: 'art', name: 'Oak 3D wall panel', w: 208, d: 2, h: 205, frame: 'oakpanel', mat: false, elev: 10 } },
   { id: 'bedroom-bed', rev: 5, from: [{ x: 115, y: 277 }, { x: 153, y: 277 }], room: 'bedroom', catalogId: 'mattis-bed', x: 153, y: 277, rot: 180 }, // centred; clears the door's arc
   // rev 4: the kitchen as in the tour (fitted run with sink, hob and wall units; dark oak tall units with two ovens)
   { id: 'kitchen-counter', builtin: true, rev: 6, from: [{ x: 105, y: 287 }, { x: 110, y: 287 }], room: 'kitchen', x: 105, y: 287, rot: 180, extra: { w: 210, style: 'fitted', name: 'Kitchen run', fixed: true },
     item: { type: 'counter', style: 'fitted', name: 'Kitchen run', fixed: true, w: 210, d: 60, h: 90, color: '#F4F4F2' } },
-  { id: 'kitchen-tall', builtin: true, rev: 5, from: { x: 30, y: 52 }, room: 'kitchen', x: 30, y: 52, rot: 270, extra: { w: 100, d: 60, h: 225, color: '#6B5F55', style: 'tallovens', name: 'Tall units with ovens', fixed: true },
+  { id: 'kitchen-tall', builtin: true, rev: 5, from: { x: 30, y: 52 }, room: 'kitchen', x: 50, y: 30, rot: 0, extra: { w: 100, d: 60, h: 225, color: '#6B5F55', style: 'tallovens', name: 'Tall units with ovens', fixed: true },
     item: { type: 'appliance', style: 'tallovens', name: 'Tall units with ovens', fixed: true, w: 100, d: 60, h: 225, color: '#6B5F55' } },
   { id: 'bath-toilet', builtin: true, rev: 2, from: { x: 30, y: 27 }, room: 'bathroom', x: 30, y: 27, extra: { fixed: true }, item: { type: 'toilet', fixed: true, name: 'Wall-hung WC', w: 37, d: 54, h: 42, color: '#FAFAF8' } },
   { id: 'bath-vanity', builtin: true, rev: 2, from: { x: 103, y: 20 }, room: 'bathroom', x: 103, y: 20, extra: { fixed: true }, item: { type: 'vanity', fixed: true, name: 'Basin on vanity', w: 59, d: 40, h: 85, color: '#C49A6C' } },
@@ -849,6 +1115,6 @@ window.HOUSE_PLACEMENTS = [
   { id: 'hall0-stairs', builtin: true, rev: 3, from: { x: 40, y: 211 }, room: 'hall0', x: 40, y: 211, extra: { fixed: true, color: '#5E3A20', style: 'glass' },
     item: { type: 'stairs', fixed: true, style: 'glass', name: 'Stairs up', w: 81, d: 271, h: 225, color: '#5E3A20' } },
   { id: 'landing1-stairs', builtin: true, rev: 2, from: { x: 51, y: 136 }, room: 'landing1', x: 51, y: 136, extra: { fixed: true }, item: { type: 'stairs', fixed: true, name: 'Stairs up', w: 87, d: 272, h: 213, color: '#9A6B3F' } },
-  { id: 'landing1-cupboard', builtin: true, rev: 2, from: { x: 159, y: 472 }, room: 'landing1', x: 159, y: 472, extra: { fixed: true }, rot: 90, item: { type: 'wardrobe', fixed: true, name: 'Built-in cupboard', w: 145, d: 38, h: 200, color: '#F2F1EC' } },
-  { id: 'landing2-stairs', builtin: true, rev: 2, from: { x: 48, y: 129 }, room: 'landing2', x: 48, y: 129, extra: { fixed: true }, item: { type: 'stairs', fixed: true, name: 'Stairs up', w: 91, d: 260, h: 225, color: '#C8A77E' } }
+  { id: 'landing1-cupboard', builtin: true, rev: 2, from: { x: 159, y: 472 }, room: 'landing1', x: 159, y: 466, extra: { fixed: true }, rot: 90, item: { type: 'wardrobe', fixed: true, name: 'Built-in cupboard', w: 145, d: 38, h: 200, color: '#F2F1EC' } },
+  { id: 'landing2-stairs', builtin: true, rev: 2, from: { x: 48, y: 129 }, room: 'landing2', x: 48, y: 131, extra: { fixed: true }, item: { type: 'stairs', fixed: true, name: 'Stairs up', w: 91, d: 260, h: 225, color: '#C8A77E' } }
 ];

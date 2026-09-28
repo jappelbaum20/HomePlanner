@@ -706,7 +706,16 @@
     part(g, m, w * 0.7, 28, 8, 0, h - 14, -d / 2 + 4, 3);
     const seat = cyl(g, mat('#FFFFFF', { rough: 0.15 }), w / 2 + 0.5, w / 2 + 0.5, 2.5, 0, h - 0.5, -d / 2 + 4 + bd / 2, 32); seat.scale.z = bd / w;
   };
-  B.box = (g, w, d, h, c) => { part(g, mat(c, { rough: 0.7 }), w, h, d, 0, h / 2, 0, 1.5); };
+  // Sauna cabin: spruce panelling, glass door on the front, small window strip
+  B.sauna = (g, w, d, h, c) => {
+    const m = mat(c, { rough: 0.7, map: texFor('panelling', w, h), bump: texFor('panelling', w, h), bumpScale: 0.5 });
+    part(g, m, w, h, d, 0, h / 2, 0, 1);
+    const glass = mat('#9DB3BC', { rough: 0.05, metal: 0.2, transparent: true, opacity: 0.55 }); glass.envMapIntensity = 1.2;
+    part(g, glass, 60, 185, 1, -w / 2 + 45, 95, d / 2 + 0.3, 0.5);
+    part(g, mat('#C9CCCE', { rough: 0.2, metal: 0.9 }), 2, 30, 3, -w / 2 + 70, 100, d / 2 + 2, 0.8);
+  };
+  B.box = (g, w, d, h, c, it) => {
+    if (it && it.style === 'sauna') return B.sauna(g, w, d, h, c); part(g, mat(c, { rough: 0.7 }), w, h, d, 0, h / 2, 0, 1.5); };
 
   // ---------- Wall art ----------
   // Picture textures are cached by photo id and kept across rebuilds (tex.keep)
