@@ -179,6 +179,12 @@
         let x = rnd() * 120; while (x < s) { g.fillStyle = 'rgba(140,140,140,.45)'; g.fillRect(x, j * sh + 1, 3, sh - 1); x += 90 + rnd() * 160; } // nodes
       }
     }, 80),
+    // channel stitching: 5 cm vertical channels, rounded, with a sewn seam between them
+    channel: () => canvasTex('channel', 512, (g, s) => {
+      g.fillStyle = '#fff'; g.fillRect(0, 0, s, s); const n = 8, cw = s / n;
+      for (let i = 0; i < n; i++) { const x = i * cw, gr = g.createLinearGradient(x, 0, x + cw, 0); gr.addColorStop(0, 'rgb(208,208,208)'); gr.addColorStop(0.1, 'rgb(242,242,242)'); gr.addColorStop(0.5, 'rgb(255,255,255)'); gr.addColorStop(0.9, 'rgb(242,242,242)'); gr.addColorStop(1, 'rgb(208,208,208)'); g.fillStyle = gr; g.fillRect(x, 0, cw, s); }
+      seed = 67; noise(g, s, 6000, 0.1, 190, 255);
+    }, 40),
     // woven bamboo: basket weave of 1.5 cm strips over and under (tinted by the material)
     bamboo: () => canvasTex('bamboo', 512, (g, s) => {
       seed = 59; g.fillStyle = '#9a9a9a'; g.fillRect(0, 0, s, s); const n = 16, c = s / n;
@@ -327,7 +333,36 @@
     // two scatter cushions in a slightly paler cord
     for (const k of [0, 1]) { const m = pillow(g, cord(shade(c, 1.1), 45, 45), 44, 44, 13, sx * (w / 2 - cw - 34 - k * 44), seatH + 20, z0 + backT + 24, 5); m.rotation.x = -0.28; m.rotation.y = (k ? -1 : 1) * 0.18; m.rotation.z = (k ? 1 : -1) * 0.06; }
   };
-  B.chair = (g, w, d, h, c) => {
+  // Tub dining chair: channel-stitched shell curving from the back into the arms, padded seat, splayed beech legs with black caps
+  B.tubChair = (g, w, d, h, c) => {
+    const seatH = Math.min(48, h * 0.57), R = w / 2, thick = 5, A = Math.PI * 0.64, zc = -d / 2 + R, armTop = seatH + 19, bottom = seatH - 9;
+    const velvet = (() => { const m = new T3.MeshPhysicalMaterial({ color: lin(c), roughness: 0.8, side: T3.DoubleSide }); const t = TEX.channel(); m.map = t; m.bumpMap = t; m.bumpScale = 1.6; if ('sheen' in m) m.sheen = new T3.Color(c).lerp(new T3.Color('#FFFFFF'), 0.6).convertSRGBToLinear(); m.envMapIntensity = 0.3; return m; })();
+    // shell as one mesh: outer wall, inner wall and the rounded top edge, over the angle a (0 = middle of the back)
+    const segA = 48, pos = [], uv = [], idx = [], top = (a) => armTop + (h - armTop) * Math.pow(Math.cos((a / A) * Math.PI / 2), 0.8);
+    const ring = (r, y, a) => [r * Math.sin(a), y, zc - r * Math.cos(a)];
+    const rows = [(a) => ring(R, bottom, a), (a) => ring(R, top(a) - 2, a), (a) => ring(R - thick / 2, top(a), a), (a) => ring(R - thick, top(a) - 2, a), (a) => ring(R - thick, bottom + 6, a)];
+    for (let i = 0; i <= segA; i++) {
+      const a = -A + (2 * A * i) / segA;
+      rows.forEach((f, j) => { const v = f(a); pos.push(...v); uv.push((a * R) / 40, v[1] / 40 + j * 0.01); });
+    }
+    const nr = rows.length;
+    for (let i = 0; i < segA; i++) for (let j = 0; j < nr - 1; j++) { const a0 = i * nr + j, b0 = (i + 1) * nr + j; idx.push(a0, b0, a0 + 1, b0, b0 + 1, a0 + 1); }
+    const geo = new T3.BufferGeometry(); geo.setAttribute('position', new T3.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new T3.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
+    const shell = new T3.Mesh(geo, velvet); shell.castShadow = true; shell.receiveShadow = true; g.add(shell);
+    // seat pan and cushion (the cushion is plain, not channelled)
+    const plain = new T3.MeshPhysicalMaterial({ color: lin(shade(c, 1.02)), roughness: 0.82 }); if ('sheen' in plain) plain.sheen = velvet.sheen; plain.envMapIntensity = 0.3;
+    part(g, plain, w - 3, 8, d - 4, 0, bottom + 4, 0, 3);
+    pillow(g, plain, w - 2 * thick - 2, 8, d - 12, 0, seatH - 3, 3, 1.5);
+    // splayed beech legs with black caps
+    const beech = wood('#D6B08A', 5, 45), cap = mat('#1E1E1E', { rough: 0.4, metal: 0.4 }), legH = bottom + 1;
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      const lg = new T3.Group(); lg.position.set(sx * (w / 2 - 10), bottom, sz * (d / 2 - 10)); lg.rotation.z = sx * 0.14; lg.rotation.x = -sz * 0.14; g.add(lg);
+      const l = cyl(g, beech, 1.9, 1.3, legH, 0, 0, 0, 16); g.remove(l); l.position.set(0, -legH / 2, 0); lg.add(l);
+      const k = cyl(g, cap, 2.1, 2.1, 2.2, 0, 0, 0, 16); g.remove(k); k.position.set(0, -1.1, 0); lg.add(k);
+    }
+  };
+  B.chair = (g, w, d, h, c, it) => {
+    if (it && it.style === 'tub') return B.tubChair(g, w, d, h, c);
     const seatH = Math.min(46, h * 0.5), t = 3, woodM = wood(c, w, d);
     const m = h > 100 ? METAL_DARK() : woodM;
     if (h > 100) { // office chair
@@ -497,7 +532,7 @@
   B.counter = (g, w, d, h, c) => {
     // light fronts get a gloss finish and a dark granite top; dark fronts get a pale stone top
     const light = new T3.Color(c).getHSL({}).l > 0.6, top = 4, m = mat(c, { rough: light ? 0.18 : 0.5 });
-    const topM = light ? mat('#9A8F86', { rough: 0.15, map: texFor('granite', w, d) }) : mat('#E9E6E0', { rough: 0.2, map: texFor('terrazzo', w, d) });
+    const topM = light ? mat('#4F443D', { rough: 0.15, map: texFor('granite', w, d) }) : mat('#E9E6E0', { rough: 0.2, map: texFor('terrazzo', w, d) });
     topM.envMapIntensity = 1;
     part(g, mat('#2A2A2A'), w - 4, 10, d - 8, 0, 5, -3);
     part(g, m, w, h - top - 10, d - 3, 0, 10 + (h - top - 10) / 2, -1.5, 0.4);
@@ -567,6 +602,65 @@
   };
   B.box = (g, w, d, h, c) => { part(g, mat(c, { rough: 0.7 }), w, h, d, 0, h / 2, 0, 1.5); };
 
+  // ---------- Wall art ----------
+  // Picture textures are cached by photo id and kept across rebuilds (tex.keep)
+  const artCache = new Map();
+  function pictureTexture(url, key, aspect) {
+    const ck = key + '@' + aspect.toFixed(3);
+    if (artCache.has(ck)) return artCache.get(ck);
+    const img = new Image(), tex = new T3.Texture(img);
+    tex.encoding = T3.sRGBEncoding; tex.anisotropy = 8; tex.keep = true;
+    img.onload = () => { // crop to fill the opening (like a print trimmed to the frame)
+      const ia = img.width / img.height;
+      if (ia > aspect) { tex.repeat.set(aspect / ia, 1); tex.offset.set((1 - aspect / ia) / 2, 0); } else { tex.repeat.set(1, ia / aspect); tex.offset.set(0, (1 - ia / aspect) / 2); }
+      tex.needsUpdate = true;
+    };
+    img.src = url; artCache.set(ck, tex); return tex;
+  }
+  // Placeholder print: soft abstract shapes in muted colours, different for every artwork
+  function placeholderArt(key, aspect) {
+    const ck = 'ph:' + key + '@' + aspect.toFixed(2);
+    if (artCache.has(ck)) return artCache.get(ck);
+    const W = 512, H = Math.round(512 / aspect), c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+    let h = 0; for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) % 2147483647; seed = h || 7;
+    const pal = [['#E9E2D3', '#C8A27A', '#6E7F73', '#2F3A40', '#D8B7A4'], ['#F1ECE4', '#A7B6C2', '#3D4A5C', '#C99D4A', '#E3C6BC'], ['#EFE9DD', '#B4BFA6', '#8C6A4F', '#1F2A36', '#D6CCBC']][Math.floor(rnd() * 3)];
+    g.fillStyle = pal[0]; g.fillRect(0, 0, W, H);
+    for (let i = 0; i < 5; i++) {
+      g.fillStyle = pal[1 + Math.floor(rnd() * 4)]; g.globalAlpha = 0.75 + rnd() * 0.25; g.beginPath();
+      if (rnd() < 0.5) g.arc(rnd() * W, rnd() * H, (0.12 + rnd() * 0.3) * Math.min(W, H), 0, 7);
+      else { const x = rnd() * W, y = rnd() * H; g.ellipse(x, y, (0.1 + rnd() * 0.35) * W, (0.05 + rnd() * 0.2) * H, rnd() * 3, 0, 7); }
+      g.fill();
+    }
+    g.globalAlpha = 0.08; for (let i = 0; i < 4000; i++) { g.fillStyle = rnd() < 0.5 ? '#000' : '#fff'; g.fillRect(rnd() * W, rnd() * H, 1, 1); } g.globalAlpha = 1;
+    const tex = new T3.CanvasTexture(c); tex.encoding = T3.sRGBEncoding; tex.keep = true; artCache.set(ck, tex); return tex;
+  }
+  const FRAME_COLORS = { black: '#1D1D1D', white: '#F2F1EC', oak: '#C49A6C', brass: '#B89559' };
+  // Local space: back against the wall at -z, picture facing +z, from y = 0 (bottom edge) to h
+  B.art = (g, w, d, h, c, it, opts) => {
+    const frame = (it && it.frame) || 'black', canvasOnly = frame === 'none', fw = canvasOnly ? 0 : Math.max(1.5, Math.min(4, Math.min(w, h) * 0.035));
+    const depth = canvasOnly ? Math.max(d, 3) : Math.max(d, 2);
+    const matW = !canvasOnly && it && it.mat ? Math.min(w, h) * 0.1 : 0;
+    const iw = w - 2 * fw - 2 * matW, ih = h - 2 * fw - 2 * matW, aspect = Math.max(0.05, iw / Math.max(ih, 1));
+    const url = it && it.image && opts && opts.photo ? opts.photo(it.image) : null;
+    const pic = url ? pictureTexture(url, it.image, aspect) : placeholderArt((it && (it.image || it.id)) || 'art', aspect);
+    const picM = new T3.MeshStandardMaterial({ map: pic, roughness: canvasOnly ? 0.85 : 0.6 }); picM.envMapIntensity = 0.3;
+    const z0 = -d / 2;
+    if (canvasOnly) {
+      // stretched canvas: picture on the front, a toned edge around it
+      part(g, mat('#E8E4DC', { rough: 0.9 }), w, h, depth, 0, h / 2, z0 + depth / 2, 0.3);
+      const face = new T3.Mesh(new T3.PlaneGeometry(w - 0.4, h - 0.4), picM); face.position.set(0, h / 2, z0 + depth + 0.05); g.add(face);
+      return;
+    }
+    const fc = FRAME_COLORS[frame] || c, fm = frame === 'oak' ? wood(fc, w, h) : mat(fc, { rough: frame === 'brass' ? 0.3 : 0.45, metal: frame === 'brass' ? 0.9 : 0 });
+    part(g, fm, w, fw, depth, 0, fw / 2, z0 + depth / 2, 0.3); part(g, fm, w, fw, depth, 0, h - fw / 2, z0 + depth / 2, 0.3);
+    part(g, fm, fw, h - 2 * fw, depth, -w / 2 + fw / 2, h / 2, z0 + depth / 2, 0.3); part(g, fm, fw, h - 2 * fw, depth, w / 2 - fw / 2, h / 2, z0 + depth / 2, 0.3);
+    part(g, mat('#DDD8CE', { rough: 0.9 }), w - 2 * fw, h - 2 * fw, 0.4, 0, h / 2, z0 + 0.2); // backing
+    if (matW) part(g, mat('#F7F5EF', { rough: 0.95 }), w - 2 * fw, h - 2 * fw, 0.3, 0, h / 2, z0 + depth - 0.9);
+    const face = new T3.Mesh(new T3.PlaneGeometry(iw, ih), picM); face.position.set(0, h / 2, z0 + depth - (matW ? 0.7 : 0.9)); g.add(face);
+    const glass = mat('#FFFFFF', { rough: 0.05, transparent: true, opacity: 0.06 }); glass.envMapIntensity = 1.2; glass.depthWrite = false;
+    const gl = new T3.Mesh(new T3.PlaneGeometry(w - 2 * fw, h - 2 * fw), glass); gl.position.set(0, h / 2, z0 + depth - 0.4); g.add(gl);
+  };
+
   // ---------- Lights ----------
   // Returns y (local) of the bulb so the caller can place a light source there
   const L = {};
@@ -620,8 +714,8 @@
     let bulbY = null;
     if (L[it.type]) bulbY = L[it.type](g, w, d, h, it.color, opts.evening, opts.kelvinHex, opts.roomTop, it);
     else {
-      (B[it.type] || B.box)(g, w, d, h, it.color, it);
-      if (!['rug', 'vanity', 'toilet', 'cornersofa'].includes(it.type) && !(it.elev > 0)) g.add(HM.contactShadow(w, d));
+      (B[it.type] || B.box)(g, w, d, h, it.color, it, opts);
+      if (!['rug', 'vanity', 'toilet', 'cornersofa', 'art'].includes(it.type) && !(it.elev > 0)) g.add(HM.contactShadow(w, d));
     }
     g.userData.bulbY = bulbY;
     return g;

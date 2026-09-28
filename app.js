@@ -19,7 +19,7 @@
   const FURNITURE_TYPES = {
     sofa: 'Sofa', cornersofa: 'Corner sofa', armchair: 'Armchair', chair: 'Chair', table: 'Table, rectangular', roundtable: 'Table, round',
     desk: 'Desk', bed: 'Bed', cabinet: 'Cabinet or sideboard', shelf: 'Shelf', wardrobe: 'Wardrobe',
-    counter: 'Counter or island', appliance: 'Appliance', rug: 'Rug', plant: 'Plant', bath: 'Bathtub',
+    counter: 'Counter or island', appliance: 'Appliance', rug: 'Rug', plant: 'Plant', art: 'Artwork (on a wall)', bath: 'Bathtub',
     shower: 'Shower', vanity: 'Vanity', toilet: 'Toilet', box: 'Other'
   };
   const LIGHT_TYPES = {
@@ -36,6 +36,10 @@
       ['armchair', 'Armchair', 85, 85, 80, '#A0826D'], ['table', 'Coffee table', 110, 60, 40, '#8B6A4E'],
       ['cabinet', 'TV unit', 180, 40, 50, '#5B5048'], ['cabinet', 'Sideboard', 180, 45, 80, '#5B5048'],
       ['shelf', 'Bookshelf', 80, 30, 200, '#8B6A4E'], ['rug', 'Rug', 200, 300, 1, '#C9BBA8'], ['plant', 'Plant', 40, 40, 120, '#5E7A55']
+    ]],
+    ['Wall art', [
+      ['art', 'Artwork 50 x 70', 50, 3, 70, '#1D1D1D'], ['art', 'Artwork 70 x 100', 70, 3, 100, '#1D1D1D'],
+      ['art', 'Canvas 100 x 70', 100, 4, 70, '#F4F3EF'], ['art', 'Small print 30 x 40', 30, 2, 40, '#C49A6C']
     ]],
     ['Lights', [
       ['ceiling', 'Ceiling light', 40, 40, 10, '#F2F0EA'], ['pendant', 'Pendant', 40, 40, 30, '#2F3337'],
@@ -57,7 +61,9 @@
   ];
   const TYPE_DEFAULTS = {};
   LIBRARY.forEach(([, items]) => items.forEach(([t, , w, d, h, c]) => { if (!TYPE_DEFAULTS[t]) TYPE_DEFAULTS[t] = { w, d, h, color: c }; }));
-  const SHARED = ['name', 'type', 'w', 'd', 'h', 'color', 'kelvin', 'power', 'doors', 'books', 'style'];
+  const SHARED = ['name', 'type', 'w', 'd', 'h', 'color', 'kelvin', 'power', 'doors', 'books', 'style', 'image', 'frame', 'mat'];
+  const ART_FRAMES = { black: 'Black frame', white: 'White frame', oak: 'Oak frame', brass: 'Brass frame', none: 'No frame (canvas)' };
+  const ART_WALL_ROT = { n: 0, e: 90, s: 180, w: 270 };
   const SHELF_DOORS = { none: 'No doors', lower: 'Doors on the lower half', full: 'Full-height doors' };
 
   // ================= Helpers =================
@@ -146,6 +152,7 @@
       case 'ceiling': case 'spot': return roomH - h;
       case 'pendant': return Math.max(0, Math.min(roomH - h, 150));
       case 'sconce': return 170;
+      case 'art': return Math.max(0, 150 - h / 2); // picture centre at 150 cm, gallery height
       case 'tablelamp': return 75;
       default: return 0;
     }
@@ -164,6 +171,7 @@
     if (type === 'cornersofa') o.side = it.side === 'left' ? 'left' : 'right';
     if (type === 'shelf') { o.doors = SHELF_DOORS[it.doors] ? it.doors : 'none'; o.books = it.books !== false; }
     if (it.style) o.style = String(it.style);
+    if (type === 'art') { o.frame = ART_FRAMES[it.frame] ? it.frame : 'black'; o.mat = it.mat !== false && o.frame !== 'none'; if (it.image) o.image = String(it.image); }
     if (isLight(type)) { o.kelvin = KELVIN[it.kelvin] ? Number(it.kelvin) : 2700; o.power = POWER[it.power] ? it.power : 'medium'; }
     return o;
   }
@@ -198,17 +206,36 @@
     if (type === 'cornersofa') o.side = p.side === 'left' ? 'left' : 'right';
     if (type === 'shelf') { o.doors = SHELF_DOORS[p.doors] ? p.doors : 'none'; o.books = p.books !== false; }
     if (p.style) o.style = String(p.style);
+    if (type === 'art') { o.frame = ART_FRAMES[p.frame] ? p.frame : 'black'; o.mat = p.mat !== false && o.frame !== 'none'; if (p.image) o.image = String(p.image); }
     if (isLight(type)) { o.kelvin = KELVIN[p.kelvin] ? Number(p.kelvin) : 2700; o.power = POWER[p.power] ? p.power : 'medium'; }
     if (p.seedRev) o.seedRev = p.seedRev;
     return o;
   }
   function normState(s) {
     const o = { version: 2, name: s.name || 'New house', catalog: (s.catalog || []).map(normPiece), rooms: (s.rooms || []).map(normRoom) };
+    o.removedPieces = Array.isArray(s.removedPieces) ? s.removedPieces.slice() : [];
+    o.placedSeeds = Array.isArray(s.placedSeeds) ? s.placedSeeds.slice() : [];
+    o.removedRooms = Array.isArray(s.removedRooms) ? s.removedRooms.slice() : [];
+    // Starter rooms from house-data.js. A room is matched by name (so your own "Büro" counts as the office);
+    // a starter room you deleted is never recreated.
+    const seedRooms = window.HOUSE_ROOMS || [];
+    const findRoom = (rid) => {
+      const tpl = seedRooms.find((x) => x.id === rid), names = [rid].concat(tpl ? [tpl.name].concat(tpl.match || []) : []).map((n) => n.toLowerCase());
+      let r = o.rooms.find((x) => x.seedId === rid) || o.rooms.find((x) => names.includes(x.name.trim().toLowerCase()));
+      if (!r && tpl && !o.removedRooms.includes(rid)) { r = normRoom(Object.assign({}, tpl, { id: 'r' + uid() })); r.seedId = rid; o.rooms.push(r); }
+      if (r && !r.seedId) r.seedId = rid;
+      return r;
+    };
+    // The old example room goes once the real rooms exist, unless it holds any of your pieces
+    if (!s.exampleRetired) {
+      o.rooms = o.rooms.filter((r) => !(r.name === 'Example living room' && /^Example room/.test(r.notes) && !r.items.some((i) => i.catalogId)));
+      o.exampleRetired = true;
+    } else o.exampleRetired = true;
+    seedRooms.filter((t) => t.ensure).forEach((t) => findRoom(t.id));
     if (!o.rooms.length) o.rooms.push(normRoom({ name: 'Room 1' }));
     o.activeRoomId = o.rooms.some((r) => r.id === s.activeRoomId) ? s.activeRoomId : o.rooms[0].id;
-    // Pieces Claude adds to house-data.js appear in My pieces once; deleting one keeps it out
-    o.removedPieces = Array.isArray(s.removedPieces) ? s.removedPieces.slice() : [];
-    // A higher `rev` on a seeded piece updates its size, look, name and notes (status and photos stay yours)
+    // Pieces Claude adds to house-data.js appear in My pieces once; deleting one keeps it out.
+    // A higher `rev` on a seeded piece updates its size, look, name and notes (status and photos stay yours).
     (window.HOUSE_PIECES || []).forEach((p) => {
       if (!p.id || o.removedPieces.includes(p.id)) return;
       const ex = o.catalog.find((c) => c.id === p.id), rev = p.rev || 1;
@@ -220,23 +247,14 @@
         o.rooms.forEach((r) => r.items.forEach((it) => { if (it.catalogId === ex.id) SHARED.forEach((k) => { if (ex[k] !== undefined) it[k] = ex[k]; }); }));
       }
     });
-    // Placements Claude adds to house-data.js are made once. The target room is one with a matching name,
-    // else a starter room from HOUSE_ROOMS (only if that room was never deleted).
-    o.placedSeeds = Array.isArray(s.placedSeeds) ? s.placedSeeds.slice() : [];
-    o.removedRooms = Array.isArray(s.removedRooms) ? s.removedRooms.slice() : [];
-    const seedRooms = window.HOUSE_ROOMS || [];
-    const findRoom = (rid) => {
-      const tpl = seedRooms.find((x) => x.id === rid), names = [rid].concat(tpl ? [tpl.name].concat(tpl.match || []) : []).map((n) => n.toLowerCase());
-      let r = o.rooms.find((x) => x.seedId === rid) || o.rooms.find((x) => names.includes(x.name.trim().toLowerCase()));
-      if (!r && tpl && !o.removedRooms.includes(rid)) { r = normRoom(Object.assign({}, tpl, { id: 'r' + uid() })); r.seedId = rid; o.rooms.push(r); }
-      return r;
-    };
+    // Placements Claude adds to house-data.js are made once
     (window.HOUSE_PLACEMENTS || []).forEach((pl) => {
       if (!pl.id || o.placedSeeds.includes(pl.id)) return;
-      const pc = o.catalog.find((c) => c.id === pl.catalogId), r = pc && findRoom(pl.room);
+      const pc = pl.catalogId ? o.catalog.find((c) => c.id === pl.catalogId) : null, r = (pc || pl.item) && findRoom(pl.room);
       if (!r) return;
-      const it = normItem(Object.assign({}, pc, { id: undefined, catalogId: pc.id, photos: undefined, status: undefined, link: undefined, notes: undefined },
-        { x: Math.min(pl.x, r.width), y: Math.min(pl.y, r.length), rot: pl.rot || 0 }, pl.extra || {}), r);
+      const base = pc ? Object.assign({}, pc, { id: undefined, catalogId: pc.id, photos: undefined, status: undefined, link: undefined, notes: undefined }) : pl.item;
+      const it = normItem(Object.assign({}, base, { x: Math.min(pl.x, r.width), y: Math.min(pl.y, r.length), rot: pl.rot || 0 }, pl.extra || {}), r);
+      if (it.type === 'art') snapArt(it, r);
       r.items.push(it); o.placedSeeds.push(pl.id);
     });
     return o;
@@ -291,11 +309,24 @@
     for (let a = 0; a < solids.length; a++) for (let z = a + 1; z < solids.length; z++) {
       const A = solids[a].b, B = solids[z].b;
       const ov = (p, q, P, Q) => Math.min(q, Q) - Math.max(p, P) > 1;
+      // chairs tuck under tables and desks, so that pair is not a clash
+      const tA = solids[a].i.type, tB = solids[z].i.type, tuck = (x, y) => x === 'chair' && ['table', 'roundtable', 'desk'].includes(y);
+      if (tuck(tA, tB) || tuck(tB, tA)) continue;
       if (ov(A.x0, A.x1, B.x0, B.x1) && ov(A.y0, A.y1, B.y0, B.y1) && ov(A.z0, A.z1, B.z0, B.z1)) { out.add(solids[a].i.id); out.add(solids[z].i.id); }
     }
     return out;
   }
-  const wallLength = (r, k) => (k === 'n' || k === 's') ? r.width : r.length;
+  function wallLength(r, k) { return (k === 'n' || k === 's') ? r.width : r.length; }
+  // Artwork hangs flat on a wall: pick the given (or nearest) wall, face into the room, stay within the wall
+  function artWall(it) { return ({ 0: 'n', 90: 'e', 180: 's', 270: 'w' })[it.rot] || 'n'; }
+  function snapArt(it, r, wall) {
+    const k = wall || [['n', it.y], ['s', r.length - it.y], ['w', it.x], ['e', r.width - it.x]].sort((a, b) => a[1] - b[1])[0][0];
+    const len = wallLength(r, k), half = Math.min(it.w / 2, len / 2), off = it.d / 2;
+    const along = Math.min(len - half, Math.max(half, (k === 'n' || k === 's') ? it.x : it.y));
+    it.rot = ART_WALL_ROT[k];
+    if (k === 'n') { it.x = along; it.y = off; } else if (k === 's') { it.x = along; it.y = r.length - off; }
+    else if (k === 'w') { it.x = off; it.y = along; } else { it.x = r.width - off; it.y = along; }
+  }
 
   // ================= Shared UI pieces =================
   const photoStrip = (ids, owner) => `<div class="photos" data-owner="${owner}">${(ids || []).map((id) =>
@@ -380,6 +411,7 @@
   // ================= Render: inspector =================
   function renderInspector() {
     const el = $('#inspector'), it = selItem(), op = selOpening();
+    if (it && it.type === 'art') return renderArtInspector(el, it);
     if (it) {
       const p = it.catalogId && piece(it.catalogId), light = isLight(it.type);
       el.innerHTML = `<h2>${esc(it.name)}</h2>
@@ -436,6 +468,36 @@
     } else {
       el.innerHTML = `<h2>Selection</h2><p class="empty">Tap furniture, a light, a door or a window on the plan to edit it. Tap a wall to choose its color.</p>`;
     }
+  }
+
+  function renderArtInspector(el, it) {
+    const r = room(), k = artWall(it), along = Math.round((k === 'n' || k === 's') ? it.x : it.y), centre = Math.round(it.elev + it.h / 2), p = it.catalogId && piece(it.catalogId);
+    el.innerHTML = `<h2>${esc(it.name)}</h2>
+      ${p ? `<div class="linked"><span>From My pieces. Changes apply to every placement of this piece (${placements(p.id)}).</span></div>` : ''}
+      <div class="art-pick">${it.image ? `<img data-photo="${it.image}" alt="">` : '<span class="art-empty">No picture yet: a placeholder is shown</span>'}
+        <div class="btnrow"><button class="btn small" data-act="artPicture">${it.image ? 'Change picture' : 'Add picture'}</button>${it.image ? '<button class="btn light small" data-act="artClear">Remove picture</button>' : ''}</div></div>
+      <label class="field"><span>Label</span><input data-item="name" value="${esc(it.name)}"></label>
+      <div class="row2">
+        <label class="field"><span>Width, cm</span><input type="number" data-item="w" value="${it.w}"></label>
+        <label class="field"><span>Height, cm</span><input type="number" data-item="h" value="${it.h}"></label>
+      </div>
+      <div class="row3">
+        <label class="field"><span>Wall</span><select data-art="wall">${WALLS.map(([w, n]) => `<option value="${w}" ${k === w ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <label class="field"><span>Along wall, cm</span><input type="number" data-art="along" value="${along}"></label>
+        <label class="field"><span>Centre height, cm</span><input type="number" data-art="centre" value="${centre}"></label>
+      </div>
+      <div class="row2">
+        <label class="field"><span>Frame</span><select data-item="frame">${Object.entries(ART_FRAMES).map(([f, n]) => `<option value="${f}" ${it.frame === f ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <label class="check" style="margin-top:22px"><input type="checkbox" data-item="mat" ${it.mat ? 'checked' : ''} ${it.frame === 'none' ? 'disabled' : ''}> White mat</label>
+      </div>
+      <p class="note">Along wall is the picture's centre, from the ${k === 'n' || k === 's' ? 'left' : 'top'} corner. Drag it on the plan to slide it along a wall or move it to another wall. 150 cm is a usual centre height.</p>
+      <div class="btnrow" style="margin-top:12px">
+        <button class="btn light" data-act="rotate">Next wall</button>
+        <button class="btn light" data-act="duplicate">Duplicate</button>
+        ${p ? '<button class="btn light" data-act="editPiece">Edit piece</button>' : '<button class="btn light" data-act="savePiece">Save to My pieces</button>'}
+        <button class="btn danger" data-act="delete">Remove</button>
+      </div>`;
+    hydratePhotos(el);
   }
 
   // ================= Render: catalog =================
@@ -495,6 +557,10 @@
     const base = `<rect class="body" x="${x0}" y="${y0}" width="${w}" height="${d}" rx="2" fill="${c}"/>`;
     switch (it.type) {
       case 'rug': return `<rect class="body" x="${x0}" y="${y0}" width="${w}" height="${d}" fill="${c}" fill-opacity=".75" stroke-dasharray="6 4"/>`;
+      case 'art': { // seen from above: a thin frame on the wall with the picture edge inside
+        const t = Math.max(d, 5), fc = { black: '#1D1D1D', white: '#E8E6E0', oak: '#C49A6C', brass: '#B89559', none: '#8A8A8A' }[it.frame] || c;
+        return `<rect class="body" x="${x0}" y="${-t / 2}" width="${w}" height="${t}" fill="${fc}"/><line class="detail" x1="${x0 + 3}" x2="${x0 + w - 3}" y1="${t / 2 + 3}" y2="${t / 2 + 3}"/>`;
+      }
       case 'plant': return `<ellipse class="body" rx="${w / 2}" ry="${d / 2}" fill="${c}"/>`;
       case 'roundtable': { const r = Math.min(w, d) / 2; return `<rect class="body" x="${x0}" y="${y0}" width="${w}" height="${d}" rx="${r}" ry="${r}" fill="${c}"/>`; }
       case 'bed': {
@@ -600,6 +666,7 @@
   // Walls between the camera and the room turn see-through, with everything mounted on them
   function fadeWalls() {
     const r = room(), c = three.camera.position, hide = { n: c.z < 0, s: c.z > r.length, w: c.x < 0, e: c.x > r.width };
+    for (const k in three.wallArt || {}) three.wallArt[k].forEach((o) => { o.visible = !hide[k]; });
     for (const k in three.walls) {
       const t = hide[k] ? 0.1 : 1;
       for (const m of three.walls[k]) {
@@ -617,12 +684,19 @@
     cam.position.copy(three.controls.target).addScaledVector(new THREE.Vector3(0.5, 0.78, 0.75).normalize(), dist);
     three.controls.update();
   }
+  // Artwork pictures live in IndexedDB; load on first use, then rebuild the 3D view
+  const photoLoading = new Set();
+  function photoFor3D(id) {
+    const u = photoCache.get(id);
+    if (!u && !photoLoading.has(id)) { photoLoading.add(id); getPhoto(id).then((x) => { if (x) schedule3D(); }); }
+    return u || null;
+  }
   let queued3D = false;
   function schedule3D() { if (queued3D || view === 'plan') return; queued3D = true; requestAnimationFrame(() => { queued3D = false; build3D(); }); }
   function disposeTree(o) {
     o.traverse((c) => {
       if (c.geometry) c.geometry.dispose();
-      if (c.material) [].concat(c.material).forEach((m) => { ['map', 'bumpMap'].forEach((k) => { if (m[k]) m[k].dispose(); }); m.dispose(); });
+      if (c.material) [].concat(c.material).forEach((m) => { ['map', 'bumpMap'].forEach((k) => { if (m[k] && !m[k].keep) m[k].dispose(); }); m.dispose(); });
     });
   }
   function build3D() {
@@ -643,7 +717,7 @@
 
     // Walls with openings, skirting, window frames and doors
     const spec = { n: { axis: 'x', fixed: -T / 2, start: -T, end: W + T, inward: 1 }, s: { axis: 'x', fixed: L + T / 2, start: -T, end: W + T, inward: -1 }, w: { axis: 'z', fixed: -T / 2, start: 0, end: L, inward: 1 }, e: { axis: 'z', fixed: W + T / 2, start: 0, end: L, inward: -1 } };
-    three.walls = {};
+    three.walls = {}; three.wallArt = {};
     for (const k of Object.keys(spec)) {
       const frameM = HM.mat('#F3F2EE', { rough: 0.5 }), skirtM = HM.mat('#F6F5F1', { rough: 0.55 }); // per wall, so they fade with it
       const s = spec[k], mats = three.walls[k] = [], wm = HM.wallMaterial(r.walls[k], r.wallFinish[k], s.end - s.start, H); mats.push(wm);
@@ -700,9 +774,10 @@
     const lights = [];
     for (const it of r.items) {
       const light = isLight(it.type), base = it.elev || 0;
-      const obj = HM.buildItem(it, { evening, kelvinHex: KELVIN[it.kelvin], roomTop: H - base - Math.max(it.h, 1) + it.h });
+      const obj = HM.buildItem(it, { evening, kelvinHex: KELVIN[it.kelvin], roomTop: H - base - Math.max(it.h, 1) + it.h, photo: photoFor3D });
       obj.position.set(it.x, base, it.y); obj.rotation.y = -it.rot * Math.PI / 180;
       g.add(obj);
+      if (it.type === 'art') (three.wallArt[artWall(it)] = three.wallArt[artWall(it)] || []).push(obj);
       if (light && evening) lights.push({ it, base, bulbY: obj.userData.bulbY || 0, obj });
     }
     // Evening: each lamp gets a real light source; the brightest few cast shadows
@@ -905,11 +980,13 @@
   function placePiece(p) {
     const r = room();
     const it = normItem(Object.assign({}, p, { id: undefined, catalogId: p.id, x: snap(r.width / 2), y: snap(r.length / 2), rot: 0 }), r);
+    if (it.type === 'art') snapArt(it, r, wallTarget !== 'all' ? wallTarget : 'n');
     r.items.push(it); selected = { kind: 'item', id: it.id }; commit(); toast(`Placed ${p.name} in ${r.name}`);
   }
   function addFromLibrary(ci, ii) {
     const [type, name, w, d, h, color] = LIBRARY[ci][1][ii], r = room();
     const it = normItem({ type, name, w, d, h, color, x: snap(r.width / 2), y: snap(r.length / 2) }, r);
+    if (type === 'art') { it.frame = color === '#F4F3EF' ? 'none' : color === '#C49A6C' ? 'oak' : 'black'; it.mat = it.frame !== 'none'; snapArt(it, r, wallTarget !== 'all' ? wallTarget : 'n'); }
     r.items.push(it); selected = { kind: 'item', id: it.id }; commit();
   }
   function addOpening(type) {
@@ -924,8 +1001,17 @@
     if (selected.kind === 'item') r.items = r.items.filter((i) => i.id !== selected.id); else r.openings = r.openings.filter((o) => o.id !== selected.id);
     selected = null; commit();
   }
-  function rotateSelected(deg) { const it = selItem(); if (!it) return; it.rot = ((it.rot + deg) % 360 + 360) % 360; commit(); }
-  function duplicateSelected() { const it = selItem(); if (!it) return; const c = Object.assign(clone(it), { id: 'i' + uid(), x: it.x + 20, y: it.y + 20 }); room().items.push(c); selected = { kind: 'item', id: c.id }; commit(); }
+  function rotateSelected(deg) {
+    const it = selItem(); if (!it) return;
+    if (it.type === 'art') { const order = ['n', 'e', 's', 'w'], k = order[(order.indexOf(artWall(it)) + (deg < 0 ? 3 : 1)) % 4]; snapArt(it, room(), k); commit(); return; }
+    it.rot = ((it.rot + deg) % 360 + 360) % 360; commit();
+  }
+  function duplicateSelected() {
+    const it = selItem(); if (!it) return;
+    const c = Object.assign(clone(it), { id: 'i' + uid(), x: it.x + 20, y: it.y + 20 });
+    if (c.type === 'art') { const k = artWall(it); if (k === 'n' || k === 's') c.x = it.x + it.w + 15; else c.y = it.y + it.w + 15; snapArt(c, room(), k); }
+    room().items.push(c); selected = { kind: 'item', id: c.id }; commit();
+  }
   function applyWallColor(h) { const r = room(); if (wallTarget === 'all') WALLS.forEach(([k]) => { r.walls[k] = h; }); else r.walls[wallTarget] = h; renderRoomPanel(); refreshDrawing(); }
 
   async function exportBackup() {
@@ -1035,9 +1121,19 @@
       else if (f === 'side') it.side = t.value === 'left' ? 'left' : 'right';
       else if (f === 'doors') it.doors = SHELF_DOORS[t.value] ? t.value : 'none';
       else if (f === 'books') it.books = t.checked;
+      else if (f === 'frame') { it.frame = ART_FRAMES[t.value] ? t.value : 'black'; if (it.frame === 'none') it.mat = false; }
+      else if (f === 'mat') it.mat = t.checked;
       else it[f] = num(t.value, 1, 3000, it[f]);
       syncToPiece(it); commit();
     }
+    if (it && it.type === 'art' && t.dataset.art) {
+      const f = t.dataset.art, r = room();
+      if (f === 'wall') snapArt(it, r, t.value);
+      else if (f === 'along') { const k = artWall(it); if (k === 'n' || k === 's') it.x = num(t.value, 0, 5000, it.x); else it.y = num(t.value, 0, 5000, it.y); snapArt(it, r, k); }
+      else if (f === 'centre') it.elev = Math.max(0, num(t.value, 0, 800, it.elev + it.h / 2) - it.h / 2);
+      syncToPiece(it); commit(); return;
+    }
+    if (it && it.type === 'art' && (t.dataset.item === 'w' || t.dataset.item === 'h')) { setTimeout(() => { const a = selItem(); if (a && a.type === 'art') { snapArt(a, room(), artWall(a)); commit(); } }, 0); }
     if (op && t.dataset.op) {
       const f = t.dataset.op;
       if (f === 'type') { op.type = t.value; if (op.type === 'door') { op.sill = 0; op.height = 205; op.radiator = false; op.color = op.color || '#F7F6F2'; } else { op.sill = 90; op.height = 130; op.radiator = true; } }
@@ -1053,7 +1149,16 @@
     const it = selItem();
     ({ rotate: () => rotateSelected(90), duplicate: duplicateSelected, delete: deleteSelected,
       editPiece: () => it && pieceDialog(piece(it.catalogId)),
-      savePiece: () => it && pieceDialog(null, { from: it, linkItem: it }) })[a.dataset.act]();
+      savePiece: () => it && pieceDialog(null, { from: it, linkItem: it }),
+      artPicture: () => $('#artPicker').click(),
+      artClear: () => { if (it) { delete it.image; syncToPiece(it); if (it.catalogId && piece(it.catalogId)) delete piece(it.catalogId).image; state.rooms.forEach((r) => r.items.forEach((x) => { if (it.catalogId && x.catalogId === it.catalogId) delete x.image; })); commit(); } } })[a.dataset.act]();
+  });
+  // Picture for the selected artwork: stored like room photos (downscaled, in this browser)
+  $('#artPicker').addEventListener('change', async (e) => {
+    const f = e.target.files[0]; e.target.value = ''; const it = selItem();
+    if (!f || !it || it.type !== 'art') return;
+    toast('Adding picture…'); const [id] = await storePhotos([f]); if (!id) return;
+    it.image = id; syncToPiece(it); commit(); toast('Picture added');
   });
 
   $('#catalogPanel').addEventListener('click', (e) => {
@@ -1099,7 +1204,10 @@
   svg.addEventListener('pointermove', (e) => {
     if (!drag) return;
     const p = svgPoint(e), nx = snap(p.x - drag.dx), ny = snap(p.y - drag.dy);
-    if (nx !== drag.it.x || ny !== drag.it.y) { drag.it.x = nx; drag.it.y = ny; drag.moved = true; renderPlan(); schedule3D(); }
+    if (nx !== drag.it.x || ny !== drag.it.y) {
+      drag.it.x = nx; drag.it.y = ny; if (drag.it.type === 'art') snapArt(drag.it, room());
+      drag.moved = true; renderPlan(); schedule3D();
+    }
   });
   const endDrag = () => { if (drag && drag.moved) { save(); renderInspector(); renderStatus(); } drag = null; };
   svg.addEventListener('pointerup', endDrag); svg.addEventListener('pointercancel', endDrag);

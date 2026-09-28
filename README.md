@@ -54,7 +54,7 @@ To send the current state back to Claude, use Claude handoff, then Copy this roo
 - Opening `offset`: from the top corner on side walls, the left corner on top and bottom walls.
 - Item `x`, `y`: center point from the top-left interior corner. `rot`: degrees clockwise. `elev`: underside height above the floor.
 - Items with `catalogId` take size, color and name from the catalog piece.
-- Furniture types: sofa, cornersofa, armchair, chair, table, roundtable, desk, bed, cabinet, shelf, wardrobe, counter, appliance, rug, plant, bath, shower, vanity, toilet, box.
+- Furniture types: sofa, cornersofa, armchair, chair, art, table, roundtable, desk, bed, cabinet, shelf, wardrobe, counter, appliance, rug, plant, bath, shower, vanity, toilet, box.
 - Light types: ceiling, pendant, spot, sconce, floorlamp, tablelamp. `kelvin`: 2200, 2700, 3000, 4000. `power`: soft, medium, bright.
 - Piece `status`: own, considering, ordered.
 - Room `floorFinish`: parquet, wood, marble, stone, tile, concrete, terrazzo, carpet, plain (default parquet). Sets the floor texture in 3D.
@@ -64,6 +64,8 @@ To send the current state back to Claude, use Claude handoff, then Copy this roo
 - Pieces listed in `window.HOUSE_PIECES` in `house-data.js` are added to My pieces once. Deleting one in the app keeps it out. A higher `rev` on a piece pushes a changed size or look to browsers that already have it.
 - `window.HOUSE_PLACEMENTS` places a piece once in a room: the room with a matching name (for example Office, Büro), else a starter room from `window.HOUSE_ROOMS`. A deleted starter room is not recreated.
 - Shelf items and pieces take `doors` (none, lower, full; woven bamboo HÖGADAL style) and `books` (true or false).
+- Artwork: `type: "art"`, `w` and `h` = picture size, `d` = depth, `elev` = bottom edge height, `frame` (black, white, oak, brass, none), `mat` (true or false). It hangs on the wall it is nearest to and faces into the room. Pictures are uploaded in the app and stay in the browser (and backups).
+- Default rooms: Living room, Bedroom, Kitchen, Office, Second bedroom (`HOUSE_ROOMS` with `ensure: true`). A deleted default room is not recreated.
 - `style` picks a specific model: desk `standing` (FlexiSpot style), cabinet `fjallbo`, floorlamp `hektar`.
 - Photos are never part of the handoff; they stay in the browser and in backup files.
 

@@ -7,34 +7,8 @@
 window.HOUSE_SEED = {
   version: 2,
   name: "New house",
-  activeRoomId: "r1",
   catalog: [],
-  rooms: [
-    {
-      id: "r1",
-      name: "Example living room",
-      level: "Ground floor",
-      width: 520, length: 430, height: 260,
-      floor: "#D6BA8E",
-      walls: { n: "#F4F3EF", e: "#B4BFA6", s: "#F4F3EF", w: "#F4F3EF" },
-      notes: "Example room. Delete it once the real rooms are in.",
-      photos: [],
-      openings: [
-        { id: "o1", type: "window", wall: "n", offset: 170, width: 200, height: 140, sill: 80 },
-        { id: "o2", type: "door", wall: "s", offset: 40, width: 90, height: 205, sill: 0 }
-      ],
-      items: [
-        { id: "i1", type: "rug", name: "Rug", x: 190, y: 225, w: 240, d: 170, h: 1, rot: 0, color: "#C9BBA8" },
-        { id: "i2", type: "sofa", name: "Sofa, 3-seat", x: 50, y: 225, w: 220, d: 95, h: 85, rot: 90, color: "#6F7C8A" },
-        { id: "i3", type: "table", name: "Coffee table", x: 185, y: 225, w: 110, d: 60, h: 40, rot: 90, color: "#8B6A4E" },
-        { id: "i4", type: "cabinet", name: "TV unit", x: 500, y: 225, w: 180, d: 40, h: 50, rot: 270, color: "#5B5048" },
-        { id: "i5", type: "armchair", name: "Armchair", x: 165, y: 75, w: 85, d: 85, h: 80, rot: 150, color: "#A0826D" },
-        { id: "i6", type: "plant", name: "Plant", x: 475, y: 45, w: 40, d: 40, h: 120, rot: 0, color: "#5E7A55" },
-        { id: "i7", type: "floorlamp", name: "Floor lamp", x: 45, y: 60, w: 30, d: 30, h: 160, rot: 0, color: "#2F3337", kelvin: 2700, power: "medium" },
-        { id: "i8", type: "pendant", name: "Pendant", x: 260, y: 225, w: 45, d: 45, h: 30, elev: 200, rot: 0, color: "#2F3337", kelvin: 2700, power: "bright" }
-      ]
-    }
-  ]
+  rooms: [] // the default rooms come from HOUSE_ROOMS below
 };
 
 // Pieces Claude found and you confirmed. Each appears in My pieces once (matched by id);
@@ -58,6 +32,12 @@ window.HOUSE_PIECES = [
     w: 130, d: 100, h: 75, color: '#B8875A', status: 'own',
     link: 'https://www.home24.de/produkt/esstisch-amburwood-mit-ausziehfunktion-eiche-massiv-eiche',
     notes: 'home24 (Ars Natura), Sep 2024. Solid oiled oak, round 100 cm, extends to 130 x 100 with a built-in butterfly leaf. Seats 2 to 4 (6 extended). Shown extended (130 x 100). Set width to 100 to plan it closed.'
+  },
+  {
+    id: 'tub-chair', type: 'chair', style: 'tub', name: 'JYSK ADSLEV dining chair',
+    w: 59, d: 59, h: 82, color: '#EAE0C8', status: 'own',
+    link: 'https://jysk.de/esszimmer/esszimmerstuehle/esszimmerstuhl-adslev-stoff-beige-eiche-natur',
+    notes: 'JYSK ADSLEV with armrests, cream/beige fabric with vertical channel stitching, natural oak-colour legs with black caps. 59 x 59 x 82 (JYSK listing). 4 owned (listed for sale in Dec 2024, kept).'
   },
   {
     id: 'q8-desk', type: 'desk', style: 'standing', name: 'FlexiSpot Q8 standing desk',
@@ -91,21 +71,40 @@ window.HOUSE_PIECES = [
   }
 ];
 
-// Starter rooms with placeholder sizes, used only when no room with a matching name exists.
-// Replace the sizes once the rooms are measured.
+// Default rooms (ensure: true = always present unless you delete them). Placeholder sizes until measured.
+// A room of yours with a matching name is used instead of creating a new one.
+const WHITE = '#F7F7F4';
 window.HOUSE_ROOMS = [
   {
-    id: 'office', name: 'Office', match: ['büro', 'buero', 'arbeitszimmer', 'home office', 'study'], level: 'Ground floor',
+    id: 'living', ensure: true, name: 'Living room', match: ['living', 'wohnzimmer', 'stube', 'lounge'], level: 'Ground floor',
+    width: 620, length: 480, height: 245, floor: '#D9B98A', floorFinish: 'parquet', wallFinish: { e: 'oakpanels' },
+    notes: 'Placeholder size until measured. East wall: oak 3D panels as in the listing photo.',
+    openings: [{ type: 'window', wall: 'n', offset: 80, width: 140, height: 130, sill: 85 }, { type: 'window', wall: 'n', offset: 330, width: 110, height: 130, sill: 85 },
+      { type: 'window', wall: 'w', offset: 60, width: 120, height: 130, sill: 85 }, { type: 'door', wall: 's', offset: 480, width: 90, height: 205, color: '#1F2A36' }]
+  },
+  {
+    id: 'bedroom', ensure: true, name: 'Bedroom', match: ['schlafzimmer', 'main bedroom', 'master bedroom'], level: 'Ground floor',
+    width: 420, length: 380, height: 240, floor: '#D9B98A', floorFinish: 'parquet', wallFinish: { n: 'panelling', e: 'panelling', w: 'panelling' },
+    notes: 'Placeholder size until measured. White wood panelling as in the listing photo.',
+    openings: [{ type: 'window', wall: 'e', offset: 70, width: 80, height: 110, sill: 90 }, { type: 'door', wall: 's', offset: 320, width: 85, height: 205 }]
+  },
+  {
+    id: 'kitchen', ensure: true, name: 'Kitchen', match: ['küche', 'kueche', 'kochen'], level: 'Ground floor',
+    width: 380, length: 300, height: 240, floor: '#ECE9E3', floorFinish: 'marble', wallFinish: { n: 'marble' },
+    notes: 'Placeholder size until measured. White marble floor and splashback, white gloss fronts, dark granite top.',
+    openings: [{ type: 'window', wall: 'e', offset: 90, width: 100, height: 110, sill: 95 }, { type: 'door', wall: 's', offset: 30, width: 85, height: 205 }]
+  },
+  {
+    id: 'office', ensure: true, name: 'Office', match: ['büro', 'buero', 'arbeitszimmer', 'home office', 'study'], level: 'Ground floor',
     width: 380, length: 320, height: 240, floor: '#D9B98A', floorFinish: 'parquet',
     notes: 'Placeholder size until measured.',
     openings: [{ type: 'window', wall: 'n', offset: 120, width: 120, height: 130, sill: 85 }, { type: 'door', wall: 's', offset: 270, width: 85, height: 205 }]
   },
   {
-    id: 'living', name: 'Living room', match: ['living', 'wohnzimmer', 'stube', 'lounge'], level: 'Ground floor',
-    width: 620, length: 480, height: 245, floor: '#D9B98A', floorFinish: 'parquet', wallFinish: { e: 'oakpanels' },
-    notes: 'Placeholder size until measured. East wall: oak 3D panels as in the listing photo.',
-    openings: [{ type: 'window', wall: 'n', offset: 80, width: 140, height: 130, sill: 85 }, { type: 'window', wall: 'n', offset: 330, width: 110, height: 130, sill: 85 },
-      { type: 'window', wall: 'w', offset: 60, width: 120, height: 130, sill: 85 }, { type: 'door', wall: 's', offset: 480, width: 90, height: 205, color: '#1F2A36' }]
+    id: 'bedroom2', ensure: true, name: 'Second bedroom', match: ['bedroom 2', 'schlafzimmer 2', 'guest room', 'gästezimmer', 'gaestezimmer', 'kinderzimmer'], level: 'Ground floor',
+    width: 360, length: 320, height: 240, floor: '#D9B98A', floorFinish: 'parquet',
+    notes: 'Placeholder size until measured.',
+    openings: [{ type: 'window', wall: 'n', offset: 120, width: 110, height: 120, sill: 90 }, { type: 'door', wall: 's', offset: 250, width: 85, height: 205 }]
   }
 ];
 
@@ -115,5 +114,15 @@ window.HOUSE_PLACEMENTS = [
   { id: 'office-billy', room: 'office', catalogId: 'billy-hoegadal', x: 16, y: 190, rot: 270 },
   { id: 'office-hektar', room: 'office', catalogId: 'hektar-floor', x: 330, y: 45, rot: 200 },
   { id: 'living-billy-1', room: 'living', catalogId: 'billy', x: 15, y: 260, rot: 270 },
-  { id: 'living-billy-2', room: 'living', catalogId: 'billy', x: 15, y: 341, rot: 270 }
+  { id: 'living-billy-2', room: 'living', catalogId: 'billy', x: 15, y: 341, rot: 270 },
+  { id: 'living-sofa', room: 'living', catalogId: 'dellia-sofa', x: 240, y: 389, rot: 180 },
+  { id: 'living-table', room: 'living', catalogId: 'amburwood-table', x: 450, y: 150, rot: 0 },
+  { id: 'living-chair-1', room: 'living', catalogId: 'tub-chair', x: 417, y: 88, rot: 0 },
+  { id: 'living-chair-2', room: 'living', catalogId: 'tub-chair', x: 483, y: 88, rot: 0 },
+  { id: 'living-chair-3', room: 'living', catalogId: 'tub-chair', x: 417, y: 212, rot: 180 },
+  { id: 'living-chair-4', room: 'living', catalogId: 'tub-chair', x: 483, y: 212, rot: 180 },
+  { id: 'living-art', room: 'living', x: 240, y: 470, item: { type: 'art', name: 'Artwork above the sofa', w: 100, d: 3, h: 70, frame: 'oak', mat: true, elev: 115 } },
+  { id: 'bedroom-bed', room: 'bedroom', catalogId: 'mattis-bed', x: 210, y: 108, rot: 0 },
+  { id: 'kitchen-counter', room: 'kitchen', x: 170, y: 30, item: { type: 'counter', name: 'Kitchen counter', w: 280, d: 60, h: 90, color: '#F4F4F2' } },
+  { id: 'kitchen-tall', room: 'kitchen', x: 20, y: 170, rot: 270, item: { type: 'appliance', name: 'Tall units with oven', w: 60, d: 40, h: 225, color: '#3A3634' } }
 ];
