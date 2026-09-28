@@ -836,19 +836,19 @@ window.HOUSE_PLACEMENTS = [
   { id: 'living-art', rev: 3, from: { x: 618.5, y: 340 }, room: 'living', x: 481, y: 230, item: { type: 'art', name: 'Artwork above the sofa', w: 100, d: 3, h: 70, frame: 'oak', mat: true, elev: 115 } },
   { id: 'living-oakpanel', rev: 3, from: { x: 305, y: 479 }, room: 'living', x: 178, y: 0, extra: { w: 208, h: 205, elev: 10 },
     item: { type: 'art', name: 'Oak 3D wall panel', w: 208, d: 2, h: 205, frame: 'oakpanel', mat: false, elev: 10 } },
-  { id: 'bedroom-bed', rev: 4, from: { x: 153, y: 277 }, room: 'bedroom', catalogId: 'mattis-bed', x: 115, y: 277, rot: 180 }, // clear of the door swing
+  { id: 'bedroom-bed', rev: 5, from: [{ x: 115, y: 277 }, { x: 153, y: 277 }], room: 'bedroom', catalogId: 'mattis-bed', x: 153, y: 277, rot: 180 }, // centred; clears the door's arc
   // rev 4: the kitchen as in the tour (fitted run with sink, hob and wall units; dark oak tall units with two ovens)
-  { id: 'kitchen-counter', rev: 5, from: { x: 110, y: 287 }, room: 'kitchen', x: 105, y: 287, rot: 180, extra: { w: 210, style: 'fitted', name: 'Kitchen run' },
-    item: { type: 'counter', style: 'fitted', name: 'Kitchen run', w: 210, d: 60, h: 90, color: '#F4F4F2' } },
-  { id: 'kitchen-tall', rev: 4, from: { x: 30, y: 52 }, room: 'kitchen', x: 30, y: 52, rot: 270, extra: { w: 100, d: 60, h: 225, color: '#4A4440', style: 'tallovens', name: 'Tall units with ovens' },
-    item: { type: 'appliance', style: 'tallovens', name: 'Tall units with ovens', w: 100, d: 60, h: 225, color: '#4A4440' } },
-  { id: 'bath-toilet', room: 'bathroom', x: 30, y: 27, item: { type: 'toilet', name: 'Wall-hung WC', w: 37, d: 54, h: 42, color: '#FAFAF8' } },
-  { id: 'bath-vanity', room: 'bathroom', x: 103, y: 20, item: { type: 'vanity', name: 'Basin on vanity', w: 59, d: 40, h: 85, color: '#C49A6C' } },
-  { id: 'bath-tub', rev: 2, from: { x: 223, y: 40 }, room: 'bathroom', x: 223, y: 40, extra: { style: 'screen', name: 'Bath with shower screen' },
-    item: { type: 'bath', style: 'screen', name: 'Bath with shower screen', w: 167, d: 80, h: 58, color: '#FAFAF8' } },
-  { id: 'hall0-stairs', rev: 2, from: { x: 40, y: 211 }, room: 'hall0', x: 40, y: 211, extra: { color: '#5E3A20', style: 'glass' },
-    item: { type: 'stairs', style: 'glass', name: 'Stairs up', w: 81, d: 271, h: 225, color: '#5E3A20' } },
-  { id: 'landing1-stairs', room: 'landing1', x: 51, y: 136, item: { type: 'stairs', name: 'Stairs up', w: 87, d: 272, h: 213, color: '#9A6B3F' } },
-  { id: 'landing1-cupboard', room: 'landing1', x: 159, y: 472, rot: 90, item: { type: 'wardrobe', name: 'Built-in cupboard', w: 145, d: 38, h: 200, color: '#F2F1EC' } },
-  { id: 'landing2-stairs', room: 'landing2', x: 48, y: 129, item: { type: 'stairs', name: 'Stairs up', w: 91, d: 260, h: 225, color: '#C8A77E' } }
+  { id: 'kitchen-counter', rev: 6, from: [{ x: 105, y: 287 }, { x: 110, y: 287 }], room: 'kitchen', x: 105, y: 287, rot: 180, extra: { w: 210, style: 'fitted', name: 'Kitchen run', fixed: true },
+    item: { type: 'counter', style: 'fitted', name: 'Kitchen run', fixed: true, w: 210, d: 60, h: 90, color: '#F4F4F2' } },
+  { id: 'kitchen-tall', rev: 5, from: { x: 30, y: 52 }, room: 'kitchen', x: 30, y: 52, rot: 270, extra: { w: 100, d: 60, h: 225, color: '#6B5F55', style: 'tallovens', name: 'Tall units with ovens', fixed: true },
+    item: { type: 'appliance', style: 'tallovens', name: 'Tall units with ovens', fixed: true, w: 100, d: 60, h: 225, color: '#6B5F55' } },
+  { id: 'bath-toilet', rev: 2, from: { x: 30, y: 27 }, room: 'bathroom', x: 30, y: 27, extra: { fixed: true }, item: { type: 'toilet', fixed: true, name: 'Wall-hung WC', w: 37, d: 54, h: 42, color: '#FAFAF8' } },
+  { id: 'bath-vanity', rev: 2, from: { x: 103, y: 20 }, room: 'bathroom', x: 103, y: 20, extra: { fixed: true }, item: { type: 'vanity', fixed: true, name: 'Basin on vanity', w: 59, d: 40, h: 85, color: '#C49A6C' } },
+  { id: 'bath-tub', rev: 3, from: { x: 223, y: 40 }, room: 'bathroom', x: 223, y: 40, extra: { fixed: true, style: 'screen', name: 'Bath with shower screen' },
+    item: { type: 'bath', fixed: true, style: 'screen', name: 'Bath with shower screen', w: 167, d: 80, h: 58, color: '#FAFAF8' } },
+  { id: 'hall0-stairs', rev: 3, from: { x: 40, y: 211 }, room: 'hall0', x: 40, y: 211, extra: { fixed: true, color: '#5E3A20', style: 'glass' },
+    item: { type: 'stairs', fixed: true, style: 'glass', name: 'Stairs up', w: 81, d: 271, h: 225, color: '#5E3A20' } },
+  { id: 'landing1-stairs', rev: 2, from: { x: 51, y: 136 }, room: 'landing1', x: 51, y: 136, extra: { fixed: true }, item: { type: 'stairs', fixed: true, name: 'Stairs up', w: 87, d: 272, h: 213, color: '#9A6B3F' } },
+  { id: 'landing1-cupboard', rev: 2, from: { x: 159, y: 472 }, room: 'landing1', x: 159, y: 472, extra: { fixed: true }, rot: 90, item: { type: 'wardrobe', fixed: true, name: 'Built-in cupboard', w: 145, d: 38, h: 200, color: '#F2F1EC' } },
+  { id: 'landing2-stairs', rev: 2, from: { x: 48, y: 129 }, room: 'landing2', x: 48, y: 129, extra: { fixed: true }, item: { type: 'stairs', fixed: true, name: 'Stairs up', w: 91, d: 260, h: 225, color: '#C8A77E' } }
 ];

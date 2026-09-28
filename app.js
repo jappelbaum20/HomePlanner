@@ -179,6 +179,7 @@
     if (type === 'cornersofa') o.side = it.side === 'left' ? 'left' : 'right';
     if (type === 'shelf') { o.doors = SHELF_DOORS[it.doors] ? it.doors : 'none'; o.books = it.books !== false; }
     if (it.style) o.style = String(it.style);
+    if (it.fixed) o.fixed = true; // built into the house: cannot be moved, resized, rotated or removed
     if (type === 'art') { o.frame = ART_FRAMES[it.frame] ? it.frame : 'black'; o.mat = it.mat !== false && !['none', 'oakpanel'].includes(o.frame); if (it.image) o.image = String(it.image); }
     if (isLight(type)) { o.kelvin = KELVIN[it.kelvin] ? Number(it.kelvin) : 2700; o.power = POWER[it.power] ? it.power : 'medium'; }
     return o;
@@ -287,9 +288,9 @@
       const mark = pl.rev ? pl.id + '@' + pl.rev : null;
       if (o.placedSeeds.includes(pl.id)) {
         if (!mark || o.placedSeeds.includes(mark)) return;
-        const r = findRoom(pl.room), f = pl.from || {};
+        const r = findRoom(pl.room), froms = [].concat(pl.from || {});
         const it = r && r.items.find((i) => (pl.catalogId ? i.catalogId === pl.catalogId : (i.type === pl.item.type && !i.catalogId)) &&
-          Math.abs(i.x - f.x) < 2 && Math.abs(i.y - f.y) < 2 && (f.rot == null || i.rot === f.rot));
+          froms.some((f) => Math.abs(i.x - f.x) < 2 && Math.abs(i.y - f.y) < 2 && (f.rot == null || i.rot === f.rot)));
         if (it) { Object.assign(it, pl.extra || {}); it.x = Math.min(pl.x, r.width); it.y = Math.min(pl.y, r.length); it.rot = pl.rot || 0; if (it.type === 'art') snapArt(it, r); }
         o.placedSeeds.push(mark); return;
       }
@@ -350,20 +351,31 @@
     const hw = (it.w * c + it.d * s) / 2, hd = (it.w * s + it.d * c) / 2;
     return { x0: it.x - hw, x1: it.x + hw, y0: it.y - hd, y1: it.y + hd, z0: it.elev || 0, z1: (it.elev || 0) + it.h };
   }
-  // Area a door sweeps when it opens into the room (a square of its width against the wall)
+  // The quarter circle a door leaf sweeps as it opens into the room: hinge at the start of the opening
+  // (offset along the wall), radius = door width. Kept in the wall's own frame (x along the wall, y into the room).
   function doorZones(r) {
-    return r.openings.filter((o) => o.type === 'door' && o.leaf !== false && o.swing !== 'out').map((o) => {
-      const a = o.offset, b = o.offset + o.width, w = o.width;
-      return { n: { x0: a, x1: b, y0: 0, y1: w }, s: { x0: a, x1: b, y0: r.length - w, y1: r.length }, w: { x0: 0, x1: w, y0: a, y1: b }, e: { x0: r.width - w, x1: r.width, y0: a, y1: b } }[o.wall];
-    });
+    return r.openings.filter((o) => o.type === 'door' && o.leaf !== false && o.swing !== 'out').map((o) => ({ wall: o.wall, a: o.offset, w: o.width }));
   }
-  // Rugs, wall art and anything mounted above door height can sit in a door's swing; everything else must not
-  const inSwing = (it, zones) => {
+  // An item's footprint in a wall's frame (all four walls are axis-aligned, so a box stays a box)
+  function toWallFrame(r, k, b) {
+    if (k === 'n') return { x0: b.x0, x1: b.x1, y0: b.y0, y1: b.y1 };
+    if (k === 's') return { x0: b.x0, x1: b.x1, y0: r.length - b.y1, y1: r.length - b.y0 };
+    if (k === 'w') return { x0: b.y0, x1: b.y1, y0: b.x0, y1: b.x1 };
+    return { x0: b.y0, x1: b.y1, y0: r.width - b.x1, y1: r.width - b.x0 };
+  }
+  // Rugs, wall art and anything mounted above door height can sit in a door's swing; everything else must not.
+  // 6 cm of tolerance: a leaf clears things it only grazes.
+  const inSwing = (it, zones, r) => {
     if (it.type === 'rug' || it.type === 'art' || (it.elev || 0) >= 200) return false;
-    const b = aabb(it); // 6 cm of tolerance: a leaf clears things it only grazes
-    return zones.some((z) => Math.min(b.x1, z.x1) - Math.max(b.x0, z.x0) > 6 && Math.min(b.y1, z.y1) - Math.max(b.y0, z.y0) > 6);
+    const b = aabb(it);
+    return zones.some((z) => {
+      const f = toWallFrame(r, z.wall, b), x0 = Math.max(f.x0, z.a), x1 = Math.min(f.x1, z.a + z.w), y0 = Math.max(f.y0, 0), y1 = Math.min(f.y1, z.w);
+      if (x1 - x0 <= 6 || y1 - y0 <= 6) return false;
+      const nx = Math.max(x0, Math.min(z.a, x1)) - z.a, ny = Math.max(y0, Math.min(0, y1));
+      return Math.hypot(nx, ny) < z.w - 6;
+    });
   };
-  function swingClashes(r) { const z = doorZones(r); return new Set(r.items.filter((it) => inSwing(it, z)).map((it) => it.id)); }
+  function swingClashes(r) { const z = doorZones(r); return new Set(r.items.filter((it) => inSwing(it, z, r)).map((it) => it.id)); }
   function clashes(r) {
     const out = new Set(), solids = r.items.filter((i) => i.type !== 'rug').map((i) => ({ i, b: aabb(i) }));
     for (const { i, b } of solids) if (b.x0 < -0.5 || b.y0 < -0.5 || b.x1 > r.width + 0.5 || b.y1 > r.length + 0.5 || b.z1 > r.height + 0.5) out.add(i.id);
@@ -475,6 +487,11 @@
   function renderInspector() {
     const el = $('#inspector'), it = selItem(), op = selOpening();
     if (it && it.type === 'art') return renderArtInspector(el, it);
+    if (it && it.fixed) {
+      el.innerHTML = `<h2>${esc(it.name)}</h2><div class="ins-thumb">${thumbImg(it, 'thumb3d big')}</div>
+        <p class="note">Built into the house, so it is locked in place. ${Math.round(it.w)} x ${Math.round(it.d)} x ${Math.round(it.h)} cm.</p>`;
+      return;
+    }
     if (it) {
       const p = it.catalogId && piece(it.catalogId), light = isLight(it.type);
       el.innerHTML = `<h2>${esc(it.name)}</h2>
@@ -574,7 +591,7 @@
   const thumbs = new Map(), thumbQueue = [];
   let thumbBusy = false, thumbFail = false;
   const libFrame = (color) => color === '#F4F3EF' ? 'none' : color === '#C49A6C' ? 'oak' : color === '#C9A06A' ? 'oakpanel' : 'black';
-  const THUMB_VERSION = 3; // bump when models change so saved thumbnails are redrawn
+  const THUMB_VERSION = 4; // bump when models change so saved thumbnails are redrawn
   const thumbKey = (o) => JSON.stringify([THUMB_VERSION].concat(['type', 'w', 'd', 'h', 'color', 'style', 'doors', 'books', 'side', 'frame', 'mat', 'image', 'kelvin'].map((k) => o[k])));
   const showThumb = (key, url) => $$('img[data-thumb]').forEach((img) => { if (img.dataset.thumb === key) img.src = url; });
   function thumbImg(o, cls) {
@@ -729,7 +746,7 @@
     for (const o of r.openings) {
       let g = `<rect x="${o.offset}" y="${-T - 1}" width="${o.width}" height="${T + 2}" fill="${r.floor}"/>`;
       if (o.niche > 0) g += `<rect class="niche" x="${o.offset}" y="${-o.niche}" width="${o.width}" height="${o.niche}" fill="${r.floor}"/>`;
-      if (o.type === 'door' && o.leaf !== false && o.swing !== 'out') g += `<rect class="swing" x="${o.offset}" y="0" width="${o.width}" height="${o.width}" fill="url(#swingHatch)"/>`;
+      if (o.type === 'door' && o.leaf !== false && o.swing !== 'out') g += `<path class="swing" d="M${o.offset} 0H${o.offset + o.width}A${o.width} ${o.width} 0 0 1 ${o.offset} ${o.width}Z" fill="url(#swingHatch)"/>`;
       if (o.type === 'door' && o.leaf !== false && o.swing === 'out') g += `<line class="line" x1="${o.offset}" x2="${o.offset + o.width}" y1="${-T / 2}" y2="${-T / 2}" stroke-dasharray="4 3"/>`;
       else if (o.type === 'door' && o.leaf !== false) g += `<rect x="${o.offset}" y="0" width="${o.width}" height="${o.width}" fill="transparent"/><path class="line" d="M${o.offset} 0L${o.offset} ${o.width}M${o.offset + o.width} 0A${o.width} ${o.width} 0 0 1 ${o.offset} ${o.width}"/>`;
       else g += `<rect class="glass" x="${o.offset}" y="${-T}" width="${o.width}" height="${T}"/><line class="line" x1="${o.offset}" x2="${o.offset + o.width}" y1="${-T / 2}" y2="${-T / 2}"/>`;
@@ -1167,13 +1184,16 @@
     if (type === 'door') o.color = '#F7F6F2';
     r.openings.push(o); selected = { kind: 'opening', id: o.id }; commit();
   }
+  const lockedMsg = () => toast('Built into the house: locked in place');
   function deleteSelected() {
     const r = room(); if (!selected) return;
+    if (selItem() && selItem().fixed) return lockedMsg();
     if (selected.kind === 'item') r.items = r.items.filter((i) => i.id !== selected.id); else r.openings = r.openings.filter((o) => o.id !== selected.id);
     selected = null; commit();
   }
   function rotateSelected(deg) {
     const it = selItem(); if (!it) return;
+    if (it.fixed) return lockedMsg();
     if (it.type === 'art') { const order = ['n', 'e', 's', 'w'], k = order[(order.indexOf(artWall(it)) + (deg < 0 ? 3 : 1)) % 4]; snapArt(it, room(), k); commit(); return; }
     it.rot = ((it.rot + deg) % 360 + 360) % 360; commit();
   }
@@ -1371,8 +1391,8 @@
     const r = room(), ig = e.target.closest('.item'), og = e.target.closest('.opening'), wg = e.target.closest('.wall');
     if (ig) {
       const it = r.items.find((i) => i.id === ig.dataset.item), p = svgPoint(e);
-      selected = { kind: 'item', id: it.id }; drag = { it, dx: p.x - it.x, dy: p.y - it.y, moved: false, x0: it.x, y0: it.y, rot0: it.rot };
-      svg.setPointerCapture(e.pointerId); renderInspector(); renderPlan();
+      selected = { kind: 'item', id: it.id }; drag = it.fixed ? null : { it, dx: p.x - it.x, dy: p.y - it.y, moved: false, x0: it.x, y0: it.y, rot0: it.rot };
+      if (drag) svg.setPointerCapture(e.pointerId); renderInspector(); renderPlan();
     } else if (og) { selected = { kind: 'opening', id: og.dataset.opening }; renderRoomPanel(); renderInspector(); renderPlan(); }
     else if (wg) { wallTarget = wg.dataset.wall; selected = null; roomTab = 'layout'; renderRoomPanel(); renderInspector(); renderPlan(); }
     else if (selected) { selected = null; renderRoomPanel(); renderInspector(); renderPlan(); }
@@ -1388,7 +1408,7 @@
   const endDrag = () => {
     if (drag && drag.moved) {
       const r = room(), it = drag.it;
-      if (inSwing(it, doorZones(r)) && !inSwing(Object.assign({}, it, { x: drag.x0, y: drag.y0, rot: drag.rot0 }), doorZones(r))) {
+      if (inSwing(it, doorZones(r), r) && !inSwing(Object.assign({}, it, { x: drag.x0, y: drag.y0, rot: drag.rot0 }), doorZones(r), r)) {
         it.x = drag.x0; it.y = drag.y0; it.rot = drag.rot0; renderPlan(); schedule3D(); toast('Keep the door swing clear: moved it back');
       }
       save(); renderInspector(); renderStatus();
@@ -1403,6 +1423,7 @@
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); }
     else if (e.key === 'Escape') { selected = null; renderAll(); }
     else if (it && (e.key === 'r' || e.key === 'R')) rotateSelected(e.shiftKey ? -15 : 90);
+    else if (it && it.fixed && e.key.startsWith('Arrow')) { e.preventDefault(); lockedMsg(); }
     else if (it && e.key.startsWith('Arrow')) {
       e.preventDefault(); const step = e.shiftKey ? 25 : SNAP;
       if (e.key === 'ArrowLeft') it.x -= step; if (e.key === 'ArrowRight') it.x += step;

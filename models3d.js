@@ -561,7 +561,7 @@
   // white gloss wall units and an angled hood. Laid out left to right seen from the front; extra width becomes a filler.
   B.fittedKitchen = (g, w, d, h, c) => {
     const plinth = 10, top = 4, body = h - top - plinth, z = d / 2 - 1.2, gloss = mat(c, { rough: 0.12 }); gloss.envMapIntensity = 0.9;
-    const granite = mat('#4F443D', { rough: 0.15, map: texFor('granite', w, d) }); granite.envMapIntensity = 1;
+    const granite = mat('#7A6555', { rough: 0.15, map: texFor('granite', w, d) }); granite.envMapIntensity = 1;
     part(g, mat('#2A2A2A'), w - 2, plinth, d - 8, 0, plinth / 2, -3);
     part(g, mat('#EEEEEC', { rough: 0.5 }), w, body, d - 3, 0, plinth + body / 2, -1.5);
     part(g, granite, w + 1, top, d + 2, 0, h - top / 2, 1, 0.6);
@@ -572,14 +572,20 @@
     let sinkX = 0, hobX = 0;
     for (const [kind, mw0] of mods) {
       const mw = mw0 * k, cx = x + mw / 2;
-      if (kind === 'dish') { part(g, STEEL(), mw - 0.6, body - 1, 1.6, cx, plinth + body / 2, z, 0.2); part(g, mat('#1C1C1C', { rough: 0.4 }), mw - 0.6, 7, 1.8, cx, h - top - 4.5, z + 0.1, 0.2); }
+      if (kind === 'dish') { // white door with a black control strip along the top
+        part(g, mat('#F2F2F0', { rough: 0.3 }), mw - 0.6, body - 1, 1.6, cx, plinth + body / 2, z, 0.2);
+        part(g, mat('#141414', { rough: 0.3 }), mw - 0.6, 8, 1.9, cx, h - top - 5, z + 0.1, 0.2);
+        part(g, mat('#2A2A2A', { rough: 0.5 }), mw * 0.3, 4, 2.2, cx - mw * 0.05, h - top - 9, z + 0.3, 0.3); }
       if (kind === 'door') { part(g, gloss, mw - 0.6, body - 1, 1.6, cx, plinth + body / 2, z, 0.2); handle(cx, h - top - 8); sinkX = cx - 8; }
-      if (kind === 'drawers') { const dh = (body - 1) / 3; for (let i = 0; i < 3; i++) { const y = plinth + dh * (i + 0.5); part(g, gloss, mw - 0.6, dh - 0.8, 1.6, cx, y, z, 0.2); handle(cx, y + dh * 0.3); } }
+      if (kind === 'drawers') { // a shallow top drawer over two deep ones
+        const hs = [0.4, 0.4, 0.2].map((f) => f * (body - 1)); let y0 = plinth;
+        for (const dh of hs) { part(g, gloss, mw - 0.6, dh - 0.8, 1.6, cx, y0 + dh / 2, z, 0.2); handle(cx, y0 + dh * 0.72); y0 += dh; } }
       if (kind === 'oven') { part(g, gloss, mw - 0.6, 12, 1.6, cx, plinth + 6, z, 0.2); ovenFront(g, cx, plinth + 12, mw - 0.6, body - 13, z); hobX = cx; }
       x += mw;
     }
     // sink: stainless bowl set into the granite, with a tap behind it
-    part(g, mat('#A9ADB0', { rough: 0.35, metal: 0.7 }), 48, 0.6, 38, sinkX, h + 0.1, 0, 3); part(g, mat('#5E6264', { rough: 0.45, metal: 0.6 }), 40, 0.4, 32, sinkX, h + 0.25, 0, 3);
+    cyl(g, mat('#B4B8BB', { rough: 0.3, metal: 0.85 }), 21, 21, 0.5, sinkX, h + 0.1, 2, 40); // round undermount bowl
+    cyl(g, mat('#6E7274', { rough: 0.35, metal: 0.8 }), 18.5, 18.5, 0.4, sinkX, h + 0.3, 2, 40);
     cyl(g, STEEL(), 1.4, 1.6, 26, sinkX, h + 13, -d / 2 + 8, 16); const spout = part(g, STEEL(), 2.2, 2.2, 20, sinkX, h + 25, -d / 2 + 17, 1); spout.rotation.x = -0.15;
     // hob: black glass with faint rings
     part(g, BLACK_GLASS(), 58, 0.6, 50, hobX, h + 0.2, 1, 1);
@@ -588,18 +594,26 @@
     // go in their own group that the room fades out together with that wall
     const up = new T3.Group(); g.add(up); g.userData.wallMounted = up; const gFloor = g; g = up;
     part(g, mat('#F3F1EC', { rough: 0.12, map: texFor('marble', w, 55) }), w, 55, 1.5, 0, h + 27.5, -d / 2 + 0.75);
-    const wallW = Math.max(0, hobX - 30 - (-w / 2)), nU = Math.max(1, Math.round(wallW / 60));
+    // marble also wraps onto the side wall at the hob end
+    part(g, mat('#F3F1EC', { rough: 0.12, map: texFor('marble', d, 110) }), 1.5, 110, d, w / 2 - 0.75, h + 55, 0);
+    const wallW = Math.max(0, hobX - 31 - (-w / 2)), nU = wallW > 70 ? 2 : 1; // two gloss wall units over dishwasher and sink
     for (let i = 0; i < nU; i++) { const uw = wallW / nU, cx = -w / 2 + uw * (i + 0.5); part(g, gloss, uw - 0.6, 50, 34, cx, h + 55 + 25, -d / 2 + 17, 0.4); part(g, STEEL(), uw * 0.4, 1.2, 2, cx, h + 55 + 3, -d / 2 + 35, 0.5); }
-    const hood = part(g, mat('#F2F2F0', { rough: 0.2 }), 58, 42, 3, hobX, h + 85, -d / 2 + 22, 0.5); hood.rotation.x = -0.55;
-    part(g, BLACK_GLASS(), 50, 30, 0.5, hobX, h + 85, -d / 2 + 24.2, 0).rotation.x = -0.55;
-    part(g, mat('#F2F2F0', { rough: 0.2 }), 22, 60, 20, hobX, h + 125, -d / 2 + 10, 0.5); // chimney
+    // angled wall hood: white body, pale glass face in a white frame, lights underneath
+    // the panel leans back from its lower front edge (about 40 cm out over the hob) to the wall
+    const white = mat('#F4F4F2', { rough: 0.2 }), hood = new T3.Group(); hood.position.set(hobX, h + 65, -d / 2 + 40); hood.rotation.x = -0.72; g.add(hood);
+    part(hood, white, 60, 56, 7, 0, 28, -3.5, 0.8);
+    const glass = mat('#E6EBED', { rough: 0.05, metal: 0.25 }); glass.envMapIntensity = 1.4; part(hood, glass, 44, 34, 0.6, 0, 29, 0.2, 0.2);
+    part(hood, STEEL(), 44, 1.2, 0.8, 0, 12, 0.3, 0.2);
+    part(g, white, 60, 26, 16, hobX, h + 112, -d / 2 + 8, 0.8); // body against the wall
+    for (const ox of [-15, 15]) cyl(g, mat('#FFFFFF', { emissive: '#FFFFFF', emissiveIntensity: 0.8 }), 2.5, 2.5, 0.4, hobX + ox, h + 63, -d / 2 + 36, 16);
     g = gFloor;
   };
   // Tall units as in the house: two dark oak columns, the right one with a compact oven over a full oven
-  B.tallOvens = (g, w, d, h, c) => {
+  B.tallOvens = (g, w, d, h, c) => { // c: oak colour
     const oak = wood(c, w, h), plinth = 10, body = h - plinth, z = d / 2 - 0.8, cw = w / 2;
     part(g, mat('#2A2A2A'), w - 2, plinth, d - 8, 0, plinth / 2, -3);
-    part(g, mat('#3A3531', { rough: 0.6 }), w, body, d - 2, 0, plinth + body / 2, -1);
+    part(g, mat('#3A3531', { rough: 0.6 }), w - 4, body, d - 2, 0, plinth + body / 2, -1);
+    for (const sx of [-1, 1]) part(g, mat('#F4F4F2', { rough: 0.35 }), 2, h, d, sx * (w / 2 - 1), h / 2, 0); // white end panels, as in the house
     const bar = (x, y, len) => part(g, STEEL(), 1.4, len, 2.2, x, y, z + 1.6, 0.6);
     // left column: tall door over a lower door
     const lx = -cw / 2, d1 = body * 0.62;
