@@ -246,6 +246,8 @@
     o.removedPieces = Array.isArray(s.removedPieces) ? s.removedPieces.slice() : [];
     o.placedSeeds = Array.isArray(s.placedSeeds) ? s.placedSeeds.slice() : [];
     o.removedRooms = Array.isArray(s.removedRooms) ? s.removedRooms.slice() : [];
+    // favourites, shown at the top of Furniture and lights: 'p:<piece id>' or 'l:<generic item name>'
+    o.favorites = (Array.isArray(s.favorites) ? s.favorites : []).filter((k) => typeof k === 'string');
     // your paint palette: [{ id, name, hex }]
     o.paints = (Array.isArray(s.paints) ? s.paints : []).map((p) => ({ id: p.id || 'c' + uid(), name: String(p.name || p.hex || ''), hex: hex(p.hex, '') })).filter((p) => p.hex);
     // Starter rooms from house-data.js. A room is matched by name (so your own "Büro" counts as the office);
@@ -665,9 +667,16 @@
       }, { timeout: 2000 }));
     });
   }
+  const isFav = (k) => state.favorites.includes(k);
+  const favBtn = (k, label) => `<button class="fav ${isFav(k) ? 'on' : ''}" data-fav="${esc(k)}" aria-pressed="${isFav(k)}" aria-label="${isFav(k) ? 'Remove from' : 'Add to'} favorites: ${esc(label)}" title="${isFav(k) ? 'Remove from favorites' : 'Add to favorites'}">${isFav(k) ? '★' : '☆'}</button>`;
+  function libCard(ci, ii) {
+    const [type, name, w, d, h, color, extra] = LIBRARY[ci][1][ii];
+    return `<div class="libcard"><button data-lib="${ci}:${ii}">${thumbImg(Object.assign({ type, w, d, h, color }, extra || {}, type === 'art' ? { frame: libFrame(color), mat: !['#F4F3EF', '#C9A06A'].includes(color) } : {}))}<span>${name}</span><small>${w} x ${d} x ${h} cm</small></button>${favBtn('l:' + name, name)}</div>`;
+  }
+  function libIndex(name) { for (let ci = 0; ci < LIBRARY.length; ci++) { const ii = LIBRARY[ci][1].findIndex((x) => x[1] === name); if (ii >= 0) return [ci, ii]; } return null; }
   function pieceCard(p) {
     const st = p.status === 'own' ? '' : `<span class="badge want">${p.status === 'ordered' ? 'Ordered' : 'Considering'}</span>`;
-    return `<li class="piece"><div class="pic" style="--c:${p.color}">${p.photos[0] ? `<img data-photo="${p.photos[0]}" alt="">` : thumbImg(p)}</div>
+    return `<li class="piece"><div class="picwrap"><div class="pic" style="--c:${p.color}">${p.photos[0] ? `<img data-photo="${p.photos[0]}" alt="">` : thumbImg(p)}</div>${favBtn('p:' + p.id, p.name)}</div>
       <div class="txt"><b>${esc(p.name)}</b><small>${dims(p)}${st}${placements(p.id) ? `<span class="badge">${placements(p.id)} placed</span>` : ''}</small></div>
       <div class="acts"><button class="btn small" data-place="${p.id}">Place</button><button class="btn light small" data-edit-piece="${p.id}">Edit</button></div></li>`;
   }
@@ -680,13 +689,18 @@
         ${lights.length ? `<h3>Lights</h3><ul class="pieces">${lights.map(pieceCard).join('')}</ul>` : ''}`
         : `<p class="empty">Add the furniture and lights you own or are considering, with photos and sizes. Each piece can then be placed in any room, and editing it updates every placement.</p>`;
     } else {
-      body = LIBRARY.map(([cat, items], ci) => `<h3>${cat}</h3><div class="lib-grid">${items.map(([type, name, w, d, h], ii) =>
-        `<button data-lib="${ci}:${ii}">${thumbImg(Object.assign({ type, w, d, h, color: LIBRARY[ci][1][ii][5] }, LIBRARY[ci][1][ii][6] || {}, type === 'art' ? { frame: libFrame(LIBRARY[ci][1][ii][5]), mat: !['#F4F3EF', '#C9A06A'].includes(LIBRARY[ci][1][ii][5]) } : {}))}<span>${name}</span><small>${w} x ${d} x ${h} cm</small></button>`).join('')}</div>`).join('');
+      body = LIBRARY.map(([cat, items], ci) => `<h3>${cat}</h3><div class="lib-grid">${items.map((x, ii) => libCard(ci, ii)).join('')}</div>`).join('');
     }
+    // Favourites from both tabs, always at the top (in the order you starred them)
+    const favPieces = [], favLib = [];
+    state.favorites.forEach((k) => { if (k.startsWith('p:')) { const p = piece(k.slice(2)); if (p) favPieces.push(p); } else if (k.startsWith('l:')) { const at = libIndex(k.slice(2)); if (at) favLib.push(at); } });
+    const favs = favPieces.length || favLib.length ? `<section class="favs"><h3>★ Favorites</h3>
+      ${favPieces.length ? `<ul class="pieces">${favPieces.map(pieceCard).join('')}</ul>` : ''}
+      ${favLib.length ? `<div class="lib-grid"${favPieces.length ? ' style="margin-top:6px"' : ''}>${favLib.map(([ci, ii]) => libCard(ci, ii)).join('')}</div>` : ''}</section>` : '';
     el.innerHTML = `<div class="sec-head"><h2>Furniture and lights</h2><button class="btn small" data-new-piece>New piece</button></div>
       <div class="tabs" role="tablist">
         <button role="tab" data-cat-tab="mine" aria-selected="${catTab === 'mine'}">My pieces (${state.catalog.length})</button>
-        <button role="tab" data-cat-tab="generic" aria-selected="${catTab === 'generic'}">Generic</button></div>${body}`;
+        <button role="tab" data-cat-tab="generic" aria-selected="${catTab === 'generic'}">Generic</button></div>${favs}${body}`;
     hydratePhotos(el);
   }
 
@@ -1439,6 +1453,8 @@
     const t = e.target;
     const tab = t.closest('[data-cat-tab]'); if (tab) { catTab = tab.dataset.catTab; renderCatalog(); return; }
     if (t.closest('[data-new-piece]')) return pieceDialog(null);
+    const fv = t.closest('[data-fav]');
+    if (fv) { const k = fv.dataset.fav; state.favorites = isFav(k) ? state.favorites.filter((x) => x !== k) : state.favorites.concat(k); save(); renderCatalog(); return; }
     const pl = t.closest('[data-place]'); if (pl) return placePiece(piece(pl.dataset.place));
     const ed = t.closest('[data-edit-piece]'); if (ed) return pieceDialog(piece(ed.dataset.editPiece));
     const lib = t.closest('[data-lib]'); if (lib) { const [ci, ii] = lib.dataset.lib.split(':').map(Number); addFromLibrary(ci, ii); }
