@@ -10,7 +10,9 @@ No build step. Open `index.html`, or serve the folder:
 python3 -m http.server 8000   # then open http://localhost:8000
 ```
 
-three.js and the font load from a CDN, so the first load needs internet.
+three.js and the font load from a CDN, so the first load needs internet. The 3D models, materials and textures are generated in `models3d.js`; nothing else is downloaded.
+
+Live site: https://jappelbaum20.github.io/HomePlanner/ (redeploys on every push to `main`).
 
 ## The workflow
 
@@ -30,7 +32,7 @@ To send the current state back to Claude, use Claude handoff, then Copy this roo
   "rooms": [{
     "id": "living", "name": "Living room", "level": "Ground floor",
     "width": 520, "length": 430, "height": 260,
-    "floor": "#D6BA8E",
+    "floor": "#D6BA8E", "floorFinish": "wood",
     "walls": { "n": "#F4F3EF", "e": "#B4BFA6", "s": "#F4F3EF", "w": "#F4F3EF" },
     "notes": "",
     "openings": [
@@ -55,6 +57,7 @@ To send the current state back to Claude, use Claude handoff, then Copy this roo
 - Furniture types: sofa, armchair, chair, table, roundtable, desk, bed, cabinet, shelf, wardrobe, counter, appliance, rug, plant, bath, shower, vanity, toilet, box.
 - Light types: ceiling, pendant, spot, sconce, floorlamp, tablelamp. `kelvin`: 2200, 2700, 3000, 4000. `power`: soft, medium, bright.
 - Piece `status`: own, considering, ordered.
+- Room `floorFinish`: wood, tile, concrete, terrazzo, carpet, plain (default wood). Sets the floor texture in 3D.
 - Photos are never part of the handoff; they stay in the browser and in backup files.
 
 ## Storage notes

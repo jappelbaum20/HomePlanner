@@ -11,9 +11,10 @@
     ['Eucalyptus', '#8C9F90'], ['Forest', '#3E5544'], ['Dusty blue', '#A7B6C2'], ['Navy', '#2D394D'], ['Charcoal', '#46494D']
   ];
   const FLOOR_SWATCHES = [
-    ['White oak', '#E4D3B5'], ['Light oak', '#D6BA8E'], ['Walnut', '#77543A'], ['Grey tile', '#BCBCB6'],
-    ['Concrete', '#A3A39E'], ['Terrazzo', '#D9D6CF'], ['Dark slate', '#55595C']
+    ['White oak', '#E4D3B5', 'wood'], ['Light oak', '#D6BA8E', 'wood'], ['Walnut', '#77543A', 'wood'], ['Grey tile', '#BCBCB6', 'tile'],
+    ['Concrete', '#A3A39E', 'concrete'], ['Terrazzo', '#D9D6CF', 'terrazzo'], ['Dark slate', '#55595C', 'tile']
   ];
+  const FLOOR_FINISHES = { wood: 'Wood planks', tile: 'Tiles', concrete: 'Concrete', terrazzo: 'Terrazzo', carpet: 'Carpet', plain: 'Plain' };
   const FURNITURE_TYPES = {
     sofa: 'Sofa', armchair: 'Armchair', chair: 'Chair', table: 'Table, rectangular', roundtable: 'Table, round',
     desk: 'Desk', bed: 'Bed', cabinet: 'Cabinet or sideboard', shelf: 'Shelf', wardrobe: 'Wardrobe',
@@ -165,7 +166,7 @@
     const o = {
       id: r.id || 'r' + uid(), name: r.name || 'Room', level: r.level || 'Ground floor',
       width: num(r.width, 50, 3000, 400), length: num(r.length, 50, 3000, 350), height: num(r.height, 150, 800, 250),
-      floor: hex(r.floor, '#D6BA8E'), walls: {}, notes: r.notes || '', photos: Array.isArray(r.photos) ? r.photos.slice() : [],
+      floor: hex(r.floor, '#D6BA8E'), floorFinish: FLOOR_FINISHES[r.floorFinish] ? r.floorFinish : 'wood', walls: {}, notes: r.notes || '', photos: Array.isArray(r.photos) ? r.photos.slice() : [],
       openings: [], items: []
     };
     const wc = r.walls || {};
@@ -207,16 +208,20 @@
   let draft = null;             // piece or room being edited in a dialog
 
   function load() { try { const s = localStorage.getItem(STORAGE_KEY); const p = s ? JSON.parse(s) : null; return p && Array.isArray(p.rooms) && p.rooms.length ? p : null; } catch (e) { return null; } }
-  let saveTimer;
+  let saveTimer = null;
+  function flushSave() {
+    clearTimeout(saveTimer); saveTimer = null;
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); saveNote = 'All changes saved in this browser'; }
+    catch (e) { saveNote = 'Browser storage is unavailable, so changes are not kept. Export a backup.'; }
+    renderStatus();
+  }
   function save() {
     saveNote = 'Saving…'; renderStatus();
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); saveNote = 'All changes saved in this browser'; }
-      catch (e) { saveNote = 'Browser storage is unavailable, so changes are not kept. Export a backup.'; }
-      renderStatus();
-    }, 300);
+    clearTimeout(saveTimer); saveTimer = setTimeout(flushSave, 300);
   }
+  // Don't lose the last edit when the tab is closed or hidden within the save delay
+  window.addEventListener('pagehide', () => { if (saveTimer) flushSave(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && saveTimer) flushSave(); });
   const room = () => state.rooms.find((r) => r.id === state.activeRoomId) || state.rooms[0];
   const piece = (id) => state.catalog.find((p) => p.id === id);
   const selItem = () => selected && selected.kind === 'item' ? room().items.find((i) => i.id === selected.id) : null;
@@ -312,7 +317,10 @@
       <div class="swatches" data-kind="wall">${WALL_SWATCHES.map(([n, h]) => `<button class="sw" data-hex="${h}" style="--c:${h}"><i></i>${n}</button>`).join('')}</div>
       <h3>Floor</h3>
       <div class="wallrow"><input type="color" data-floor value="${r.floor}" aria-label="Floor color"><span>Floor</span><code>${r.floor.toUpperCase()}</code></div>
-      <div class="swatches" data-kind="floor" style="margin-top:8px">${FLOOR_SWATCHES.map(([n, h]) => `<button class="sw" data-hex="${h}" style="--c:${h}"><i></i>${n}</button>`).join('')}</div>
+      <div class="target"><span>Finish</span>
+        <select data-room="floorFinish">${Object.entries(FLOOR_FINISHES).map(([k, n]) => `<option value="${k}" ${r.floorFinish === k ? 'selected' : ''}>${n}</option>`).join('')}</select>
+      </div>
+      <div class="swatches" data-kind="floor" style="margin-top:8px">${FLOOR_SWATCHES.map(([n, h, f]) => `<button class="sw" data-hex="${h}" data-finish="${f}" style="--c:${h}"><i></i>${n}</button>`).join('')}</div>
       <h3>Doors and windows</h3>
       <div class="btnrow"><button class="btn light" data-add-opening="door">Add door</button><button class="btn light" data-add-opening="window">Add window</button></div>
       <ul class="openings">${r.openings.map((o) => `<li><button data-select-opening="${o.id}" class="${selected && selected.id === o.id ? 'on' : ''}">
@@ -498,96 +506,148 @@
   function renderAll() { renderRooms(); renderRoomPanel(); renderInspector(); renderCatalog(); renderPlan(); schedule3D(); renderStatus(); }
 
   // ================= 3D =================
+  // Models, textures and materials live in models3d.js (window.HouseModels).
   const three = { ok: undefined, lastRoom: null };
   function init3D() {
     if (three.ok !== undefined) return;
     const host = $('#three');
-    if (!window.THREE || !THREE.OrbitControls) { three.ok = false; host.innerHTML = '<p class="empty">The 3D view could not load three.js. Check the internet connection and reload.</p>'; return; }
+    if (!window.THREE || !THREE.OrbitControls || !window.HouseModels) { three.ok = false; host.innerHTML = '<p class="empty">The 3D view could not load three.js. Check the internet connection and reload.</p>'; return; }
     let renderer;
     try { renderer = new THREE.WebGLRenderer({ antialias: true }); } catch (e) { three.ok = false; host.innerHTML = '<p class="empty">The 3D view needs WebGL, which is turned off in this browser.</p>'; return; }
+    HouseModels.init(THREE);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
+    renderer.physicallyCorrectLights = false;
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     host.appendChild(renderer.domElement);
-    const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(45, 1, 5, 20000);
+    const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(40, 1, 5, 20000);
+    let envMap = null;
+    if (THREE.RoomEnvironment) { const pm = new THREE.PMREMGenerator(renderer); envMap = pm.fromScene(new THREE.RoomEnvironment(), 0.04).texture; pm.dispose(); }
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.49;
-    const hemi = new THREE.HemisphereLight(0xffffff, 0xc9c3b8, 0.9); scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xffffff, 0.32); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005;
+    controls.addEventListener('start', () => { three.userMoved = true; });
+    const hemi = new THREE.HemisphereLight(0xffffff, 0xb9ae9e, 0.5); scene.add(hemi);
+    const sun = new THREE.DirectionalLight(0xfff4e5, 1.6); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.6; sun.shadow.radius = 4;
     scene.add(sun); scene.add(sun.target);
     const group = new THREE.Group(); scene.add(group);
-    Object.assign(three, { ok: true, renderer, scene, camera, controls, hemi, sun, group, walls: {} });
+    Object.assign(three, { ok: true, renderer, scene, camera, controls, hemi, sun, group, envMap, walls: {} });
     new ResizeObserver(resize3D).observe(host);
     (function loop() { requestAnimationFrame(loop); if (view === 'plan') return; controls.update(); fadeWalls(); renderer.render(scene, camera); })();
   }
-  function resize3D() { if (!three.ok) return; const host = $('#three'), w = host.clientWidth, h = host.clientHeight; if (!w || !h) return; three.renderer.setSize(w, h); three.camera.aspect = w / h; three.camera.updateProjectionMatrix(); }
+  function resize3D() { if (!three.ok) return; const host = $('#three'), w = host.clientWidth, h = host.clientHeight; if (!w || !h) return; three.renderer.setSize(w, h); three.camera.aspect = w / h; three.camera.updateProjectionMatrix(); if (!three.userMoved && three.lastRoom) fitCamera(); }
+  // Walls between the camera and the room turn see-through, with everything mounted on them
   function fadeWalls() {
     const r = room(), c = three.camera.position, hide = { n: c.z < 0, s: c.z > r.length, w: c.x < 0, e: c.x > r.width };
-    for (const k in three.walls) { const m = three.walls[k], t = hide[k] ? 0.12 : 1; if (m.opacity !== t) { m.opacity = t; m.depthWrite = t === 1; m.needsUpdate = true; } }
+    for (const k in three.walls) {
+      const t = hide[k] ? 0.1 : 1;
+      for (const m of three.walls[k]) {
+        const full = m.userData.opacity != null ? m.userData.opacity : 1, o = Math.min(full, t);
+        if (m.opacity !== o) { m.opacity = o; m.transparent = true; m.depthWrite = o >= 0.99; m.needsUpdate = true; }
+      }
+    }
   }
-  const lambert = (h, extra) => new THREE.MeshLambertMaterial(Object.assign({ color: new THREE.Color(h) }, extra || {}));
+  // Fit the room's bounding sphere in view, looking down from the front-right corner
+  function fitCamera() {
+    const r = room(), W = r.width, L = r.length, H = r.height, cam = three.camera;
+    const rad = Math.sqrt(W * W + L * L + H * H) / 2, vf = cam.fov * Math.PI / 360;
+    const hf = Math.atan(Math.tan(vf) * Math.max(cam.aspect || 1, 0.4)), dist = rad / Math.sin(Math.min(vf, hf)) * 0.92;
+    three.controls.target.set(W / 2, H * 0.25, L / 2);
+    cam.position.copy(three.controls.target).addScaledVector(new THREE.Vector3(0.5, 0.78, 0.75).normalize(), dist);
+    three.controls.update();
+  }
   let queued3D = false;
   function schedule3D() { if (queued3D || view === 'plan') return; queued3D = true; requestAnimationFrame(() => { queued3D = false; build3D(); }); }
+  function disposeTree(o) {
+    o.traverse((c) => {
+      if (c.geometry) c.geometry.dispose();
+      if (c.material) [].concat(c.material).forEach((m) => { ['map', 'bumpMap'].forEach((k) => { if (m[k]) m[k].dispose(); }); m.dispose(); });
+    });
+  }
   function build3D() {
     if (!three.ok) return;
-    const r = room(), g = three.group, W = r.width, L = r.length, H = r.height;
-    while (g.children.length) { const c = g.children.pop(); c.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); }
-    three.scene.background = new THREE.Color(evening ? '#23272B' : '#E4E7E2');
-    three.hemi.intensity = evening ? 0.2 : 0.9; three.sun.intensity = evening ? 0 : 0.32;
-    const floor = new THREE.Mesh(new THREE.BoxGeometry(W + 2 * T, 4, L + 2 * T), lambert(r.floor)); floor.position.set(W / 2, -2, L / 2); floor.receiveShadow = true; g.add(floor);
-    const spec = { n: { axis: 'x', fixed: -T / 2, start: -T, end: W + T }, s: { axis: 'x', fixed: L + T / 2, start: -T, end: W + T }, w: { axis: 'z', fixed: -T / 2, start: 0, end: L }, e: { axis: 'z', fixed: W + T / 2, start: 0, end: L } };
+    const HM = window.HouseModels, r = room(), g = three.group, W = r.width, L = r.length, H = r.height;
+    while (g.children.length) disposeTree(g.children.pop());
+    three.scene.background = new THREE.Color(evening ? '#1B1E22' : '#E9EBE6');
+    three.scene.environment = evening ? null : three.envMap;
+    three.hemi.intensity = evening ? 0.22 : 0.3;
+    three.hemi.color.set(evening ? '#FFD7A8' : '#FFFFFF'); three.hemi.groundColor.set(evening ? '#2A221B' : '#B9AE9E');
+    three.renderer.toneMappingExposure = evening ? 1.3 : 0.9;
+    const add = (mesh, x, y, z, list) => { mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true; g.add(mesh); if (list) list.push(mesh.material); return mesh; };
+
+    // Floor, with a slab edge under the walls
+    const floor = add(new THREE.Mesh(new THREE.BoxGeometry(W, 4, L), HM.floorMaterial(r.floor, r.floorFinish, W, L)), W / 2, -2, L / 2);
+    floor.castShadow = false;
+    add(new THREE.Mesh(new THREE.BoxGeometry(W + 2 * T, 3.9, L + 2 * T), HM.mat('#8E8A84', { rough: 0.9 })), W / 2, -2.1, L / 2).castShadow = false;
+
+    // Walls with openings, skirting, window frames and doors
+    const spec = { n: { axis: 'x', fixed: -T / 2, start: -T, end: W + T, inward: 1 }, s: { axis: 'x', fixed: L + T / 2, start: -T, end: W + T, inward: -1 }, w: { axis: 'z', fixed: -T / 2, start: 0, end: L, inward: 1 }, e: { axis: 'z', fixed: W + T / 2, start: 0, end: L, inward: -1 } };
+    const frameM = HM.mat('#F3F2EE', { rough: 0.5 }), skirtM = HM.mat('#F6F5F1', { rough: 0.55 });
     three.walls = {};
     for (const k of Object.keys(spec)) {
-      const s = spec[k], m = lambert(r.walls[k], { transparent: true }); three.walls[k] = m;
-      const piece3 = (a, b, y0, y1) => {
-        if (b - a < 0.5 || y1 - y0 < 0.5) return;
-        const len = b - a, hh = y1 - y0, mid = (a + b) / 2;
-        const mesh = new THREE.Mesh(s.axis === 'x' ? new THREE.BoxGeometry(len, hh, T) : new THREE.BoxGeometry(T, hh, len), m);
-        if (s.axis === 'x') mesh.position.set(mid, y0 + hh / 2, s.fixed); else mesh.position.set(s.fixed, y0 + hh / 2, mid);
-        mesh.castShadow = true; mesh.receiveShadow = true; g.add(mesh);
+      const s = spec[k], mats = three.walls[k] = [], wm = HM.wallMaterial(r.walls[k], s.end - s.start, H); mats.push(wm);
+      // place a box along this wall: a..b along the wall, y0..y1 high, depth dz, offset from the wall centre line (+ = into the room)
+      const along = (a, b, y0, y1, dz, off, m) => {
+        if (b - a < 0.3 || y1 - y0 < 0.3) return null;
+        const len = b - a, hh = y1 - y0, mid = (a + b) / 2, geo = s.axis === 'x' ? new THREE.BoxGeometry(len, hh, dz) : new THREE.BoxGeometry(dz, hh, len);
+        const o = s.fixed + s.inward * off, mesh = new THREE.Mesh(geo, m);
+        if (s.axis === 'x') add(mesh, mid, y0 + hh / 2, o); else add(mesh, o, y0 + hh / 2, mid);
+        if (!mats.includes(m)) mats.push(m); return mesh;
       };
-      const ops = r.openings.filter((o) => o.wall === k).map((o) => ({ a: o.offset, b: o.offset + o.width, sill: o.sill, top: o.sill + o.height, type: o.type })).sort((p, q) => p.a - q.a);
+      const ops = r.openings.filter((o) => o.wall === k).map((o) => ({ a: o.offset, b: o.offset + o.width, sill: o.sill, top: Math.min(o.sill + o.height, H), type: o.type })).sort((p, q) => p.a - q.a);
       let cur = s.start;
+      const skirt = (a, b) => along(Math.max(a, 0), Math.min(b, s.axis === 'x' ? W : L), 0, 8, 1.5, T / 2 + 0.75, skirtM);
       for (const o of ops) {
         const a = Math.max(o.a, cur);
-        piece3(cur, a, 0, H); piece3(a, o.b, 0, o.sill); piece3(a, o.b, Math.min(o.top, H), H);
-        if (o.type === 'window' && o.b > a) {
-          const hh = Math.min(o.top, H) - o.sill, len = o.b - a, mid = (a + o.b) / 2;
-          const glass = new THREE.Mesh(s.axis === 'x' ? new THREE.BoxGeometry(len, hh, 1) : new THREE.BoxGeometry(1, hh, len), lambert(evening ? '#1B2430' : '#BFD6E3', { transparent: true, opacity: evening ? 0.8 : 0.35 }));
-          if (s.axis === 'x') glass.position.set(mid, o.sill + hh / 2, s.fixed); else glass.position.set(s.fixed, o.sill + hh / 2, mid);
-          g.add(glass);
+        along(cur, a, 0, H, T, 0, wm); skirt(cur, a);
+        along(a, o.b, 0, o.sill, T, 0, wm); along(a, o.b, o.top, H, T, 0, wm);
+        if (o.b > a) {
+          const fw = 5;
+          along(a - fw, a, o.sill, o.top + (o.type === 'door' ? fw : 0), T + 2, 0, frameM); along(o.b, o.b + fw, o.sill, o.top + (o.type === 'door' ? fw : 0), T + 2, 0, frameM);
+          along(a - (o.type === 'door' ? fw : 0), o.b + (o.type === 'door' ? fw : 0), o.top, o.top + fw, T + 2, 0, frameM);
+          if (o.type === 'window') {
+            along(a - 3, o.b + 3, o.sill - 3, o.sill, T + 6, 3, frameM); // sill
+            const glass = HM.mat(evening ? '#101820' : '#CFE3EE', { rough: 0.02, metal: 0.1, transparent: true, opacity: evening ? 0.85 : 0.18 });
+            glass.userData.opacity = glass.opacity;
+            along(a, o.b, o.sill, o.top, 1, 0, glass);
+            if (o.b - a > 90) along((a + o.b) / 2 - 2, (a + o.b) / 2 + 2, o.sill, o.top, 5, 0, frameM); // mullion
+          } else {
+            const leaf = along(a + 1, o.b - 1, 0, o.top - 0.5, 4, T / 2 - 2, HM.mat('#F7F6F2', { rough: 0.45 }));
+            if (leaf) { const hm = HM.mat('#9A9C9E', { rough: 0.25, metal: 1 }); const hx = s.inward > 0 ? o.b - 8 : o.b - 8; along(hx - 7, hx, 100, 102.5, 2, T / 2 + 1, hm); }
+          }
         }
         cur = Math.max(cur, o.b);
       }
-      piece3(cur, s.end, 0, H);
+      along(cur, s.end, 0, H, T, 0, wm); skirt(cur, s.end);
     }
-    const edgeMat = new THREE.LineBasicMaterial({ color: evening ? 0x000000 : 0x1D2124, transparent: true, opacity: 0.25 });
+
+    // Furniture and lights
+    const lights = [];
     for (const it of r.items) {
-      const h = Math.max(it.h, 1), light = isLight(it.type), base = it.elev || 0;
-      const geo = ROUND.has(it.type) ? new THREE.CylinderGeometry(it.w / 2, it.w / 2, h, 32) : new THREE.BoxGeometry(it.w, h, it.d);
-      const mat = lambert(it.color);
-      if (light && evening) { mat.emissive = new THREE.Color(KELVIN[it.kelvin]); mat.emissiveIntensity = 0.8; }
-      const mesh = new THREE.Mesh(geo, mat);
-      if (ROUND.has(it.type)) mesh.scale.z = it.d / it.w;
-      mesh.position.set(it.x, base + h / 2, it.y); mesh.rotation.y = -it.rot * Math.PI / 180;
-      mesh.castShadow = it.type !== 'rug' && !light; mesh.receiveShadow = true;
-      mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 30), edgeMat.clone()));
-      g.add(mesh);
-      if (light && evening) {
-        const pl = new THREE.PointLight(new THREE.Color(KELVIN[it.kelvin]), POWER[it.power] * 1.4, Math.max(W, L) * 2, 1);
-        const y = { floorlamp: base + h - 12, tablelamp: base + h * 0.7, sconce: base + h / 2 }[it.type];
-        pl.position.set(it.x, y !== undefined ? y : base - 3, it.y); g.add(pl);
-      }
+      const light = isLight(it.type), base = it.elev || 0;
+      const obj = HM.buildItem(it, { evening, kelvinHex: KELVIN[it.kelvin], roomTop: H - base - Math.max(it.h, 1) + it.h });
+      obj.position.set(it.x, base, it.y); obj.rotation.y = -it.rot * Math.PI / 180;
+      g.add(obj);
+      if (light && evening) lights.push({ it, base, bulbY: obj.userData.bulbY || 0, obj });
     }
-    const span = Math.max(W, L), sun = three.sun;
-    sun.position.set(W * 0.3, span * 1.6, L * 1.3); sun.target.position.set(W / 2, 0, L / 2);
+    // Evening: each lamp gets a real light source; the brightest few cast shadows
+    lights.sort((a, b) => POWER[b.it.power] - POWER[a.it.power]).forEach((l, i) => {
+      const it = l.it, down = it.type === 'spot' || it.type === 'ceiling' || it.type === 'pendant';
+      const pl = new THREE.PointLight(new THREE.Color(KELVIN[it.kelvin]).convertSRGBToLinear(), POWER[it.power] * (down ? 3.2 : 2.6), Math.max(W, L) * 2.5, 1.2);
+      const p = new THREE.Vector3(0, l.bulbY, 0); l.obj.localToWorld(p); pl.position.copy(p);
+      if (i < 3) { pl.castShadow = true; pl.shadow.mapSize.set(1024, 1024); pl.shadow.bias = -0.002; pl.shadow.radius = 6; pl.shadow.camera.near = 2; }
+      g.add(pl);
+    });
+    if (evening && !lights.length) three.hemi.intensity = 0.25;
+
+    // Sun: comes in through the first window if there is one
+    const span = Math.max(W, L), sun = three.sun, win = r.openings.find((o) => o.type === 'window');
+    sun.intensity = evening ? 0 : 1.4;
+    const out = { n: [0, -1], s: [0, 1], w: [-1, 0], e: [1, 0] }[win ? win.wall : 's'];
+    const cx = win && (win.wall === 'n' || win.wall === 's') ? win.offset + win.width / 2 : W / 2, cz = win && (win.wall === 'e' || win.wall === 'w') ? win.offset + win.width / 2 : L / 2;
+    sun.position.set(cx + out[0] * span * 1.2 + span * 0.3, span * 1.3, cz + out[1] * span * 1.2 + span * 0.2); sun.target.position.set(W / 2, 0, L / 2);
     Object.assign(sun.shadow.camera, { left: -span, right: span, top: span, bottom: -span, near: 10, far: span * 5 }); sun.shadow.camera.updateProjectionMatrix();
-    if (three.lastRoom !== r.id) {
-      three.lastRoom = r.id;
-      const k = Math.max(1, 1.2 / (three.camera.aspect || 1));
-      three.controls.target.set(W / 2, H * 0.3, L / 2);
-      three.camera.position.set(W / 2 + span * 0.55 * k, span * 0.95 * k, L / 2 + span * 0.9 * k);
-      three.controls.update();
-    }
+    if (three.lastRoom !== r.id) { three.lastRoom = r.id; three.userMoved = false; fitCamera(); }
   }
 
   // ================= Dialogs =================
@@ -855,13 +915,14 @@
     if (f === 'width' || f === 'length') { r[f] = num(t.value, 50, 3000, r[f]); commit(); }
     else if (f === 'height') { r.height = num(t.value, 150, 800, r.height); commit(); }
     else if (f === 'level') { r.level = t.value.trim() || 'Ground floor'; commit(); }
+    else if (f === 'floorFinish') { r.floorFinish = FLOOR_FINISHES[t.value] ? t.value : 'wood'; commit(); }
     else if (t.id === 'wallTarget') { wallTarget = t.value; renderRoomPanel(); renderPlan(); }
   });
   rp.addEventListener('click', (e) => {
     const t = e.target, r = room();
     const tab = t.closest('[data-room-tab]'); if (tab) { roomTab = tab.dataset.roomTab; renderRoomPanel(); return; }
     const sw = t.closest('.sw');
-    if (sw) { if (sw.parentElement.dataset.kind === 'wall') applyWallColor(sw.dataset.hex); else { r.floor = sw.dataset.hex; renderRoomPanel(); refreshDrawing(); } return; }
+    if (sw) { if (sw.parentElement.dataset.kind === 'wall') applyWallColor(sw.dataset.hex); else { r.floor = sw.dataset.hex; if (sw.dataset.finish) r.floorFinish = sw.dataset.finish; renderRoomPanel(); refreshDrawing(); } return; }
     const add = t.closest('[data-add-opening]'); if (add) return addOpening(add.dataset.addOpening);
     const so = t.closest('[data-select-opening]'); if (so) { selected = { kind: 'opening', id: so.dataset.selectOpening }; renderRoomPanel(); renderInspector(); renderPlan(); return; }
     if (t.id === 'dupRoom') {
