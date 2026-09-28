@@ -246,6 +246,10 @@
       o.rooms = o.rooms.filter((r) => !(r.name === 'Example living room' && /^Example room/.test(r.notes) && !r.items.some((i) => i.catalogId)));
       o.exampleRetired = true;
     } else o.exampleRetired = true;
+    (window.HOUSE_RETIRED_ROOMS || []).forEach((rid) => {
+      o.rooms = o.rooms.filter((r) => r.seedId !== rid);
+      if (!o.removedRooms.includes(rid)) o.removedRooms.push(rid);
+    });
     seedRooms.filter((t) => t.ensure).forEach((t) => findRoom(t.id));
     // A higher `rev` on a starter room updates its doors, windows, wall finishes and notes; with `resize` also its
     // measured size, level and floor. Furniture you placed stays; anything left outside the new walls is pulled back in.

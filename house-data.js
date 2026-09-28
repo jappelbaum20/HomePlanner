@@ -145,128 +145,6 @@ window.HOUSE_ROOMS = [
     ]
   },
   {
-    "id": "commonroom",
-    "rev": 6,
-    "resize": true,
-    "ensure": true,
-    "name": "Common room with sauna",
-    "match": [
-      "gemeinschaftsraum",
-      "common room"
-    ],
-    "level": "Basement",
-    "width": 556,
-    "length": 240,
-    "height": 210,
-    "floor": "#BCBCB6",
-    "floorFinish": "tile",
-    "wallFinish": {},
-    "notes": "Size from the architect plan (Haus 53), BF 13.28 m², shared with Haus 55. Sauna, double doors to the garden.",
-    "openings": [
-      {
-        "type": "door",
-        "wall": "n",
-        "offset": 168,
-        "width": 88,
-        "height": 200
-      },
-      {
-        "type": "door",
-        "wall": "n",
-        "offset": 354,
-        "width": 88,
-        "height": 200,
-        "swing": "out"
-      },
-      {
-        "type": "door",
-        "wall": "e",
-        "offset": 25,
-        "width": 90,
-        "height": 200,
-        "swing": "out"
-      },
-      {
-        "type": "door",
-        "wall": "w",
-        "offset": 20,
-        "width": 75,
-        "height": 200,
-        "swing": "out"
-      },
-      {
-        "type": "door",
-        "wall": "s",
-        "offset": 228,
-        "width": 180,
-        "height": 210,
-        "color": "#6B5F55"
-      }
-    ]
-  },
-  {
-    "id": "basementbath",
-    "rev": 6,
-    "resize": true,
-    "ensure": true,
-    "name": "Basement bathroom",
-    "match": [
-      "bad ug",
-      "basement bathroom"
-    ],
-    "level": "Basement",
-    "width": 169,
-    "length": 240,
-    "height": 210,
-    "floor": "#9A9C9E",
-    "floorFinish": "stone",
-    "wallFinish": {
-      "n": "tiles",
-      "e": "tiles",
-      "s": "tiles",
-      "w": "tiles"
-    },
-    "notes": "Size from the architect plan (Haus 53), BF 3.83 m², shared with Haus 55. WC, basin and shower.",
-    "openings": []
-  },
-  {
-    "id": "annexoffice",
-    "rev": 6,
-    "resize": true,
-    "ensure": true,
-    "name": "Annex office (Büro)",
-    "match": [
-      "büro",
-      "buero ug",
-      "annex"
-    ],
-    "level": "Basement",
-    "width": 198,
-    "length": 291,
-    "height": 210,
-    "floor": "#D9B98A",
-    "floorFinish": "parquet",
-    "wallFinish": {},
-    "notes": "5.78 m², the separate office unit beside Haus 53 (own entrance).",
-    "openings": [
-      {
-        "type": "window",
-        "wall": "w",
-        "offset": 63,
-        "width": 63,
-        "height": 90,
-        "sill": 100
-      },
-      {
-        "type": "door",
-        "wall": "w",
-        "offset": 194,
-        "width": 80,
-        "height": 200
-      }
-    ]
-  },
-  {
     "id": "hall0",
     "rev": 6,
     "resize": true,
@@ -1073,16 +951,15 @@ window.HOUSE_ROOMS = [
 ];
 
 // Pieces to place once in a room (matched by name, else created from HOUSE_ROOMS). x, y = centre in cm; rot 270 = back against the left wall.
+// Starter rooms taken out of the house; removed from browsers that already have them
+window.HOUSE_RETIRED_ROOMS = ['annexoffice', 'basementbath', 'commonroom'];
+
 window.HOUSE_PLACEMENTS = [
   // Basement, attic en-suite and loft, from the architect plans
   { id: 'ug-stairs', builtin: true, room: 'laundry', x: 320, y: 60, item: { type: 'stairs', name: 'Stairs up', w: 75, d: 110, h: 210, color: '#9A6B3F' } },
   { id: 'ug-washer', room: 'laundry', x: 60, y: 196, rot: 270, item: { type: 'appliance', name: 'Washing machine', w: 60, d: 60, h: 85, color: '#F2F2F0' } },
   { id: 'ug-dryer', room: 'laundry', x: 60, y: 122, rot: 270, item: { type: 'appliance', name: 'Tumble dryer', w: 60, d: 60, h: 85, color: '#F2F2F0' } },
   { id: 'ug-sink', builtin: true, room: 'laundry', x: 24, y: 339, rot: 270, item: { type: 'vanity', name: 'Utility sink', w: 70, d: 45, h: 85, color: '#DCDCD6' } },
-  { id: 'ug-sauna', builtin: true, room: 'commonroom', x: 90, y: 169, item: { type: 'box', style: 'sauna', name: 'Sauna', w: 156, d: 135, h: 200, color: '#B98A5A' } },
-  { id: 'ug-wc', builtin: true, room: 'basementbath', x: 28, y: 20, rot: 270, item: { type: 'toilet', name: 'WC', w: 37, d: 54, h: 42, color: '#FAFAF8' } },
-  { id: 'ug-basin', builtin: true, room: 'basementbath', x: 22, y: 170, rot: 270, item: { type: 'vanity', name: 'Basin', w: 55, d: 40, h: 85, color: '#EDEBE6' } },
-  { id: 'ug-shower', builtin: true, room: 'basementbath', x: 110, y: 195, item: { type: 'shower', name: 'Shower', w: 75, d: 85, h: 200, color: '#E6ECEF' } },
   { id: 'en-bath', builtin: true, room: 'ensuite', x: 237, y: 38, item: { type: 'bath', name: 'Bathtub', w: 175, d: 72, h: 58, color: '#FAFAF8' } },
   { id: 'en-wc', builtin: true, room: 'ensuite', x: 28, y: 180, rot: 270, item: { type: 'toilet', name: 'WC', w: 37, d: 54, h: 42, color: '#FAFAF8' } },
   { id: 'bed-basin', builtin: true, room: 'bedroom', x: 24, y: 57, rot: 270, item: { type: 'vanity', name: 'Basin', w: 60, d: 45, h: 85, color: '#1E1E1E' } },
