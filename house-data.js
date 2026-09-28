@@ -16,6 +16,26 @@ window.HOUSE_SEED = {
 // to the copy already in the browser. Sizes are W x D x H in cm.
 window.HOUSE_PIECES = [
   {
+    id: 'rowing-oar', type: 'art', style: 'oar', frame: 'none', mat: false, name: 'Presentation oar (wall)',
+    w: 138, d: 6, h: 21, color: '#C9955A', status: 'own',
+    notes: 'Varnished wooden oar hung flat on the wall. Blade painted in two colours (navy and green) with gold lettering, two leather straps on the shaft. Size estimated from the photo (about 138 cm long, blade about 55 x 21): measure to confirm.'
+  },
+  {
+    id: 'painting-limed-oak', type: 'art', frame: 'limewash', mat: 'cream', image: 'url:photos/art/painting-limed-oak.jpg', name: 'Painting in limed oak frame',
+    w: 78, d: 4, h: 71, color: '#CDBFA6', status: 'own',
+    notes: 'Colourful painting behind glass, wide cream mat, whitewashed (limed) oak frame. Size estimated from the photo: measure to confirm.'
+  },
+  {
+    id: 'pastel-pine', type: 'art', frame: 'pine', mat: 'cream', image: 'url:photos/art/pastel-pine.jpg', name: 'Pastel drawing in pine frame',
+    w: 80, d: 4, h: 60, color: '#A56E3D', status: 'own',
+    notes: 'Pastel drawing behind glass, cream mat, honey pine frame. Size estimated from the photo: measure to confirm.'
+  },
+  {
+    id: 'antique-cabinet', type: 'cabinet', style: 'antique', name: 'Antique walnut cabinet',
+    w: 90, d: 45, h: 140, color: '#553019', status: 'own',
+    notes: 'Antique walnut cabinet: crown moulding, top drawer with two brass bail pulls, two burl-veneer panel doors with a keyhole, fluted corner pilasters, bun feet. Size estimated from the photo (about 90 x 45 x 140): measure to confirm.'
+  },
+  {
     id: 'dellia-sofa', type: 'cornersofa', side: 'right', name: 'DELLIA corner sofa',
     w: 289, d: 182, h: 86, color: '#D9C9B0', status: 'own',
     link: 'https://www.amazon.de/dp/B0CVQKDT11',

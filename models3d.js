@@ -480,9 +480,41 @@
       part(g, brass, 9, 1.2, 1.2, 0, y, d / 2 + 1.4, 0.4); cyl(g, brass, 0.5, 0.5, 1.6, -4, y, d / 2 + 0.8, 8).rotation.x = Math.PI / 2; cyl(g, brass, 0.5, 0.5, 1.6, 4, y, d / 2 + 0.8, 8).rotation.x = Math.PI / 2;
     }
   };
+  // Antique walnut cabinet: crown moulding, a top drawer with two brass bail pulls, two burl-veneer panel doors, bun feet
+  B.antique = (g, w, d, h, c) => {
+    const body = wood(c, w, h), burl = wood(shade(c, 1.2), w, h), dark = wood(shade(c, 0.75), w, h), brass = mat('#B8914A', { rough: 0.3, metal: 0.9 });
+    const feet = 7, plinth = 8, crown = 7, carcH = h - feet - plinth - crown, y0 = feet + plinth, fz = d / 2 - 2;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const f = new T3.Mesh(new T3.SphereGeometry(4, 16, 10), dark); f.scale.y = feet / 8; f.position.set(sx * (w / 2 - 6), feet / 2, sz * (d / 2 - 6)); f.castShadow = true; g.add(f); }
+    part(g, body, w, plinth, d, 0, feet + plinth / 2, 0, 0.8);
+    part(g, dark, w + 1, 1.5, d + 1, 0, feet + plinth - 0.75, 0, 0.5);
+    part(g, body, w - 4, carcH, d - 4, 0, y0 + carcH / 2, -1, 0.5);
+    for (const sx of [-1, 1]) { // fluted corner pilasters
+      part(g, body, 5, carcH, 4, sx * (w / 2 - 4.5), y0 + carcH / 2, fz, 0.4);
+      for (const k of [-1, 0, 1]) part(g, dark, 0.5, carcH - 10, 0.4, sx * (w / 2 - 4.5) + k * 1.3, y0 + carcH / 2, fz + 2.1);
+    }
+    part(g, body, w - 2, 2, d - 2, 0, y0 + carcH - 1, 0, 0.5);
+    part(g, dark, w + 2, 2.5, d + 2, 0, y0 + carcH + 1.25, 0.5, 0.6); // crown: stepped mouldings
+    part(g, body, w + 5, 3, d + 3.5, 0, y0 + carcH + 4, 1, 0.8);
+    part(g, dark, w + 7, 1.5, d + 4.5, 0, h - 0.75, 1.2, 0.5);
+    const fw = w - 17, drH = Math.min(18, carcH * 0.17), drY = y0 + carcH - drH / 2 - 3;
+    part(g, body, fw, drH, 1.5, 0, drY, fz, 0.4); // top drawer
+    for (const sx of [-1, 1]) { // brass bail pulls
+      part(g, brass, 6, 3, 0.4, sx * fw * 0.27, drY, fz + 0.9, 0.3);
+      const bail = new T3.Mesh(new T3.TorusGeometry(2.3, 0.3, 6, 16, Math.PI), brass); bail.rotation.z = Math.PI; bail.position.set(sx * fw * 0.27, drY, fz + 1.4); g.add(bail);
+    }
+    const dH = carcH - drH - 9, dY = y0 + 3 + dH / 2, dw = fw / 2 - 0.5;
+    for (const sx of [-1, 1]) {
+      const x = sx * (dw / 2 + 0.5);
+      part(g, body, dw, dH, 1.5, x, dY, fz, 0.4);
+      part(g, dark, dw - 7, dH - 8, 0.4, x, dY, fz + 0.9);
+      part(g, burl, dw - 9, dH - 10, 0.5, x, dY, fz + 1.1, 0.3); // burl veneer panel
+    }
+    part(g, brass, 1.6, 2.4, 0.4, 3, dY + dH * 0.1, fz + 1); // keyhole escutcheon
+  };
   B.cabinet = (g, w, d, h, c, it) => {
     if (it && it.style === 'fjallbo') return B.fjallbo(g, w, d, h, c);
     if (it && it.style === 'rivery') return B.rivery(g, w, d, h, c);
+    if (it && it.style === 'antique') return B.antique(g, w, d, h, c);
     const m = wood(c, w, h), legH = h > 60 ? 10 : 6, bodyH = h - legH;
     legs(g, METAL_DARK(), w, d, legH, 5, 2.5, true);
     part(g, m, w, bodyH, d, 0, legH + bodyH / 2, 0, 1);
@@ -733,18 +765,23 @@
 
   // ---------- Wall art ----------
   // Picture textures are cached by photo id and kept across rebuilds (tex.keep)
-  const artCache = new Map();
+  const artCache = new Map(), readyImgs = new Map();
+  // Load a picture ahead of time, so a thumbnail can be drawn with it straight away
+  HM.preloadImage = (url) => readyImgs.has(url) ? Promise.resolve() : new Promise((res) => {
+    const img = new Image(); img.onload = () => { readyImgs.set(url, img); res(); }; img.onerror = () => res(); img.src = url;
+  });
   function pictureTexture(url, key, aspect) {
     const ck = key + '@' + aspect.toFixed(3);
     if (artCache.has(ck)) return artCache.get(ck);
-    const img = new Image(), tex = new T3.Texture(img);
+    const ready = readyImgs.get(url), img = ready || new Image(), tex = new T3.Texture(img);
     tex.encoding = T3.sRGBEncoding; tex.anisotropy = 8; tex.keep = true;
-    img.onload = () => { // crop to fill the opening (like a print trimmed to the frame)
+    const crop = () => { // crop to fill the opening (like a print trimmed to the frame)
       const ia = img.width / img.height;
       if (ia > aspect) { tex.repeat.set(aspect / ia, 1); tex.offset.set((1 - aspect / ia) / 2, 0); } else { tex.repeat.set(1, ia / aspect); tex.offset.set(0, (1 - ia / aspect) / 2); }
       tex.needsUpdate = true;
     };
-    img.src = url; artCache.set(ck, tex); return tex;
+    if (ready) crop(); else { img.onload = () => { readyImgs.set(url, img); crop(); }; img.src = url; }
+    artCache.set(ck, tex); return tex;
   }
   // Placeholder print: soft abstract shapes in muted colours, different for every artwork
   function placeholderArt(key, aspect) {
@@ -763,9 +800,25 @@
     g.globalAlpha = 0.08; for (let i = 0; i < 4000; i++) { g.fillStyle = rnd() < 0.5 ? '#000' : '#fff'; g.fillRect(rnd() * W, rnd() * H, 1, 1); } g.globalAlpha = 1;
     const tex = new T3.CanvasTexture(c); tex.encoding = T3.sRGBEncoding; tex.keep = true; artCache.set(ck, tex); return tex;
   }
-  const FRAME_COLORS = { black: '#1D1D1D', white: '#F2F1EC', oak: '#C49A6C', brass: '#B89559' };
+  const FRAME_COLORS = { black: '#1D1D1D', white: '#F2F1EC', oak: '#C49A6C', limewash: '#CDBFA6', pine: '#A56E3D', walnut: '#5C3A22', brass: '#B89559' };
+  const MAT_COLORS = { white: '#F7F5EF', cream: '#EDE3CC' };
+  // Presentation oar hung flat on the wall: varnished shaft, painted blade (two colours), leather straps
+  B.oar = (g, w, d, h, c) => {
+    const shaftM = wood('#C9955A', w, 6), r = Math.min(h * 0.12, 2.3), z = -d / 2 + r + 0.5, y = h / 2, bladeL = Math.min(w * 0.4, 58), bladeH = h;
+    const shaftL = w - bladeL + 4, sx = -w / 2 + shaftL / 2;
+    const sh = cyl(g, shaftM, r, r, shaftL, sx, y, z, 16); sh.rotation.z = Math.PI / 2;
+    const grip = cyl(g, wood('#B07C45', 20, 6), r * 1.15, r * 1.15, 18, -w / 2 + 9, y, z, 16); grip.rotation.z = Math.PI / 2;
+    const leather = mat('#9B6A3F', { rough: 0.8 });
+    [0.34, 0.5].forEach((f) => { const l = cyl(g, leather, r * 1.25, r * 1.25, 6, -w / 2 + w * f, y, z, 16); l.rotation.z = Math.PI / 2; });
+    const bx = w / 2 - bladeL / 2, bt = 1.6, navy = mat('#1F2B3E', { rough: 0.35 }), green = mat('#27463A', { rough: 0.35 }), gold = mat('#C9A45C', { rough: 0.35, metal: 0.6 });
+    part(g, navy, bladeL, bladeH / 2, bt, bx, y + bladeH / 4, -d / 2 + bt / 2 + 0.3, 0.6);
+    part(g, green, bladeL, bladeH / 2, bt, bx, y - bladeH / 4, -d / 2 + bt / 2 + 0.3, 0.6);
+    part(g, shaftM, 12, r * 1.6, r * 1.6, w / 2 - bladeL - 4, y, z, 0.6); // neck where the shaft meets the blade
+    for (let i = 0; i < 4; i++) part(g, gold, bladeL * 0.6, 0.6, 0.3, bx + 2, y + bladeH * (0.3 - i * 0.2), -d / 2 + bt + 0.5); // painted lettering
+  };
   // Local space: back against the wall at -z, picture facing +z, from y = 0 (bottom edge) to h
   B.art = (g, w, d, h, c, it, opts) => {
+    if (it && it.style === 'oar') return B.oar(g, w, d, h, c);
     if (it && it.frame === 'oakpanel') { // oak 3D feature panel mounted on the wall
       const m = HM.wallMaterial('#C9A06A', 'oakpanels', w, h); m.transparent = false;
       part(g, m, w, h, Math.max(d, 2), 0, h / 2, -d / 2 + Math.max(d, 2) / 2);
@@ -785,11 +838,11 @@
       const face = new T3.Mesh(new T3.PlaneGeometry(w - 0.4, h - 0.4), picM); face.position.set(0, h / 2, z0 + depth + 0.05); g.add(face);
       return;
     }
-    const fc = FRAME_COLORS[frame] || c, fm = frame === 'oak' ? wood(fc, w, h) : mat(fc, { rough: frame === 'brass' ? 0.3 : 0.45, metal: frame === 'brass' ? 0.9 : 0 });
+    const fc = FRAME_COLORS[frame] || c, fm = ['oak', 'limewash', 'pine', 'walnut'].includes(frame) ? wood(fc, w, h) : mat(fc, { rough: frame === 'brass' ? 0.3 : 0.45, metal: frame === 'brass' ? 0.9 : 0 });
     part(g, fm, w, fw, depth, 0, fw / 2, z0 + depth / 2, 0.3); part(g, fm, w, fw, depth, 0, h - fw / 2, z0 + depth / 2, 0.3);
     part(g, fm, fw, h - 2 * fw, depth, -w / 2 + fw / 2, h / 2, z0 + depth / 2, 0.3); part(g, fm, fw, h - 2 * fw, depth, w / 2 - fw / 2, h / 2, z0 + depth / 2, 0.3);
     part(g, mat('#DDD8CE', { rough: 0.9 }), w - 2 * fw, h - 2 * fw, 0.4, 0, h / 2, z0 + 0.2); // backing
-    if (matW) part(g, mat('#F7F5EF', { rough: 0.95 }), w - 2 * fw, h - 2 * fw, 0.3, 0, h / 2, z0 + depth - 0.9);
+    if (matW) part(g, mat(MAT_COLORS[it.mat] || MAT_COLORS.white, { rough: 0.95 }), w - 2 * fw, h - 2 * fw, 0.3, 0, h / 2, z0 + depth - 0.9);
     const face = new T3.Mesh(new T3.PlaneGeometry(iw, ih), picM); face.position.set(0, h / 2, z0 + depth - (matW ? 0.7 : 0.9)); g.add(face);
     const glass = mat('#FFFFFF', { rough: 0.05, transparent: true, opacity: 0.06 }); glass.envMapIntensity = 1.2; glass.depthWrite = false;
     const gl = new T3.Mesh(new T3.PlaneGeometry(w - 2 * fw, h - 2 * fw), glass); gl.position.set(0, h / 2, z0 + depth - 0.4); g.add(gl);

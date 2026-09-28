@@ -65,7 +65,7 @@
   const TYPE_DEFAULTS = {};
   LIBRARY.forEach(([, items]) => items.forEach(([t, , w, d, h, c]) => { if (!TYPE_DEFAULTS[t]) TYPE_DEFAULTS[t] = { w, d, h, color: c }; }));
   const SHARED = ['name', 'type', 'w', 'd', 'h', 'color', 'kelvin', 'power', 'doors', 'books', 'style', 'image', 'frame', 'mat'];
-  const ART_FRAMES = { black: 'Black frame', white: 'White frame', oak: 'Oak frame', brass: 'Brass frame', none: 'No frame (canvas)', oakpanel: 'Oak 3D wall panel' };
+  const ART_FRAMES = { black: 'Black frame', white: 'White frame', oak: 'Oak frame', limewash: 'Limed oak frame', pine: 'Pine frame', walnut: 'Walnut frame', brass: 'Brass frame', none: 'No frame (canvas)', oakpanel: 'Oak 3D wall panel' };
   const ART_WALL_ROT = { n: 0, e: 90, s: 180, w: 270 };
   const SHELF_DOORS = { none: 'No doors', lower: 'Doors on the lower half', full: 'Full-height doors' };
 
@@ -181,7 +181,7 @@
     if (it.style) o.style = String(it.style);
     if (it.fixed) o.fixed = true;
     if (it.seedPl) o.seedPl = String(it.seedPl); // which house-data placement made it // built into the house: cannot be moved, resized, rotated or removed
-    if (type === 'art') { o.frame = ART_FRAMES[it.frame] ? it.frame : 'black'; o.mat = it.mat !== false && !['none', 'oakpanel'].includes(o.frame); if (it.image) o.image = String(it.image); }
+    if (type === 'art') { o.frame = ART_FRAMES[it.frame] ? it.frame : 'black'; o.mat = ['none', 'oakpanel'].includes(o.frame) || it.mat === false ? false : it.mat === 'cream' ? 'cream' : true; if (it.image) o.image = String(it.image); }
     if (isLight(type)) { o.kelvin = KELVIN[it.kelvin] ? Number(it.kelvin) : 2700; o.power = POWER[it.power] ? it.power : 'medium'; }
     return o;
   }
@@ -221,7 +221,7 @@
     if (type === 'cornersofa') o.side = p.side === 'left' ? 'left' : 'right';
     if (type === 'shelf') { o.doors = SHELF_DOORS[p.doors] ? p.doors : 'none'; o.books = p.books !== false; }
     if (p.style) o.style = String(p.style);
-    if (type === 'art') { o.frame = ART_FRAMES[p.frame] ? p.frame : 'black'; o.mat = p.mat !== false && !['none', 'oakpanel'].includes(o.frame); if (p.image) o.image = String(p.image); }
+    if (type === 'art') { o.frame = ART_FRAMES[p.frame] ? p.frame : 'black'; o.mat = ['none', 'oakpanel'].includes(o.frame) || p.mat === false ? false : p.mat === 'cream' ? 'cream' : true; if (p.image) o.image = String(p.image); }
     if (isLight(type)) { o.kelvin = KELVIN[p.kelvin] ? Number(p.kelvin) : 2700; o.power = POWER[p.power] ? p.power : 'medium'; }
     if (p.seedRev) o.seedRev = p.seedRev;
     return o;
@@ -585,7 +585,7 @@
     const r = room(), k = artWall(it), along = Math.round((k === 'n' || k === 's') ? it.x : it.y), centre = Math.round(it.elev + it.h / 2), p = it.catalogId && piece(it.catalogId);
     el.innerHTML = `<h2>${esc(it.name)}</h2>
       ${p ? `<div class="linked"><span>From My pieces. Changes apply to every placement of this piece (${placements(p.id)}).</span></div>` : ''}
-      ${it.frame === 'oakpanel' ? '' : `<div class="art-pick">${it.image ? `<img data-photo="${it.image}" alt="">` : '<span class="art-empty">No picture yet: a placeholder is shown</span>'}
+      ${it.frame === 'oakpanel' || it.style === 'oar' ? '' : `<div class="art-pick">${it.image ? `<img data-photo="${it.image}" alt="">` : '<span class="art-empty">No picture yet: a placeholder is shown</span>'}
         <div class="btnrow"><button class="btn small" data-act="artPicture">${it.image ? 'Change picture' : 'Add picture'}</button>${it.image ? '<button class="btn light small" data-act="artClear">Remove picture</button>' : ''}</div></div>`}
       <label class="field"><span>Label</span><input data-item="name" value="${esc(it.name)}"></label>
       <div class="row2">
@@ -599,7 +599,7 @@
       </div>
       <div class="row2">
         <label class="field"><span>Frame</span><select data-item="frame">${Object.entries(ART_FRAMES).map(([f, n]) => `<option value="${f}" ${it.frame === f ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-        <label class="check" style="margin-top:22px"><input type="checkbox" data-item="mat" ${it.mat ? 'checked' : ''} ${['none', 'oakpanel'].includes(it.frame) ? 'disabled' : ''}> White mat</label>
+        <label class="field"><span>Mat</span><select data-item="mat" ${['none', 'oakpanel'].includes(it.frame) ? 'disabled' : ''}>${[['', 'No mat'], ['white', 'White mat'], ['cream', 'Cream mat']].map(([v, n]) => `<option value="${v}" ${(it.mat === true ? 'white' : it.mat || '') === v ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
       </div>
       <p class="note">Along wall is the picture's centre, from the ${k === 'n' || k === 's' ? 'left' : 'top'} corner. Drag it on the plan to slide it along a wall or move it to another wall. 150 cm is a usual centre height.</p>
       <div class="btnrow" style="margin-top:12px">
@@ -617,7 +617,7 @@
   const thumbs = new Map(), thumbQueue = [];
   let thumbBusy = false, thumbFail = false;
   const libFrame = (color) => color === '#F4F3EF' ? 'none' : color === '#C49A6C' ? 'oak' : color === '#C9A06A' ? 'oakpanel' : 'black';
-  const THUMB_VERSION = 4; // bump when models change so saved thumbnails are redrawn
+  const THUMB_VERSION = 5; // bump when models change so saved thumbnails are redrawn
   const thumbKey = (o) => JSON.stringify([THUMB_VERSION].concat(['type', 'w', 'd', 'h', 'color', 'style', 'doors', 'books', 'side', 'frame', 'mat', 'image', 'kelvin'].map((k) => o[k])));
   const showThumb = (key, url) => $$('img[data-thumb]').forEach((img) => { if (img.dataset.thumb === key) img.src = url; });
   function thumbImg(o, cls) {
@@ -637,14 +637,15 @@
     // saved from an earlier visit? then no rendering at all
     Store.getThumb(job.key).catch(() => null).then((saved) => {
       if (saved) { thumbs.set(job.key, saved); showThumb(job.key, saved); return done(); }
-      (window.requestIdleCallback || ((f) => setTimeout(f, 50)))(() => {
+      const pic = job.o.image ? getPhoto(job.o.image).then((u) => u && HouseModels.preloadImage(u)).catch(() => {}) : Promise.resolve();
+      pic.then(() => (window.requestIdleCallback || ((f) => setTimeout(f, 50)))(() => {
         try {
           HouseModels.init(THREE);
           const url = HouseModels.thumbnail(job.o, { photo: photoFor3D });
           thumbs.set(job.key, url); showThumb(job.key, url); Store.putThumb(job.key, url).catch(() => {});
         } catch (e) { thumbFail = true; thumbQueue.length = 0; }
         done();
-      }, { timeout: 2000 });
+      }, { timeout: 2000 }));
     });
   }
   function pieceCard(p) {
@@ -703,7 +704,7 @@
     switch (it.type) {
       case 'rug': return `<rect class="body" x="${x0}" y="${y0}" width="${w}" height="${d}" fill="${c}" fill-opacity=".75" stroke-dasharray="6 4"/>`;
       case 'art': { // seen from above: a thin frame on the wall with the picture edge inside
-        const t = Math.max(d, 5), fc = { black: '#1D1D1D', white: '#E8E6E0', oak: '#C49A6C', brass: '#B89559', none: '#8A8A8A' }[it.frame] || c;
+        const t = Math.max(d, 5), fc = { black: '#1D1D1D', white: '#E8E6E0', oak: '#C49A6C', limewash: '#CDBFA6', pine: '#A56E3D', walnut: '#5C3A22', brass: '#B89559', none: '#8A8A8A' }[it.frame] || c;
         return `<rect class="body" x="${x0}" y="${-t / 2}" width="${w}" height="${t}" fill="${fc}"/><line class="detail" x1="${x0 + 3}" x2="${x0 + w - 3}" y1="${t / 2 + 3}" y2="${t / 2 + 3}"/>`;
       }
       case 'plant': return `<ellipse class="body" rx="${w / 2}" ry="${d / 2}" fill="${c}"/>`;
@@ -880,6 +881,7 @@
   // Artwork pictures live in IndexedDB; load on first use, then rebuild the 3D view
   const photoLoading = new Set();
   function photoFor3D(id) {
+    if (id.startsWith('url:')) return id.slice(4); // shipped with the app
     const u = photoCache.get(id);
     if (!u && !photoLoading.has(id)) { photoLoading.add(id); getPhoto(id).then((x) => { if (x) schedule3D(); }); }
     return u || null;
@@ -1346,7 +1348,7 @@
       else if (f === 'doors') it.doors = SHELF_DOORS[t.value] ? t.value : 'none';
       else if (f === 'books') it.books = t.checked;
       else if (f === 'frame') { it.frame = ART_FRAMES[t.value] ? t.value : 'black'; if (['none', 'oakpanel'].includes(it.frame)) it.mat = false; }
-      else if (f === 'mat') it.mat = t.checked;
+      else if (f === 'mat') it.mat = t.value === 'cream' ? 'cream' : !!t.value;
       else it[f] = num(t.value, 1, 3000, it[f]);
       syncToPiece(it); commit();
     }
