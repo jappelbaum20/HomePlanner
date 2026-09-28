@@ -22,10 +22,10 @@ window.HOUSE_PIECES = [
     notes: 'Beliani VINAY, 180 x 200, CHF 579.99. Olive green corduroy, thick padded headboard (186 x 90), feet 2 cm, slatted base (14 slats). Outer size 196 x 233 x 90 (Beliani listing).'
   },
   {
-    id: 'bed-time', type: 'bed', style: 'boxbed', name: 'Ti\u2019me storage bed 180 x 200 (beige)',
-    w: 196, d: 215, h: 110, color: '#D6C9B3', status: 'considering',
+    id: 'bed-time', rev: 2, type: 'bed', style: 'boxbed', name: 'Ti\u2019me storage bed 180 x 200 (beige cord)',
+    w: 240, d: 247, h: 85, color: '#C9C1B2', status: 'considering',
     link: 'https://www.xxxlutz.ch/p/ti-me-polsterbett-180-200-cm-beige-002555000801',
-    notes: 'XXXLutz Ti\u2019me (BOXXX) upholstered bed, 180 x 200, beige, slatted base and storage box. XXXLutz blocks automated access, so the outer size (196 x 215 x 110) and look are estimates: check the listing.'
+    notes: 'XXXLutz Ti\u2019me upholstered bed, 180 x 200, beige corduroy. Wide flat upholstered rim standing on the floor, lift-up slatted base with storage box, headboard of two large square cushions. Outer size 240 x 247 x 85, frame height 32, max. load 250 kg (XXXLutz product details).'
   },
   {
     id: 'bed-livetastic', type: 'bed', style: 'metalbed', name: 'Livetastic bed 180 x 200 (light brown)',

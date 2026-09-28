@@ -489,16 +489,24 @@
     for (let i = 0; i < rows; i++) pillow(g, f, w - 2, 14, rh, 0, frameH + 2 + rh * (i + 0.5), -d / 2 + 14, 3).rotation.x = Math.PI / 2 - 0.08;
     bedding(g, w - 16, -d / 2 + headD + 1, d / 2 - 6, frameH - 11, 22, c);
   };
-  // Storage bed (Ti'me / BOXXX): box base down to a recessed plinth, tall headboard with vertical channel stitching
+  // Ti'me storage bed: chunky beige cord, a wide flat rim standing straight on the floor (no visible feet) round a
+  // lift-up slatted base with storage box, and a deep headboard block topped by two big square cushions
   B.boxbed = (g, w, d, h, c) => {
-    const f = fabric(c, w, d), fd = fabric(shade(c, 0.92), w, d), plinth = 5, baseH = 38, headD = 12;
-    part(g, mat('#2A2622', { rough: 0.7 }), w - 10, plinth, d - headD - 10, 0, plinth / 2, headD / 2);
-    part(g, fd, w, baseH - plinth, d - headD, 0, plinth + (baseH - plinth) / 2, headD / 2, 3);
-    part(g, mat(shade(c, 0.75), { rough: 0.9 }), w - 1, 0.6, 0.6, 0, plinth + (baseH - plinth) * 0.45, d / 2 + 0.1); // lid seam of the storage box
-    part(g, fd, w, h, 6, 0, h / 2, -d / 2 + 3, 3); // headboard back
-    const n = Math.max(6, Math.round(w / 22)), cw = w / n;
-    for (let i = 0; i < n; i++) pillow(g, f, cw - 0.6, 7, h - baseH + 6, -w / 2 + cw * (i + 0.5), baseH - 3 + (h - baseH + 6) / 2, -d / 2 + 8, 1.2).rotation.x = Math.PI / 2;
-    bedding(g, w - 12, -d / 2 + headD + 1, d / 2 - 5, baseH - 6, 24, c);
+    const f = cord(c, w, d), fd = cord(shade(c, 0.94), w, d), frameH = 32, headD = 22, rim = Math.max(18, (w - 190) / 2), z0 = -d / 2;
+    // headboard: a base block the full width, two cushions side by side above it, a thin piped seam between them
+    const blockH = frameH + 4;
+    part(g, fd, w, blockH, headD, 0, blockH / 2, z0 + headD / 2, 2.5);
+    const cw = (w - 4) / 2, ch = h - blockH + 10;
+    for (const sx of [-1, 1]) {
+      part(g, f, cw - 1, ch, headD - 4, sx * (cw / 2 + 0.5), blockH - 10 + ch / 2, z0 + headD / 2 + 1, 5); // square cushion
+    }
+    // frame: side rails and foot rail as thick upholstered slabs, flush to the floor
+    const fl = d - headD, fz = z0 + headD + fl / 2;
+    for (const sx of [-1, 1]) part(g, fd, rim, frameH, fl, sx * (w / 2 - rim / 2), frameH / 2, fz, 2.5);
+    part(g, fd, w - 2 * rim, frameH, rim, 0, frameH / 2, d / 2 - rim / 2, 2.5);
+    part(g, mat('#2A2826', { rough: 0.8 }), w - 2 * rim, frameH - 8, fl - rim, 0, (frameH - 8) / 2, z0 + headD + (fl - rim) / 2); // storage box
+    part(g, wood('#D9BC8C', w, d), w - 2 * rim - 2, 2, fl - rim - 2, 0, frameH - 7, z0 + headD + (fl - rim) / 2, 0.3); // slats
+    bedding(g, w - 2 * rim - 4, z0 + headD + 1, d / 2 - rim - 1, frameH - 12, 20, c);
   };
   // Upholstered bed on slim black metal legs with a softly padded, piped headboard (Livetastic)
   B.metalbed = (g, w, d, h, c) => {
