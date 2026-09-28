@@ -928,14 +928,19 @@
     const light = new T3.Color(c).getHSL({}).l > 0.6, m = mat(c, { rough: light ? 0.15 : 0.6 }), tt = 3.8, pl = 10, bh = h - tt - pl;
     part(g, OAK_TOP(w, d), w, tt, d, 0, h - tt / 2, 0, 0.4);
     part(g, mat('#222222', { rough: 0.8 }), w - 6, pl, d - 10, 0, pl / 2, 0);
-    part(g, m, w - 1, bh, d - 1.5, 0, pl + bh / 2, 0, 0.3);
     const bar = (x, y, z, len, s) => part(g, mat(light ? '#BFC2C4' : '#8E9092', { rough: 0.3, metal: 0.9 }), len, 1.2, 1.6, x, y, z + s * 1.2, 0.5);
     const zf = d / 2 - 0.4, rw = 48, lw = w - 1 - rw, lx = -w / 2 + 0.5 + lw / 2, rx = w / 2 - 0.5 - rw / 2, gap = mat(shade(c, light ? 0.8 : 0.6), { rough: 0.7 });
+    // body built around an open niche on the front (+z): back block, right column, and the left part below and above the niche
+    const bd = d - 1.5, fd = 21, back = bd - fd, zc = bd / 2 - fd / 2, nh = bh * 0.38, lowH = bh - nh - 4;
+    part(g, m, w - 1, bh, back, 0, pl + bh / 2, -bd / 2 + back / 2, 0.3);
+    part(g, m, rw, bh, fd, rx, pl + bh / 2, zc, 0.3);
+    part(g, m, lw, lowH, fd, lx, pl + lowH / 2, zc, 0.3);
+    part(g, m, lw, 4, fd, lx, pl + bh - 2, zc, 0.3);
+    part(g, m, 2, nh, fd, -w / 2 + 1.5, pl + lowH + nh / 2, zc);
+    part(g, mat(shade(c, light ? 0.8 : 1.35), { rough: 0.8 }), lw - 3, nh, 0.5, lx + 1, pl + lowH + nh / 2, zc - fd / 2 + 0.3); // niche back, a shade off
     // front (+z)
     part(g, gap, 0.5, bh, 0.6, lx + lw / 2, pl + bh / 2, zf);
-    const nh = bh * 0.38; part(g, mat(shade(c, light ? 0.75 : 1.5), { rough: 0.8 }), lw - 8, nh, 1, lx, pl + bh - 4 - nh / 2, zf - 20); // niche back
-    part(g, gap, lw - 8, 0.8, 22, lx, pl + bh - 4 - nh, zf - 11); part(g, gap, lw - 8, 0.8, 22, lx, pl + bh - 4, zf - 11);
-    bar(lx, pl + bh - nh - 12, zf, lw * 0.75, 1); part(g, gap, lw, 0.5, 0.6, lx, pl + bh - nh - 6, zf);
+    bar(lx, pl + lowH - 8, zf, lw * 0.75, 1);
     bar(rx, pl + bh - 10, zf, rw * 0.7, 1);
     // back (-z)
     part(g, gap, 0.5, bh, 0.6, -lx - lw / 2, pl + bh / 2, -zf);
