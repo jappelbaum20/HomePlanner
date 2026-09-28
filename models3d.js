@@ -430,7 +430,7 @@
     part(g, steel, 1, 12, 2, -2.5 - 1.5, legH + bodyH * 0.55, d / 2 + 0.6, 0.4);
     const n = 3, dh = (bodyH - 2) / n; // three drawers (right)
     for (let i = 0; i < n; i++) { const y = legH + 1 + dh * (i + 0.5); part(g, steel, half, dh - 1, 0.8, w / 4 + 0.5, y, d / 2 - 1); part(g, pine, 14, 1.8, 2, w / 4 + 0.5, y + dh * 0.28, d / 2 + 0.6, 0.5); }
-    part(g, pine, w - 4, 1.8, d - 5, 0, legH + bodyH * 0.5, 0); // inner pine shelf (seen through the door)
+    part(g, pine, w / 2 - 6, 1.8, d - 10, -w / 4, legH + bodyH * 0.5, -3); // inner pine shelf behind the door
   };
   B.cabinet = (g, w, d, h, c, it) => {
     if (it && it.style === 'fjallbo') return B.fjallbo(g, w, d, h, c);
