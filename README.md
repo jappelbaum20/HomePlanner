@@ -61,7 +61,10 @@ To send the current state back to Claude, use Claude handoff, then Copy this roo
 - Room `wallFinish`: per wall (`n`, `e`, `s`, `w`), one of paint, panelling, oakpanels, marble, tiles (default paint).
 - Window `radiator`: true draws a panel radiator under it (default true when the sill is 50 cm or higher). Door `color`: door leaf color.
 - `cornersofa` items and pieces take `side`: right or left (chaise side seen from the front). Beds: `h` up to 80 is the mattress top; above 80 it is the headboard height.
-- Pieces listed in `window.HOUSE_PIECES` in `house-data.js` are added to My pieces once. Deleting one in the app keeps it out.
+- Pieces listed in `window.HOUSE_PIECES` in `house-data.js` are added to My pieces once. Deleting one in the app keeps it out. A higher `rev` on a piece pushes a changed size or look to browsers that already have it.
+- `window.HOUSE_PLACEMENTS` places a piece once in a room: the room with a matching name (for example Office, Büro), else a starter room from `window.HOUSE_ROOMS`. A deleted starter room is not recreated.
+- Shelf items and pieces take `doors` (none, lower, full; woven bamboo HÖGADAL style) and `books` (true or false).
+- `style` picks a specific model: desk `standing` (FlexiSpot style), cabinet `fjallbo`, floorlamp `hektar`.
 - Photos are never part of the handoff; they stay in the browser and in backup files.
 
 ## Storage notes

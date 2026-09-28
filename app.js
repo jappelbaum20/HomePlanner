@@ -57,7 +57,8 @@
   ];
   const TYPE_DEFAULTS = {};
   LIBRARY.forEach(([, items]) => items.forEach(([t, , w, d, h, c]) => { if (!TYPE_DEFAULTS[t]) TYPE_DEFAULTS[t] = { w, d, h, color: c }; }));
-  const SHARED = ['name', 'type', 'w', 'd', 'h', 'color', 'kelvin', 'power'];
+  const SHARED = ['name', 'type', 'w', 'd', 'h', 'color', 'kelvin', 'power', 'doors', 'books', 'style'];
+  const SHELF_DOORS = { none: 'No doors', lower: 'Doors on the lower half', full: 'Full-height doors' };
 
   // ================= Helpers =================
   const $ = (s, el = document) => el.querySelector(s);
@@ -161,6 +162,8 @@
     };
     if (it.catalogId) o.catalogId = it.catalogId;
     if (type === 'cornersofa') o.side = it.side === 'left' ? 'left' : 'right';
+    if (type === 'shelf') { o.doors = SHELF_DOORS[it.doors] ? it.doors : 'none'; o.books = it.books !== false; }
+    if (it.style) o.style = String(it.style);
     if (isLight(type)) { o.kelvin = KELVIN[it.kelvin] ? Number(it.kelvin) : 2700; o.power = POWER[it.power] ? it.power : 'medium'; }
     return o;
   }
@@ -171,6 +174,7 @@
       floor: hex(r.floor, '#D9B98A'), floorFinish: FLOOR_FINISHES[r.floorFinish] ? r.floorFinish : 'parquet', walls: {}, wallFinish: {}, notes: r.notes || '', photos: Array.isArray(r.photos) ? r.photos.slice() : [],
       openings: [], items: []
     };
+    if (r.seedId) o.seedId = r.seedId;
     const wc = r.walls || {};
     WALLS.forEach(([k]) => { o.walls[k] = hex(wc[k], typeof r.walls === 'string' ? hex(r.walls, '#F7F7F4') : '#F7F7F4'); });
     const wf = r.wallFinish || {};
@@ -192,6 +196,8 @@
       status: ['own', 'considering', 'ordered'].includes(p.status) ? p.status : 'own',
       link: p.link || '', notes: p.notes || '', photos: Array.isArray(p.photos) ? p.photos.slice() : [] };
     if (type === 'cornersofa') o.side = p.side === 'left' ? 'left' : 'right';
+    if (type === 'shelf') { o.doors = SHELF_DOORS[p.doors] ? p.doors : 'none'; o.books = p.books !== false; }
+    if (p.style) o.style = String(p.style);
     if (isLight(type)) { o.kelvin = KELVIN[p.kelvin] ? Number(p.kelvin) : 2700; o.power = POWER[p.power] ? p.power : 'medium'; }
     if (p.seedRev) o.seedRev = p.seedRev;
     return o;
@@ -213,6 +219,25 @@
         ex.seedRev = rev;
         o.rooms.forEach((r) => r.items.forEach((it) => { if (it.catalogId === ex.id) SHARED.forEach((k) => { if (ex[k] !== undefined) it[k] = ex[k]; }); }));
       }
+    });
+    // Placements Claude adds to house-data.js are made once. The target room is one with a matching name,
+    // else a starter room from HOUSE_ROOMS (only if that room was never deleted).
+    o.placedSeeds = Array.isArray(s.placedSeeds) ? s.placedSeeds.slice() : [];
+    o.removedRooms = Array.isArray(s.removedRooms) ? s.removedRooms.slice() : [];
+    const seedRooms = window.HOUSE_ROOMS || [];
+    const findRoom = (rid) => {
+      const tpl = seedRooms.find((x) => x.id === rid), names = [rid].concat(tpl ? [tpl.name].concat(tpl.match || []) : []).map((n) => n.toLowerCase());
+      let r = o.rooms.find((x) => x.seedId === rid) || o.rooms.find((x) => names.includes(x.name.trim().toLowerCase()));
+      if (!r && tpl && !o.removedRooms.includes(rid)) { r = normRoom(Object.assign({}, tpl, { id: 'r' + uid() })); r.seedId = rid; o.rooms.push(r); }
+      return r;
+    };
+    (window.HOUSE_PLACEMENTS || []).forEach((pl) => {
+      if (!pl.id || o.placedSeeds.includes(pl.id)) return;
+      const pc = o.catalog.find((c) => c.id === pl.catalogId), r = pc && findRoom(pl.room);
+      if (!r) return;
+      const it = normItem(Object.assign({}, pc, { id: undefined, catalogId: pc.id, photos: undefined, status: undefined, link: undefined, notes: undefined },
+        { x: Math.min(pl.x, r.width), y: Math.min(pl.y, r.length), rot: pl.rot || 0 }, pl.extra || {}), r);
+      r.items.push(it); o.placedSeeds.push(pl.id);
     });
     return o;
   }
@@ -370,6 +395,8 @@
           <label class="field"><span>From top, cm</span><input type="number" data-item="y" value="${Math.round(it.y)}"></label>
           <label class="field"><span>Rotation, °</span><input type="number" step="15" data-item="rot" value="${it.rot}"></label>
         </div>
+        ${it.type === 'shelf' ? `<div class="row2"><label class="field"><span>Doors</span><select data-item="doors">${Object.entries(SHELF_DOORS).map(([k, n]) => `<option value="${k}" ${it.doors === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+          <label class="check" style="margin-top:22px"><input type="checkbox" data-item="books" ${it.books !== false ? 'checked' : ''}> Books on shelves</label></div>` : ''}
         ${it.type === 'cornersofa' ? `<label class="field"><span>Chaise side (seen from the front)</span><select data-item="side"><option value="right" ${it.side !== 'left' ? 'selected' : ''}>Right</option><option value="left" ${it.side === 'left' ? 'selected' : ''}>Left</option></select></label>` : ''}
         <div class="row2">
           <label class="field"><span>Above floor, cm</span><input type="number" data-item="elev" value="${it.elev}"></label>
@@ -984,6 +1011,7 @@
     if (t.id === 'delRoom') {
       if (state.rooms.length < 2 || !confirm(`Delete "${r.name}" with its photos and furniture placements? Pieces in My pieces are kept.`)) return;
       r.photos.forEach((id) => Store.delPhoto(id));
+      if (r.seedId && !state.removedRooms.includes(r.seedId)) state.removedRooms.push(r.seedId);
       state.rooms = state.rooms.filter((x) => x.id !== r.id); state.activeRoomId = state.rooms[0].id; selected = null; commit(); return;
     }
     const row = t.closest('.wallrow[data-target]'); if (row && t.tagName !== 'INPUT') { wallTarget = row.dataset.target; renderRoomPanel(); renderPlan(); }
@@ -1005,6 +1033,8 @@
       else if (f === 'kelvin') it.kelvin = Number(t.value);
       else if (f === 'power') it.power = t.value;
       else if (f === 'side') it.side = t.value === 'left' ? 'left' : 'right';
+      else if (f === 'doors') it.doors = SHELF_DOORS[t.value] ? t.value : 'none';
+      else if (f === 'books') it.books = t.checked;
       else it[f] = num(t.value, 1, 3000, it[f]);
       syncToPiece(it); commit();
     }

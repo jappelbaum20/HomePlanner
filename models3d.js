@@ -164,6 +164,31 @@
       seed = 47; g.fillStyle = '#fff'; g.fillRect(0, 0, s, s);
       for (let i = 0; i < 9000; i++) { const t = rnd(), v = t < 0.6 ? 60 + rnd() * 50 : t < 0.9 ? 150 + rnd() * 60 : 235; g.fillStyle = `rgb(${v},${Math.max(0, v - 8)},${Math.max(0, v - 16)})`; const r = 1 + rnd() * 4; g.fillRect(rnd() * s, rnd() * s, r, r * (0.5 + rnd())); }
     }, 60),
+    // perforated steel: small round holes on a 1 cm grid (dark = hole)
+    perforated: () => canvasTex('perforated', 256, (g, s) => {
+      g.fillStyle = '#fff'; g.fillRect(0, 0, s, s); g.fillStyle = 'rgb(40,40,40)'; const n = 16, c = s / n;
+      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { g.beginPath(); g.arc(i * c + c / 2, j * c + c / 2, c * 0.28, 0, 7); g.fill(); }
+    }, 16),
+    // laminated bamboo desk top: 2 cm strips with nodes
+    bambootop: () => canvasTex('bambootop', 1024, (g, s) => {
+      seed = 61; g.fillStyle = '#fff'; g.fillRect(0, 0, s, s); const n = 40, sh = s / n;
+      for (let j = 0; j < n; j++) {
+        const v = 222 + rnd() * 30; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(0, j * sh, s, sh);
+        g.fillStyle = 'rgba(150,150,150,.35)'; g.fillRect(0, j * sh, s, 1);
+        for (let k = 0; k < 4; k++) { const y = j * sh + rnd() * sh, gv = v - 25; g.strokeStyle = `rgba(${gv},${gv},${gv},.35)`; g.lineWidth = 0.6; g.beginPath(); g.moveTo(0, y); g.lineTo(s, y + (rnd() - 0.5) * 2); g.stroke(); }
+        let x = rnd() * 120; while (x < s) { g.fillStyle = 'rgba(140,140,140,.45)'; g.fillRect(x, j * sh + 1, 3, sh - 1); x += 90 + rnd() * 160; } // nodes
+      }
+    }, 80),
+    // woven bamboo: basket weave of 1.5 cm strips over and under (tinted by the material)
+    bamboo: () => canvasTex('bamboo', 512, (g, s) => {
+      seed = 59; g.fillStyle = '#9a9a9a'; g.fillRect(0, 0, s, s); const n = 16, c = s / n;
+      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+        const horiz = (i + j) % 2 === 0, x = i * c, y = j * c, gr = horiz ? g.createLinearGradient(0, y, 0, y + c) : g.createLinearGradient(x, 0, x + c, 0);
+        const v = 225 + rnd() * 30; gr.addColorStop(0, `rgb(${v - 45},${v - 45},${v - 45})`); gr.addColorStop(0.5, `rgb(${v},${v},${v})`); gr.addColorStop(1, `rgb(${v - 50},${v - 50},${v - 50})`);
+        g.fillStyle = gr; g.fillRect(x + 1, y + 1, c - 2, c - 2);
+        g.strokeStyle = 'rgba(120,120,120,.35)'; g.lineWidth = 0.6; for (let k = 0; k < 3; k++) { g.beginPath(); const o = 4 + rnd() * (c - 8); if (horiz) { g.moveTo(x + 2, y + o); g.lineTo(x + c - 2, y + o); } else { g.moveTo(x + o, y + 2); g.lineTo(x + o, y + c - 2); } g.stroke(); }
+      }
+    }, 24),
     plaster: () => canvasTex('plaster', 256, (g, s) => { seed = 21; g.fillStyle = '#fbfbfb'; g.fillRect(0, 0, s, s); noise(g, s, 5000, 0.18, 225, 255); }, 100)
   };
   // Clone a cached texture with a repeat that keeps its real-world scale on a w x h (cm) face
@@ -324,12 +349,38 @@
     legs(g, m, w, d, h - top, Math.max(t, 6), t, h < 50);
     if (h >= 50) { part(g, m, w - 2 * t, 8, 2, 0, h - top - 4, d / 2 - t, 0); part(g, m, w - 2 * t, 8, 2, 0, h - top - 4, -d / 2 + t, 0); }
   };
-  B.desk = (g, w, d, h, c) => {
+  B.desk = (g, w, d, h, c, it) => {
+    if (it && it.style === 'standing') return B.standingDesk(g, w, d, h, c, it);
     const m = wood(c, w, d), top = 3;
     part(g, m, w, top, d, 0, h - top / 2, 0, 0.5);
     const lm = METAL_DARK();
     for (const sx of [-1, 1]) { part(g, lm, 4, h - top, d - 10, sx * (w / 2 - 5), (h - top) / 2, 0); }
     part(g, lm, w - 10, 4, 2, 0, h - top - 12, -d / 2 + 6);
+  };
+  // Electric standing desk: laminated bamboo top with rounded corners on two stepped black columns with T-feet
+  B.standingDesk = (g, w, d, h, c) => {
+    const top = 2.5, rad = 3, frame = mat('#1C1C1C', { rough: 0.45, metal: 0.5 });
+    const shp = new T3.Shape(), hw = w / 2, hd = d / 2;
+    shp.moveTo(-hw + rad, -hd); shp.lineTo(hw - rad, -hd); shp.quadraticCurveTo(hw, -hd, hw, -hd + rad); shp.lineTo(hw, hd - rad); shp.quadraticCurveTo(hw, hd, hw - rad, hd);
+    shp.lineTo(-hw + rad, hd); shp.quadraticCurveTo(-hw, hd, -hw, hd - rad); shp.lineTo(-hw, -hd + rad); shp.quadraticCurveTo(-hw, -hd, -hw + rad, -hd);
+    const geo = new T3.ExtrudeGeometry(shp, { depth: top - 0.8, bevelEnabled: true, bevelThickness: 0.4, bevelSize: 0.4, bevelSegments: 2, curveSegments: 8 });
+    geo.rotateX(-Math.PI / 2); geo.translate(0, h - top + 0.4, 0);
+    const tex = TEX.bambootop(), map = tex.clone(); map.needsUpdate = true; map.repeat.set(1 / tex.cmSize, 1 / tex.cmSize);
+    const bam = mat(c, { rough: 0.4, map }); bam.envMapIntensity = 0.7;
+    const t = new T3.Mesh(geo, bam); t.castShadow = true; t.receiveShadow = true; g.add(t);
+    const colH = h - top - 4, fx = w / 2 - Math.min(18, w * 0.12);
+    for (const sx of [-1, 1]) {
+      const x = sx * fx;
+      part(g, frame, 7, 3, Math.min(d - 4, 70), x, 1.5, 0, 1); // foot
+      part(g, frame, 8, colH * 0.36, 6, x, 3 + colH * 0.18, 0, 0.6); // stage 1 (widest)
+      part(g, frame, 7.2, colH * 0.34, 5.2, x, 3 + colH * 0.36 + colH * 0.17, 0, 0.6);
+      part(g, frame, 6.4, colH * 0.3, 4.4, x, 3 + colH * 0.7 + colH * 0.15, 0, 0.6);
+      part(g, frame, 6, 3, d - 14, x, h - top - 1.5, 0, 0.5); // support arm under the top
+    }
+    part(g, frame, 2 * fx, 4, 5, 0, h - top - 2, -2, 0.5); // cross beam
+    part(g, mat('#2A2A2A', { rough: 0.5 }), 14, 2.5, 5, w / 2 - 22, h - top - 1.2, d / 2 - 3, 0.8); // control panel
+    part(g, mat('#2A2A2A', { rough: 0.7 }), Math.min(w - 40, 90), 8, 12, 0, h - top - 8, -d / 2 + 12, 0.5); // cable tray
+    part(g, frame, Math.min(72, w * 0.5), 5, Math.min(32, d * 0.45), 0, h - top - 2.5, d / 2 - Math.min(16, d * 0.23) - 2, 0.5); // slim drawer
   };
   // Round table, or a round table extended with a centre leaf (w != d): semicircular ends and straight sides.
   B.roundtable = (g, w, d, h, c) => {
@@ -366,7 +417,23 @@
     const n = w >= 140 ? 2 : 1, pw = (w - 12 - (n - 1) * 6) / n;
     for (let k = 0; k < n; k++) { const x = -w / 2 + 6 + pw / 2 + k * (pw + 6); const p = part(g, fabric('#FBFAF7', pw, 40), pw - 6, 12, 36, x, frameH - 8 + mattH + 6, -d / 2 + 30, 6); p.rotation.x = -0.25; }
   };
-  B.cabinet = (g, w, d, h, c) => {
+  // FJÄLLBO style: black powder-coated steel on tall feet, perforated door, drawers, stained pine top
+  B.fjallbo = (g, w, d, h, c) => {
+    const steel = mat(c, { rough: 0.5, metal: 0.55 }), pine = wood('#5A3E2B', w, d), legH = 14, bodyH = h - legH - 2.5;
+    for (const [x, z] of [[-w / 2 + 1.5, -d / 2 + 1.5], [w / 2 - 1.5, -d / 2 + 1.5], [-w / 2 + 1.5, d / 2 - 1.5], [w / 2 - 1.5, d / 2 - 1.5]]) part(g, steel, 3, legH + bodyH, 3, x, (legH + bodyH) / 2, z, 0.3);
+    part(g, steel, w - 3, 1.2, d - 3, 0, legH, 0); // bottom
+    part(g, steel, w - 3, bodyH, 0.6, 0, legH + bodyH / 2, -d / 2 + 1.5); // back
+    for (const sx of [-1, 1]) part(g, steel, 0.6, bodyH, d - 3, sx * (w / 2 - 1.5), legH + bodyH / 2, 0);
+    part(g, pine, w + 1, 2.5, d + 1, 0, h - 1.25, 0, 0.4); // pine top
+    const half = w / 2 - 2, perf = mat(c, { rough: 0.55, metal: 0.5, map: texFor('perforated', half, bodyH), transparent: false });
+    part(g, perf, half, bodyH - 2, 0.8, -w / 4 - 0.5, legH + bodyH / 2, d / 2 - 1); // perforated door (left)
+    part(g, steel, 1, 12, 2, -2.5 - 1.5, legH + bodyH * 0.55, d / 2 + 0.6, 0.4);
+    const n = 3, dh = (bodyH - 2) / n; // three drawers (right)
+    for (let i = 0; i < n; i++) { const y = legH + 1 + dh * (i + 0.5); part(g, steel, half, dh - 1, 0.8, w / 4 + 0.5, y, d / 2 - 1); part(g, pine, 14, 1.8, 2, w / 4 + 0.5, y + dh * 0.28, d / 2 + 0.6, 0.5); }
+    part(g, pine, w - 4, 1.8, d - 5, 0, legH + bodyH * 0.5, 0); // inner pine shelf (seen through the door)
+  };
+  B.cabinet = (g, w, d, h, c, it) => {
+    if (it && it.style === 'fjallbo') return B.fjallbo(g, w, d, h, c);
     const m = wood(c, w, h), legH = h > 60 ? 10 : 6, bodyH = h - legH;
     legs(g, METAL_DARK(), w, d, legH, 5, 2.5, true);
     part(g, m, w, bodyH, d, 0, legH + bodyH / 2, 0, 1);
@@ -376,16 +443,45 @@
       part(g, METAL_BRASS(), 1.2, Math.min(14, bodyH * 0.3), 1.5, -w / 2 + dw * (k + 0.5) + (k % 2 ? -1 : 1) * (dw / 2 - 5), legH + bodyH * 0.6, d / 2 + 1.8, 0.5);
     }
   };
-  B.shelf = (g, w, d, h, c) => {
-    const m = wood(c, w, h), t = 2.2, n = Math.max(2, Math.round(h / 36));
+  // Bookcase (BILLY-like): sides, back, top, plinth, shelves; books on the open shelves; optional doors
+  // it.doors: 'none' | 'lower' (lower half, about 97 cm) | 'full'; it.books: false for empty shelves
+  B.shelf = (g, w, d, h, c, it) => {
+    const white = new T3.Color(c).getHSL({}).l > 0.8, m = white ? mat(c, { rough: 0.5 }) : wood(c, w, h), t = 1.6, plinth = Math.min(8, h * 0.05);
+    const doors = (it && it.doors) || 'none', withBooks = !it || it.books !== false;
     part(g, m, t, h, d, -w / 2 + t / 2, h / 2, 0); part(g, m, t, h, d, w / 2 - t / 2, h / 2, 0);
-    part(g, m, w, h, 0.8, 0, h / 2, -d / 2 + 0.4);
-    const books = ['#6F4E37', '#2F4858', '#B08D57', '#8C3B32', '#D9CBB0', '#3E5544', '#1F2A36'];
-    for (let k = 0; k <= n; k++) {
-      const y = Math.min(h - t / 2, k * (h - t) / n + t / 2); part(g, m, w - 2 * t, t, d, 0, y, 0);
-      if (k < n && k % 2 === 0) { // a row of books on every other shelf
-        let x = -w / 2 + t + 2; const maxH = (h - t) / n - t - 3; let i = k;
-        while (x < w / 2 - t - 6 && maxH > 12) { const bw = 2 + ((i * 7) % 5), bh = maxH * (0.7 + ((i * 13) % 5) * 0.06); part(g, mat(books[i % books.length], { rough: 0.8 }), bw, bh, d * 0.75, x + bw / 2, y + t / 2 + bh / 2, 0); x += bw + 0.3; i++; if (x > w * 0.1 && i % 9 === 0) x += 12; }
+    part(g, m, w - 2 * t, 0.4, 0.4, 0, h / 2, -d / 2 + 0.6); part(g, mat(shade(c, 0.93), { rough: 0.7 }), w - 2 * t, h - plinth, 0.4, 0, plinth + (h - plinth) / 2, -d / 2 + 0.4);
+    part(g, m, w - 2 * t, plinth, t, 0, plinth / 2, d / 2 - 2.5); part(g, m, w, t, d, 0, h - t / 2, 0, 0.3);
+    // shelves about every 35 cm
+    const inner = h - plinth - t, n = Math.max(2, Math.round(inner / 36)), gap = inner / n;
+    const doorTop = doors === 'full' ? h - t : doors === 'lower' ? Math.min(h - t, plinth + 97) : plinth;
+    const spines = ['#6F4E37', '#2F4858', '#B08D57', '#8C3B32', '#E4D9C4', '#3E5544', '#1F2A36', '#C9B79C', '#5B6770', '#A0522D', '#F2EFE8', '#7A6A58'];
+    seed = Math.floor(w * 3 + h) || 5;
+    const spineM = spines.map((x) => mat(x, { rough: 0.75 })), pick = () => spineM[Math.floor(rnd() * spineM.length)];
+    for (let k = 0; k < n; k++) {
+      const y = plinth + k * gap; if (k > 0) part(g, m, w - 2 * t, t, d - 1.5, 0, y, 0.75);
+      if (!withBooks || y + gap <= doorTop + 1) continue; // behind doors: no need to draw books
+      const maxH = gap - t - 2; let x = -w / 2 + t + 1;
+      while (x < w / 2 - t - 3 && maxH > 12) {
+        if (rnd() < 0.025 && x < w / 2 - t - 30) { // now and then a small stack lying flat
+          let sy = y + t / 2; for (let j = 0; j < 3; j++) { const bh = 2.5 + rnd() * 2, bw = 20 + rnd() * 6; part(g, pick(), bw, bh, d * 0.7, x + bw / 2 + 1, sy + bh / 2, 0); sy += bh; }
+          x += 27; continue;
+        }
+        if (rnd() < 0.015) { x += 4 + rnd() * 5; continue; } // small gap
+        const bw = 1.8 + rnd() * 3.2, bh = Math.min(maxH, maxH * (0.62 + rnd() * 0.35)), bd = d * (0.62 + rnd() * 0.2);
+        const b = part(g, pick(), bw, bh, bd, x + bw / 2, y + t / 2 + bh / 2, -d / 2 + bd / 2 + 1.5, 0.2);
+        b.castShadow = false; x += bw + 0.15;
+      }
+    }
+    // doors: white frame with a woven bamboo panel (HÖGADAL style), two across if wider than 60 cm
+    if (doors !== 'none') {
+      const nd = w > 60 ? 2 : 1, dw = (w - 0.6) / nd, dh = doorTop - plinth, fr = 5.5, frameM = mat('#F6F5F1', { rough: 0.5 });
+      const weave = mat('#D8C39C', { rough: 0.85, map: texFor('bamboo', dw, dh), bump: texFor('bamboo', dw, dh), bumpScale: 0.8 });
+      for (let i = 0; i < nd; i++) {
+        const cx = -w / 2 + 0.3 + dw * (i + 0.5), cy = plinth + dh / 2, z = d / 2 + 0.9;
+        part(g, frameM, dw - 0.3, fr, 1.8, cx, plinth + fr / 2, z); part(g, frameM, dw - 0.3, fr, 1.8, cx, doorTop - fr / 2, z);
+        part(g, frameM, fr, dh, 1.8, cx - dw / 2 + fr / 2, cy, z); part(g, frameM, fr, dh, 1.8, cx + dw / 2 - fr / 2, cy, z);
+        part(g, weave, dw - 2 * fr, dh - 2 * fr, 0.8, cx, cy, z - 0.3);
+        cyl(g, mat('#E9E6DF', { rough: 0.4 }), 1.3, 1.3, 1.6, cx + (i === 0 && nd === 2 ? dw / 2 - 5 : -dw / 2 + 5), cy + dh * 0.1, z + 1.6, 16).rotation.x = Math.PI / 2;
       }
     }
   };
@@ -495,7 +591,19 @@
     part(g, mat(c, { rough: 0.3, metal: 0.8 }), w * 0.5, h * 0.5, 2, 0, h * 0.5, -d / 2 + 1, 1);
     const s = cyl(g, shadeMat('#F4EFE6', on, k), w * 0.35, w * 0.5, h * 0.55, 0, h * 0.55, 0, 32); s.castShadow = false; return h * 0.55;
   };
-  L.floorlamp = (g, w, d, h, c, on, k) => {
+  // HEKTAR style: heavy disc base, straight pole, oversized tilted metal bell shade (open at the bottom)
+  L.hektar = (g, w, d, h, c, on, k) => {
+    const m = mat(c, { rough: 0.6, metal: 0.25 }), shadeR = Math.max(w, d) / 2, baseR = shadeR * 1.08;
+    cyl(g, m, baseR, baseR, 2.5, 0, 1.25, 0, 40);
+    cyl(g, m, 1.3, 1.3, h - 30, 0, (h - 30) / 2, 0, 12);
+    const head = new T3.Group(); head.position.set(0, h - 30, 0); head.rotation.x = 0.45; g.add(head); // tilted forward
+    const bell = new T3.Mesh(new T3.CylinderGeometry(shadeR * 0.28, shadeR, 26, 40, 1, true), mat(c, { rough: 0.6, metal: 0.25, side: T3.DoubleSide })); bell.position.set(0, 16, 12); bell.castShadow = true; head.add(bell);
+    const cap = new T3.Mesh(new T3.CylinderGeometry(shadeR * 0.1, shadeR * 0.28, 5, 24), m); cap.position.set(0, 31.5, 12); head.add(cap);
+    const bulb = new T3.Mesh(new T3.SphereGeometry(6, 20, 14), mat('#FFF8EC', { rough: 0.2, emissive: on ? k : null, emissiveIntensity: on ? 3 : 0 })); bulb.position.set(0, 8, 12); head.add(bulb);
+    return h - 30 + 4;
+  };
+  L.floorlamp = (g, w, d, h, c, on, k, top, it) => {
+    if (it && it.style === 'hektar') return L.hektar(g, w, d, h, c, on, k);
     cyl(g, mat(c, { rough: 0.4, metal: 0.7 }), w * 0.4, w * 0.45, 2.5, 0, 1.25, 0, 32);
     cyl(g, mat(c, { rough: 0.4, metal: 0.7 }), 1, 1, h - 28, 0, (h - 28) / 2, 0, 10);
     const s = cyl(g, shadeMat('#F1EBDF', on, k), w * 0.35, w / 2, 30, 0, h - 15, 0, 36); s.castShadow = false; return h - 18;
@@ -510,7 +618,7 @@
   HM.buildItem = (it, opts) => {
     const g = new T3.Group(), w = it.w, d = it.d, h = Math.max(it.h, 1);
     let bulbY = null;
-    if (L[it.type]) bulbY = L[it.type](g, w, d, h, it.color, opts.evening, opts.kelvinHex, opts.roomTop);
+    if (L[it.type]) bulbY = L[it.type](g, w, d, h, it.color, opts.evening, opts.kelvinHex, opts.roomTop, it);
     else {
       (B[it.type] || B.box)(g, w, d, h, it.color, it);
       if (!['rug', 'vanity', 'toilet', 'cornersofa'].includes(it.type) && !(it.elev > 0)) g.add(HM.contactShadow(w, d));
