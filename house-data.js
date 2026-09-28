@@ -16,6 +16,25 @@ window.HOUSE_SEED = {
 // to the copy already in the browser. Sizes are W x D x H in cm.
 window.HOUSE_PIECES = [
   // Copper for the Italian kitchen. h runs from the lowest pan to the ceiling (ceiling racks) or to the rail (wall rail)
+  // Kitchen islands you sent (not placed)
+  {
+    id: 'home24-hestia', type: 'counter', style: 'hestia', name: 'Kücheninsel Hestia VII (white, oak-look top)',
+    w: 151.5, d: 59.7, h: 91.7, color: '#F2F0EA', status: 'considering',
+    link: 'https://www.home24.ch/de/produkt/kuecheninsel-hestia-weiss-bfbb',
+    notes: 'home24, white with an oak-look top, 60 kg. Top 130 x 59.7, body 127 wide, 151.5 including the three-tier racks on both ends, 91.7 high, drop leaf of 25 cm at the back. 2 drawers (inside 38.9 x 47.9 x 11), 2 doors with a shelf behind each, open middle with a shelf, towel bar, power sockets on one end, 4 casters. Sizes from the home24 dimension drawing; price not checked (home24 blocks automated access).'
+  },
+  {
+    id: 'home24-pattburg', type: 'counter', style: 'pattburg', name: 'Kücheninsel Pattburg (matt black, oak-look top)',
+    w: 140, d: 90, h: 90, color: '#2B2B2B', status: 'considering',
+    link: 'https://www.home24.ch/de/produkt/kuecheninsel-pattburg-matt-schwarz',
+    notes: 'home24 (Casa) Pattburg, matt black MDF fronts, oak-look worktop, 140 x 90 x 90, 128.7 kg, wall shelf included, delivered unassembled. One side: open niche over a wide drawer, and a door; other side: a door and 3 drawers. The high-gloss white version is CHF 669.95 (your screenshot); the black price was not checked (home24 blocks automated access).'
+  },
+  {
+    id: 'ikea-vadholma-rack', type: 'counter', style: 'vadholmarack', name: 'VADHOLMA kitchen island with rack (black/oak)',
+    w: 126, d: 79, h: 193, color: '#2B2B2B', status: 'considering',
+    link: 'https://www.ikea.com/ch/en/p/vadholma-kitchen-island-with-rack-black-oak-s59276228/',
+    notes: 'IKEA VADHOLMA, CHF 543.20 (IKEA Family offer until 30.09; regular CHF 679). 126 x 79, worktop at 90, rack up to 193 (fits under the 225 cm kitchen ceiling). Solid oak / thick oak veneer top, black-painted solid beech frame, two open slatted shelves on both sides of a centre partition, no drawers. The rack has a top shelf and a rail for S-hooks: the rack-on-posts look you picked. Without the rack CHF 479.20; smaller 79 x 63 version CHF 319.20.'
+  },
   {
     id: 'pcd-hanging-rail', type: 'potrack', style: 'rail', name: 'Copper hanging pot rail 70 cm',
     w: 70, d: 20, h: 52, color: '#B87333', status: 'considering',

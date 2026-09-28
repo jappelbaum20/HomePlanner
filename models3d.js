@@ -868,8 +868,104 @@
     const topY = ovenY + oH + cH + 2, topH = plinth + body - topY;
     if (topH > 5) { part(g, oak, cw - 0.6, topH - 0.6, 1.6, rx, topY + topH / 2, z, 0.2); bar(rx - cw / 2 + 5, topY + 15, 20); }
   };
+  // ---------- Kitchen islands and drawer runs ----------
+  const OAK_TOP = (w, d) => wood('#BE8E57', w, d);
+  const knob = (g, m, x, y, z) => sphere(g, m, 1.3, x, y, z + 1, 0.8);
+  // Shaker front: flat frame with a recessed centre panel
+  function shaker(g, m, fw, fh, x, y, z) {
+    part(g, m, fw - 0.4, fh - 0.4, 1.8, x, y, z, 0.3);
+    part(g, mat(shade(m.userData.hex || '#F4F2EC', 0.94), { rough: 0.5 }), fw - 12, fh - 12, 0.6, x, y, z + 0.7);
+  }
+  // IKEA VADHOLMA: black beech frame, butcher-block oak top, two slatted shelves, centre partition.
+  // style 'vadholmarack' adds the rack: two posts, a slatted top shelf and a hanging rail (h = rack top, worktop stays at 90)
+  B.vadholma = (g, w, d, h, c, it) => {
+    const rack = it && it.style === 'vadholmarack', top = rack ? 90 : h, fr = mat(c, { rough: 0.55 }), t = 4.5;
+    part(g, OAK_TOP(w, d), w, 4, d, 0, top - 2, 0, 0.4);
+    [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(([sx, sz]) => part(g, fr, t, top - 4, t, sx * (w / 2 - t / 2 - 1), (top - 4) / 2, sz * (d / 2 - t / 2 - 1)));
+    [1, -1].forEach((s) => part(g, fr, w - 2, 7, 2, 0, top - 7.5, s * (d / 2 - 2)));
+    part(g, mat(shade(c, 1.15), { rough: 0.6 }), w - 2 * t - 2, top - 30, 1.2, 0, 17 + (top - 30) / 2 + 3, 0); // centre partition
+    [12, 46].forEach((y) => {
+      [1, -1].forEach((s) => part(g, fr, w - 2 * t - 2, 4, 2.5, 0, y, s * (d / 2 - 3)));
+      const n = Math.floor((w - 2 * t - 6) / 5.2);
+      for (let k = 0; k < n; k++) part(g, fr, 2.8, 1.6, d - 7, -w / 2 + t + 4 + k * 5.2, y + 1.5, 0);
+    });
+    if (!rack) return;
+    const tube = mat(c, { rough: 0.4, metal: 0.6 }), px = w / 2 - 3, rh = h - top;
+    [-1, 1].forEach((s) => cyl(g, tube, 1.3, 1.3, rh + 2, s * px, top + rh / 2, 0, 12));
+    const topBar = cyl(g, tube, 1.3, 1.3, 2 * px, 0, h - 1.3, 0, 12); topBar.rotation.z = Math.PI / 2;
+    part(g, fr, 2 * px - 3, 1.5, 22, 0, h - 26, 0, 0.3); // slatted top shelf
+    const rail = cyl(g, tube, 0.8, 0.8, 2 * px, 0, h - 34, 0, 10); rail.rotation.z = Math.PI / 2;
+    // a few sample pans on S-hooks, as in the IKEA photo
+    const M = { copper: mat('#C27A45', { rough: 0.24, metal: 1 }), steel: mat('#D2D5D7', { rough: 0.22, metal: 1 }), iron: mat('#2A2B2E', { rough: 0.55, metal: 0.5 }) };
+    [-0.22, 0, 0.22].forEach((f, k) => hangPan(g, M, f * w, h - 34.8, 0, 34, k, k % 2 ? 1 : -1));
+  };
+  // home24 Hestia VII: white shaker body on casters, oak-look top, 2 drawers over 2 doors with an open middle,
+  // spice racks on both ends, a towel bar and a drop leaf folded down at the back. w includes the end racks.
+  B.hestia = (g, w, d, h, c) => {
+    const m = mat(c, { rough: 0.45 }); m.userData.hex = c;
+    const bw = w - 24.5, bd = d - 5.5, topW = Math.min(w, bw + 3), tt = 3, body0 = 9.2, bodyH = h - tt - body0, fz = bd / 2 - 3;
+    part(g, OAK_TOP(topW, d), topW, tt, d, 0, h - tt / 2, 0, 0.4);
+    part(g, OAK_TOP(topW, 25), topW, 25, 1.8, 0, h - tt - 12.5, -d / 2 - 1); // drop leaf, down
+    part(g, m, bw, bodyH, bd - 1, 0, body0 + bodyH / 2, -3, 0.4);
+    part(g, m, bw + 1.5, 5, bd + 0.5, 0, body0 + 2.5, -2.8, 0.6); // shaped base rail
+    [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(([sx, sz]) => { const wh = cyl(g, mat('#1E1E1E', { rough: 0.6 }), 3.2, 3.2, 2.4, sx * (bw / 2 - 6), 3.4, sz * (bd / 2 - 8), 16); wh.rotation.z = Math.PI / 2; });
+    const dh = 15.8, dy = h - tt - dh / 2 - 1.5, br = METAL_DARK();
+    [-1, 1].forEach((s) => { shaker(g, m, 52.2, dh, s * 26.8, dy, fz); knob(g, br, s * 26.8, dy, fz + 0.9); });
+    const lowTop = dy - dh / 2 - 1, lowH = lowTop - body0 - 5, doorW = (bw - 34) / 2 - 1;
+    [-1, 1].forEach((s) => { const x = s * (17 + doorW / 2 + 0.5); shaker(g, m, doorW, lowH, x, body0 + 5 + lowH / 2, fz); knob(g, br, x - s * (doorW / 2 - 4), body0 + 5 + lowH * 0.6, fz + 0.9); });
+    part(g, mat(shade(c, 0.86), { rough: 0.6 }), 32, lowH - 2, 1, 0, body0 + 5 + lowH / 2, fz - 20); // open middle: back
+    part(g, m, 32, 1.6, 22, 0, body0 + 5 + lowH / 2, fz - 10); // middle shelf
+    [-1, 1].forEach((s) => { // end racks: three shelves with guard rails
+      const x = s * (bw / 2 + 6.1);
+      part(g, m, 12, bodyH, 1.4, x, body0 + bodyH / 2, -bd / 2 + 6);
+      [0.12, 0.45, 0.78].forEach((f) => { const y = body0 + bodyH * f; part(g, m, 11.5, 1.4, 44, x, y, -2); part(g, m, 1, 1, 44, x + s * 5.5, y + 5, -2); });
+    });
+    const bar = cyl(g, mat('#EDEDEA', { rough: 0.3, metal: 0.4 }), 0.9, 0.9, 40, w / 2 - 1, h - tt - 14, -2, 10); bar.rotation.x = Math.PI / 2;
+  };
+  // home24 Pattburg: two-sided island block, oak-look top. Front: open niche over a wide drawer, door on the right.
+  // Back: door on the left, three drawers on the right. Bar handles.
+  B.pattburg = (g, w, d, h, c) => {
+    const light = new T3.Color(c).getHSL({}).l > 0.6, m = mat(c, { rough: light ? 0.15 : 0.6 }), tt = 3.8, pl = 10, bh = h - tt - pl;
+    part(g, OAK_TOP(w, d), w, tt, d, 0, h - tt / 2, 0, 0.4);
+    part(g, mat('#222222', { rough: 0.8 }), w - 6, pl, d - 10, 0, pl / 2, 0);
+    part(g, m, w - 1, bh, d - 1.5, 0, pl + bh / 2, 0, 0.3);
+    const bar = (x, y, z, len, s) => part(g, mat(light ? '#BFC2C4' : '#8E9092', { rough: 0.3, metal: 0.9 }), len, 1.2, 1.6, x, y, z + s * 1.2, 0.5);
+    const zf = d / 2 - 0.4, rw = 48, lw = w - 1 - rw, lx = -w / 2 + 0.5 + lw / 2, rx = w / 2 - 0.5 - rw / 2, gap = mat(shade(c, light ? 0.8 : 0.6), { rough: 0.7 });
+    // front (+z)
+    part(g, gap, 0.5, bh, 0.6, lx + lw / 2, pl + bh / 2, zf);
+    const nh = bh * 0.38; part(g, mat(shade(c, light ? 0.75 : 1.5), { rough: 0.8 }), lw - 8, nh, 1, lx, pl + bh - 4 - nh / 2, zf - 20); // niche back
+    part(g, gap, lw - 8, 0.8, 22, lx, pl + bh - 4 - nh, zf - 11); part(g, gap, lw - 8, 0.8, 22, lx, pl + bh - 4, zf - 11);
+    bar(lx, pl + bh - nh - 12, zf, lw * 0.75, 1); part(g, gap, lw, 0.5, 0.6, lx, pl + bh - nh - 6, zf);
+    bar(rx, pl + bh - 10, zf, rw * 0.7, 1);
+    // back (-z)
+    part(g, gap, 0.5, bh, 0.6, -lx - lw / 2, pl + bh / 2, -zf);
+    for (let k = 1; k < 3; k++) part(g, gap, lw, 0.5, 0.6, -lx, pl + (bh * k) / 3, -zf);
+    for (let k = 0; k < 3; k++) bar(-lx, pl + (bh * (k + 1)) / 3 - 6, -zf, lw * 0.75, -1);
+    bar(-rx, pl + bh - 10, -zf, rw * 0.7, -1);
+  };
+  // A run of IKEA METOD/MAXIMERA drawer cabinets (style metod3 / metod4 = drawers per cabinet): 80 or 60 cm cabinets,
+  // matching cover panels, plinth, oak worktop and brass handles. Taller than 120 cm: a high cabinet with two doors over drawers.
+  B.metodRun = (g, w, d, h, c, it) => {
+    const rows = it && it.style === 'metod4' ? [0.25, 0.25, 0.25, 0.25] : [0.25, 0.25, 0.5], tall = h > 120;
+    const m = mat(c, { rough: 0.55 }), brass = METAL_BRASS(), pl = 8, tt = tall ? 0 : 3.8, bh = (tall ? h : Math.min(h, 91.8)) - pl - tt;
+    const n = Math.max(1, Math.round(w / (w % 80 < 1 || w >= 160 ? 80 : 60))), cw = w / n, fz = d / 2 - 1.2 - (tall ? 0 : 1.9);
+    if (!tall) part(g, OAK_TOP(w, d), w, tt, d, 0, h - tt / 2, 0, 0.4);
+    part(g, mat(c, { rough: 0.6 }), w - 2, pl, d - 8, 0, pl / 2, -3);
+    part(g, m, w, bh, d - 4.5 - (tall ? 0 : 1.9), 0, pl + bh / 2, -2.2 - (tall ? 0 : 0.95));
+    const dr = tall ? 80 - pl : bh;
+    for (let k = 0; k < n; k++) {
+      const x = -w / 2 + cw * (k + 0.5); let y = pl;
+      rows.forEach((f) => { const fh = dr * f; part(g, m, cw - 0.4, fh - 0.4, 1.9, x, y + fh / 2, fz, 0.3); part(g, brass, Math.min(16, cw * 0.3), 1, 1.4, x, y + fh - 4, fz + 1.6, 0.4); y += fh; });
+      if (tall) { const uh = h - pl - dr, dh = uh / 2; [0, 1].forEach((j) => { part(g, m, cw - 0.4, dh - 0.4, 1.9, x, pl + dr + dh * (j + 0.5), fz, 0.3); part(g, brass, 1.2, 12, 1.4, x + cw / 2 - 5, pl + dr + dh * j + (j ? 10 : dh - 10), fz + 1.6, 0.4); }); }
+    }
+  };
   B.counter = (g, w, d, h, c, it) => {
-    if (it && it.style === 'fitted') return B.fittedKitchen(g, w, d, h, c);
+    const st = it && it.style;
+    if (st === 'fitted') return B.fittedKitchen(g, w, d, h, c);
+    if (st === 'vadholma' || st === 'vadholmarack') return B.vadholma(g, w, d, h, c, it);
+    if (st === 'hestia') return B.hestia(g, w, d, h, c);
+    if (st === 'pattburg') return B.pattburg(g, w, d, h, c);
+    if (st === 'metod3' || st === 'metod4') return B.metodRun(g, w, d, h, c, it);
     // light fronts get a gloss finish and a dark granite top; dark fronts get a pale stone top
     const light = new T3.Color(c).getHSL({}).l > 0.6, top = 4, m = mat(c, { rough: light ? 0.18 : 0.5 });
     const topM = light ? mat('#4F443D', { rough: 0.15, map: texFor('granite', w, d) }) : mat('#E9E6E0', { rough: 0.2, map: texFor('terrazzo', w, d) });
