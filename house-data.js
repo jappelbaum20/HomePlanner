@@ -41,6 +41,12 @@ window.HOUSE_PIECES = [
     notes: 'Copper rail on brass wall brackets, 140 cm (two lengths joined with a coupling). £114 natural, £131 lacquered (also 50 cm £69 and 70 cm £81). The low-ceiling way to hang the heavy pans. Proper Copper Design, Brighton (UK): 22 mm copper pipe, natural or satin lacquered. Prices exclude VAT; ships to Switzerland, shipping and 8.1% import VAT extra. Copper S-hooks from the same shop, about 7.5 cm, £37 for 10: https://propercopperdesign.com/products/copper-s-hooks . Shown with sample pans.'
   },
   {
+    id: 'pcd-s-hooks', type: 'box', name: 'Copper S-hooks (set of 10)',
+    w: 8, d: 2, h: 8, color: '#B87333', status: 'considering',
+    link: 'https://propercopperdesign.com/products/copper-s-hooks',
+    notes: 'Proper Copper Design copper S-hooks, about 7.5 cm long with a 2.5 cm gap, hold cast iron. £37 for 10 (sets of 5 / 10 / 15 / 20: £19 / £37 / £51 / £64, excl. VAT). For the copper racks and rails; the racks are already drawn with hooks, so this one does not need placing.'
+  },
+  {
     id: 'bed-vinay', type: 'bed', style: 'vinay', name: 'VINAY cord bed 180 x 200 (olive)',
     w: 196, d: 233, h: 90, color: '#6E7045', status: 'considering',
     link: 'https://www.beliani.ch/polsterbett-cord-olivgrun-180-x-200-cm-vinay.html',
@@ -980,9 +986,6 @@ window.HOUSE_PLACEMENTS = [
     item: { type: 'art', name: 'Oak 3D wall panel', w: 208, d: 2, h: 205, frame: 'oakpanel', mat: false, elev: 10 } },
   // rev 6: the Mattis bed moves to the second bedroom, headboard against the west wall, clear of the door's arc
   { id: 'bedroom-bed', rev: 6, fromRoom: 'bedroom', from: 'any', room: 'bedroom2', catalogId: 'mattis-bed', x: 108, y: 160, rot: 270 },
-  // Two rows of copper pans on the free north wall of the kitchen, beside the oven towers (rails at about 178 and 138 cm)
-  { id: 'kitchen-wallrail-upper', room: 'kitchen', catalogId: 'pcd-wall-rail', x: 190, y: 7, rot: 0, extra: { elev: 147 } },
-  { id: 'kitchen-wallrail-lower', room: 'kitchen', catalogId: 'pcd-wall-rail', x: 190, y: 7, rot: 0, extra: { elev: 107 } },
   // rev 4: the kitchen as in the tour (fitted run with sink, hob and wall units; dark oak tall units with two ovens)
   { id: 'kitchen-counter', builtin: true, rev: 6, from: [{ x: 105, y: 287 }, { x: 110, y: 287 }], room: 'kitchen', x: 105, y: 287, rot: 180, extra: { w: 210, style: 'fitted', name: 'Kitchen run', fixed: true },
     item: { type: 'counter', style: 'fitted', name: 'Kitchen run', fixed: true, w: 210, d: 60, h: 90, color: '#F4F4F2' } },
