@@ -85,16 +85,20 @@
       for (let x = 0; x < s; x += 2) { const v = 215 + rnd() * 30; g.fillStyle = `rgba(${v},${v},${v},.45)`; g.fillRect(x, 0, 1, s); }
       noise(g, s, 3000, 0.3, 180, 255);
     }, 25),
-    // corduroy: soft ribs about 4 mm apart
-    cord: () => canvasTex('cord', 256, (g, s) => {
-      seed = 53; g.fillStyle = '#fff'; g.fillRect(0, 0, s, s);
-      for (let x = 0; x < s; x += 4) { const gr = g.createLinearGradient(x, 0, x + 4, 0); gr.addColorStop(0, 'rgb(200,200,200)'); gr.addColorStop(0.5, 'rgb(255,255,255)'); gr.addColorStop(1, 'rgb(205,205,205)'); g.fillStyle = gr; g.fillRect(x, 0, 4, s); }
-      noise(g, s, 2500, 0.2, 190, 255);
-    }, 12),
-    grain: () => canvasTex('grain', 512, (g, s) => {
-      seed = 17; g.fillStyle = '#f4f4f4'; g.fillRect(0, 0, s, s);
-      for (let k = 0; k < 90; k++) { const y = rnd() * s, v = 215 + rnd() * 30; g.strokeStyle = `rgba(${v},${v},${v},.5)`; g.lineWidth = 0.5 + rnd() * 2; g.beginPath(); g.moveTo(0, y); for (let x = 0; x <= s; x += 32) g.lineTo(x, y + Math.sin(x / 60 + k) * 3 + (rnd() - 0.5) * 2); g.stroke(); }
-    }, 80),
+    // corduroy: 48 rounded ribs over 24 cm (5 mm wales) with dark valleys and a little fibre noise
+    cord: () => canvasTex('cord', 512, (g, s) => {
+      seed = 53; g.fillStyle = '#fff'; g.fillRect(0, 0, s, s); const n = 48, rw = s / n;
+      for (let i = 0; i < n; i++) { const x = i * rw, gr = g.createLinearGradient(x, 0, x + rw, 0); gr.addColorStop(0, 'rgb(205,205,205)'); gr.addColorStop(0.2, 'rgb(238,238,238)'); gr.addColorStop(0.5, 'rgb(255,255,255)'); gr.addColorStop(0.8, 'rgb(238,238,238)'); gr.addColorStop(1, 'rgb(205,205,205)'); g.fillStyle = gr; g.fillRect(x, 0, rw, s); }
+      noise(g, s, 9000, 0.12, 170, 255);
+    }, 24),
+    grain: () => canvasTex('grain', 1024, (g, s) => {
+      seed = 17; g.fillStyle = '#f6f6f6'; g.fillRect(0, 0, s, s);
+      // broad tone bands along the board, then fine growth lines, cathedral arcs and pores
+      for (let k = 0; k < 18; k++) { const y = rnd() * s, v = 225 + rnd() * 30; g.fillStyle = `rgba(${v},${v},${v},.35)`; g.fillRect(0, y, s, 10 + rnd() * 40); }
+      for (let k = 0; k < 160; k++) { const y = rnd() * s, v = 190 + rnd() * 45; g.strokeStyle = `rgba(${v},${v},${v},.45)`; g.lineWidth = 0.4 + rnd() * 1.4; g.beginPath(); g.moveTo(0, y); for (let x = 0; x <= s; x += 16) g.lineTo(x, y + Math.sin(x / 90 + k) * 4 + (rnd() - 0.5) * 1.5); g.stroke(); }
+      for (let k = 0; k < 6; k++) { const cx = rnd() * s, cy = rnd() * s; for (let r = 8; r < 70; r += 6 + rnd() * 5) { const v = 185 + rnd() * 40; g.strokeStyle = `rgba(${v},${v},${v},.5)`; g.lineWidth = 0.8 + rnd(); g.beginPath(); g.ellipse(cx, cy, r * 3.5, r * 0.6, 0, Math.PI * 0.9, Math.PI * 2.1); g.stroke(); } }
+      for (let k = 0; k < 9000; k++) { const v = 150 + rnd() * 60; g.fillStyle = `rgba(${v},${v},${v},.35)`; g.fillRect(rnd() * s, rnd() * s, 1.5 + rnd() * 3, 0.8); }
+    }, 90),
     // 140 cm square: narrow oak strips (7 cm) in staggered lengths, like Swiss strip parquet
     parquet: () => canvasTex('parquet', 1024, (g, s) => {
       seed = 23; g.fillStyle = '#fff'; g.fillRect(0, 0, s, s);
@@ -141,17 +145,20 @@
       for (let i = 0; i < n; i++) { const v = 245 + Math.floor(rnd() * 10); g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(i * bw, 0, bw, s); g.fillStyle = 'rgba(150,150,150,.8)'; g.fillRect(i * bw, 0, 2.5, s); g.fillStyle = 'rgba(255,255,255,.9)'; g.fillRect(i * bw + 2.5, 0, 1.5, s); }
     }, 100),
     // oak 3D triangle panels: 20 cm triangles with alternating light and shade
-    oakpanels: () => canvasTex('oakpanels', 512, (g, s) => {
+    oakpanels: () => canvasTex('oakpanels', 1024, (g, s) => {
       seed = 43; g.fillStyle = '#ddd'; g.fillRect(0, 0, s, s); const n = 6, t = s / n;
       for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
         const x = i * t, y = j * t, tri = (pts, v) => { g.fillStyle = `rgb(${v},${v},${v})`; g.beginPath(); g.moveTo(...pts[0]); g.lineTo(...pts[1]); g.lineTo(...pts[2]); g.closePath(); g.fill(); };
         const up = (i + j) % 2 === 0;
-        tri(up ? [[x, y + t], [x + t, y + t], [x + t / 2, y]] : [[x, y], [x + t, y], [x + t / 2, y + t]], 200 + rnd() * 55);
-        tri(up ? [[x, y], [x + t / 2, y], [x, y + t]] : [[x, y + t], [x + t / 2, y + t], [x, y]], 170 + rnd() * 50);
-        tri(up ? [[x + t, y], [x + t / 2, y], [x + t, y + t]] : [[x + t, y + t], [x + t / 2, y + t], [x + t, y]], 185 + rnd() * 50);
+        // facets lit from the top left: a light, a mid and a shaded face; variation per panel stays subtle
+        const base = 214 + rnd() * 22;
+        tri(up ? [[x, y + t], [x + t, y + t], [x + t / 2, y]] : [[x, y], [x + t, y], [x + t / 2, y + t]], base);
+        tri(up ? [[x, y], [x + t / 2, y], [x, y + t]] : [[x, y + t], [x + t / 2, y + t], [x, y]], base - 26);
+        tri(up ? [[x + t, y], [x + t / 2, y], [x + t, y + t]] : [[x + t, y + t], [x + t / 2, y + t], [x + t, y]], base - 12);
       }
-      g.globalAlpha = 0.25; for (let k = 0; k < 400; k++) { const v = 120 + rnd() * 80; g.strokeStyle = `rgb(${v},${v},${v})`; g.beginPath(); const x = rnd() * s, y = rnd() * s; g.moveTo(x, y); g.lineTo(x + 20, y + (rnd() - 0.5) * 3); g.stroke(); } g.globalAlpha = 1;
-    }, 120),
+      g.globalAlpha = 0.3; for (let k = 0; k < 1400; k++) { const v = 150 + rnd() * 60; g.strokeStyle = `rgb(${v},${v},${v})`; g.lineWidth = 0.6; g.beginPath(); const x = rnd() * s, y = rnd() * s; g.moveTo(x, y); g.lineTo(x + 12 + rnd() * 25, y + (rnd() - 0.5) * 2); g.stroke(); } g.globalAlpha = 1;
+      g.strokeStyle = 'rgba(110,110,110,.35)'; g.lineWidth = 1; for (let j = 0; j <= n; j++) { g.beginPath(); g.moveTo(0, j * t); g.lineTo(s, j * t); g.stroke(); }
+    }, 90),
     // dark granite worktop: near-black with warm and pale flecks
     granite: () => canvasTex('granite', 512, (g, s) => {
       seed = 47; g.fillStyle = '#fff'; g.fillRect(0, 0, s, s);
@@ -190,7 +197,7 @@
   const GEO = {
     box(w, h, d, r) {
       r = Math.min(r || 0, w / 2 - 0.01, h / 2 - 0.01, d / 2 - 0.01);
-      if (r > 0.4 && T3.RoundedBoxGeometry) return new T3.RoundedBoxGeometry(w, h, d, 3, r);
+      if (r > 0.4 && T3.RoundedBoxGeometry) return new T3.RoundedBoxGeometry(w, h, d, r > 3 ? 6 : 3, r);
       return new T3.BoxGeometry(w, h, d);
     }
   };
@@ -199,6 +206,28 @@
     const geo = GEO.box(Math.max(w, 0.2), Math.max(h, 0.2), Math.max(d, 0.2), r);
     const mesh = new T3.Mesh(geo, m); mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true; g.add(mesh); return mesh;
   }
+  // Soft cushion: a rounded box whose top and bottom bulge towards the middle
+  function pillow(g, m, w, h, d, x, y, z, puff) {
+    const geo = GEO.box(w, h, d, Math.min(h * 0.45, 7));
+    const p = geo.attributes.position, hw = w / 2, hd = d / 2;
+    for (let i = 0; i < p.count; i++) {
+      const nx = p.getX(i) / hw, nz = p.getZ(i) / hd, f = Math.max(0, (1 - nx * nx) * (1 - nz * nz)), yv = p.getY(i);
+      p.setY(i, yv + Math.sign(yv) * (puff || h * 0.22) * f);
+    }
+    geo.computeVertexNormals();
+    const mesh = new T3.Mesh(geo, m); mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true; g.add(mesh); return mesh;
+  }
+  // Soft darkening on the floor under a piece (stands in for ambient occlusion)
+  let blobTex = null;
+  HM.contactShadow = (w, d) => {
+    if (!blobTex) {
+      const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
+      const gr = x.createRadialGradient(64, 64, 10, 64, 64, 64); gr.addColorStop(0, 'rgba(0,0,0,.5)'); gr.addColorStop(0.6, 'rgba(0,0,0,.25)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      x.fillStyle = gr; x.fillRect(0, 0, 128, 128); blobTex = new T3.CanvasTexture(c);
+    }
+    const m = new T3.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false, opacity: 0.55 });
+    const mesh = new T3.Mesh(new T3.PlaneGeometry(w * 1.12 + 12, d * 1.12 + 12), m); mesh.rotation.x = -Math.PI / 2; mesh.position.y = 0.35; mesh.renderOrder = 1; return mesh;
+  };
   function cyl(g, m, rt, rb, h, x, y, z, seg) {
     const mesh = new T3.Mesh(new T3.CylinderGeometry(rt, rb, h, seg || 32), m); mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true; g.add(mesh); return mesh;
   }
@@ -213,7 +242,12 @@
     }
   }
   const fabric = (hex, w, h) => mat(hex, { rough: 0.95, map: texFor('fabric', w, h), bump: texFor('fabric', w, h), bumpScale: 0.35 });
-  const cord = (hex, w, h) => { const m = mat(hex, { rough: 0.85, map: texFor('cord', w, h), bump: texFor('cord', w, h), bumpScale: 0.6 }); m.envMapIntensity = 0.35; return m; };
+  // Corduroy: ribbed bump plus a pale sheen, which is what makes velvet and cord read as fabric
+  const cord = (hex, w, h) => {
+    const m = new T3.MeshPhysicalMaterial({ color: lin(hex), roughness: 0.78, map: texFor('cord', w, h), bumpMap: texFor('cord', w, h), bumpScale: 0.35 });
+    if ('sheen' in m) m.sheen = new T3.Color(hex).lerp(new T3.Color('#FFFFFF'), 0.55).convertSRGBToLinear();
+    m.envMapIntensity = 0.3; return m;
+  };
   const wood = (hex, w, h) => mat(hex, { rough: 0.55, map: texFor('grain', w, h) });
   const METAL_DARK = () => mat('#2A2C2E', { rough: 0.35, metal: 0.8 });
   const METAL_BRASS = () => mat('#B89559', { rough: 0.3, metal: 0.9 });
@@ -248,23 +282,25 @@
     const z0 = -d / 2, chaiseX = sx * (w / 2 - cw / 2), mainW = w - cw; // main section excludes the chaise column
     const mainX = -sx * (cw / 2); // centre of the non-chaise part
     for (const [x, z] of [[-w / 2 + 6, z0 + 6], [w / 2 - 6, z0 + 6], [-sx * (w / 2 - 6), z0 + md - 6], [sx * (w / 2 - 6), d / 2 - 6], [sx * (w / 2 - cw + 6), d / 2 - 6]]) part(g, legM, 4, legH, 4, x, legH / 2, z, 1);
+    const sh1 = HM.contactShadow(w, md); sh1.position.z = z0 + md / 2; g.add(sh1);
+    const sh2 = HM.contactShadow(cw, d - md); sh2.position.set(chaiseX, sh2.position.y, z0 + md + (d - md) / 2); g.add(sh2);
     // bases
     part(g, fd, mainW, baseH, md, mainX, legH + baseH / 2, z0 + md / 2, 3);
     part(g, fd, cw, baseH, d, chaiseX, legH + baseH / 2, 0, 3);
     // back along the full width, arm on the non-chaise end, low arm on the chaise end
     part(g, fd, w, h - legH, backT, 0, legH + (h - legH) / 2, z0 + backT / 2, 6);
     part(g, fd, arm, seatH + 16 - legH, md, -sx * (w / 2 - arm / 2), legH + (seatH + 16 - legH) / 2, z0 + md / 2, 6);
-    // seat cushions: main (split in two or three) and the chaise
-    const inner = mainW - arm, n = inner > 150 ? 3 : 2, cwid = inner / n;
+    // seat cushions (soft, slightly domed) and loose back cushions that lean back at slightly different angles
+    const inner = mainW - arm, n = inner > 150 ? 3 : 2, cwid = inner / n, bh = Math.min(h - seatH + 8, 50);
     for (let i = 0; i < n; i++) {
       const x = -sx * (w / 2 - arm) + sx * cwid * (i + 0.5);
-      part(g, f, cwid - 1.5, 14, md - backT - 2, x, seatH - 7, z0 + backT + (md - backT) / 2, 6);
-      const bh = Math.min(h - seatH + 6, 48); const m = part(g, f, cwid - 3, bh, 18, x, seatH + bh / 2 - 2, z0 + backT + 8, 8); m.rotation.x = -0.14;
+      pillow(g, f, cwid - 1, 13, md - backT - 1, x, seatH - 6.5, z0 + backT + (md - backT) / 2, 2.2);
+      const m = pillow(g, f, cwid - 2, bh, 20, x, seatH + bh / 2 - 3, z0 + backT + 9, 4.5); m.rotation.x = -0.16 - (i % 2) * 0.04; m.rotation.z = (i - 1) * 0.012;
     }
-    part(g, f, cw - 2, 14, d - backT - 2, chaiseX, seatH - 7, z0 + backT + (d - backT) / 2, 6);
-    const bh = Math.min(h - seatH + 6, 48); const cb = part(g, f, cw - 4, bh, 18, chaiseX, seatH + bh / 2 - 2, z0 + backT + 8, 8); cb.rotation.x = -0.14;
-    // two scatter cushions
-    for (const k of [0, 1]) { const m = part(g, fabric(shade(c, 1.08), 45, 45), 42, 42, 12, sx * (w / 2 - cw - 30 - k * 46), seatH + 20, z0 + backT + 20, 9); m.rotation.x = -0.3; m.rotation.z = (k ? -1 : 1) * 0.08; }
+    pillow(g, f, cw - 1.5, 13, d - backT - 1, chaiseX, seatH - 6.5, z0 + backT + (d - backT) / 2, 2.5);
+    const cb = pillow(g, f, cw - 3, bh, 20, chaiseX, seatH + bh / 2 - 3, z0 + backT + 9, 4.5); cb.rotation.x = -0.18;
+    // two scatter cushions in a slightly paler cord
+    for (const k of [0, 1]) { const m = pillow(g, cord(shade(c, 1.1), 45, 45), 44, 44, 13, sx * (w / 2 - cw - 34 - k * 44), seatH + 20, z0 + backT + 24, 5); m.rotation.x = -0.28; m.rotation.y = (k ? -1 : 1) * 0.18; m.rotation.z = (k ? 1 : -1) * 0.06; }
   };
   B.chair = (g, w, d, h, c) => {
     const seatH = Math.min(46, h * 0.5), t = 3, woodM = wood(c, w, d);
@@ -295,12 +331,25 @@
     for (const sx of [-1, 1]) { part(g, lm, 4, h - top, d - 10, sx * (w / 2 - 5), (h - top) / 2, 0); }
     part(g, lm, w - 10, 4, 2, 0, h - top - 12, -d / 2 + 6);
   };
-  B.roundtable = (g, w, d, h, c) => { // round or oval top on four tapered legs with an apron
-    const m = wood(c, w, d), top = 2.5;
-    const t = cyl(g, m, w / 2, w / 2, top, 0, h - top / 2, 0, 64); t.scale.z = d / w;
-    const ap = cyl(g, m, w * 0.36, w * 0.36, 7, 0, h - top - 3.5, 0, 48); ap.scale.z = d / w;
-    const r = w * 0.3, rz = d * 0.3;
-    for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) cyl(g, m, 2.8, 2, h - top, sx * r * 0.72, (h - top) / 2, sz * rz * 0.72, 12);
+  // Round table, or a round table extended with a centre leaf (w != d): semicircular ends and straight sides.
+  B.roundtable = (g, w, d, h, c) => {
+    const top = 2.4, bevel = 0.6, L = Math.max(w, d), S = Math.min(w, d), r = S / 2, straight = L - S, alongX = w >= d;
+    const oak = mat(c, { rough: 0.42 }), tex = TEX.grain(), map = tex.clone(); map.needsUpdate = true; map.repeat.set(1 / tex.cmSize, 1 / tex.cmSize); oak.map = map;
+    oak.bumpMap = map; oak.bumpScale = 0.15; oak.envMapIntensity = 0.7;
+    const shp = new T3.Shape(), a = straight / 2;
+    shp.moveTo(-a, -r); shp.lineTo(a, -r); shp.absarc(a, 0, r, -Math.PI / 2, Math.PI / 2, false); shp.lineTo(-a, r); shp.absarc(-a, 0, r, Math.PI / 2, Math.PI * 1.5, false);
+    const geo = new T3.ExtrudeGeometry(shp, { depth: top - 2 * bevel, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 48 });
+    geo.rotateX(-Math.PI / 2); geo.translate(0, h - top + bevel, 0); if (!alongX) geo.rotateY(Math.PI / 2);
+    const t = new T3.Mesh(geo, oak); t.castShadow = true; t.receiveShadow = true; g.add(t);
+    // leaf joints: thin dark lines across the top where the leaf meets the halves
+    if (straight > 4) { const seam = mat(shade(c, 0.62), { rough: 0.8 }); for (const sgn of [-1, 1]) { const sp = alongX ? part(g, seam, 0.25, 0.1, S * 0.98, sgn * a, h + 0.05, 0) : part(g, seam, S * 0.98, 0.1, 0.25, 0, h + 0.05, sgn * a); sp.castShadow = false; } }
+    // apron following the top, set in 9 cm, and four tapered legs just inside it
+    const apShape = new T3.Shape(), ar = r - 9; apShape.moveTo(-a, -ar); apShape.lineTo(a, -ar); apShape.absarc(a, 0, ar, -Math.PI / 2, Math.PI / 2, false); apShape.lineTo(-a, ar); apShape.absarc(-a, 0, ar, Math.PI / 2, Math.PI * 1.5, false);
+    const hole = new T3.Path(), hr = ar - 2; hole.moveTo(-a, -hr); hole.lineTo(a, -hr); hole.absarc(a, 0, hr, -Math.PI / 2, Math.PI / 2, false); hole.lineTo(-a, hr); hole.absarc(-a, 0, hr, Math.PI / 2, Math.PI * 1.5, false); apShape.holes.push(hole);
+    const apGeo = new T3.ExtrudeGeometry(apShape, { depth: 7, bevelEnabled: false, curveSegments: 40 }); apGeo.rotateX(-Math.PI / 2); apGeo.translate(0, h - top - 7, 0); if (!alongX) apGeo.rotateY(Math.PI / 2);
+    const ap = new T3.Mesh(apGeo, wood(shade(c, 0.95), 60, 7)); ap.castShadow = true; g.add(ap);
+    const k = Math.SQRT1_2 * (ar - 3);
+    for (const [px, pz] of [[a + k, k], [a + k, -k], [-a - k, k], [-a - k, -k]]) { const x = alongX ? px : pz, z = alongX ? pz : px; const leg = cyl(g, oak, 2.9, 1.9, h - top, x, (h - top) / 2, z, 16); leg.rotation.z = (x > 0 ? -1 : 1) * 0.02; }
   };
   // Upholstered bed. h up to 80 = mattress top (headboard 45 cm above); over 80 = overall height to the top of the headboard.
   B.bed = (g, w, d, h, c) => {
@@ -462,7 +511,10 @@
     const g = new T3.Group(), w = it.w, d = it.d, h = Math.max(it.h, 1);
     let bulbY = null;
     if (L[it.type]) bulbY = L[it.type](g, w, d, h, it.color, opts.evening, opts.kelvinHex, opts.roomTop);
-    else (B[it.type] || B.box)(g, w, d, h, it.color, it);
+    else {
+      (B[it.type] || B.box)(g, w, d, h, it.color, it);
+      if (!['rug', 'vanity', 'toilet', 'cornersofa'].includes(it.type) && !(it.elev > 0)) g.add(HM.contactShadow(w, d));
+    }
     g.userData.bulbY = bulbY;
     return g;
   };

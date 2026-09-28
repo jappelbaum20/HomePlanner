@@ -38,7 +38,8 @@ window.HOUSE_SEED = {
 };
 
 // Pieces Claude found and you confirmed. Each appears in My pieces once (matched by id);
-// if you delete one in the app it stays deleted. Sizes are W x D x H in cm.
+// if you delete one in the app it stays deleted. Raising `rev` pushes a changed size or look
+// to the copy already in the browser. Sizes are W x D x H in cm.
 window.HOUSE_PIECES = [
   {
     id: 'dellia-sofa', type: 'cornersofa', side: 'right', name: 'DELLIA corner sofa',
@@ -53,9 +54,9 @@ window.HOUSE_PIECES = [
     notes: 'home24, Oct 2022. Beige woven fabric, plain rounded padded headboard, tapered oak feet, 2 storage boxes. Outer size from the home24 listing (about 205 x 216 x 112): measure to confirm.'
   },
   {
-    id: 'amburwood-table', type: 'roundtable', name: 'AmburWOOD dining table',
-    w: 100, d: 100, h: 75, color: '#B8875A', status: 'own',
+    id: 'amburwood-table', rev: 2, type: 'roundtable', name: 'AmburWOOD dining table (extended)',
+    w: 130, d: 100, h: 75, color: '#B8875A', status: 'own',
     link: 'https://www.home24.de/produkt/esstisch-amburwood-mit-ausziehfunktion-eiche-massiv-eiche',
-    notes: 'home24 (Ars Natura), Sep 2024. Solid oiled oak, round 100 cm, extends to 130 x 100 with a built-in butterfly leaf. Seats 2 to 4 (6 extended). Set depth to 130 to plan it extended.'
+    notes: 'home24 (Ars Natura), Sep 2024. Solid oiled oak, round 100 cm, extends to 130 x 100 with a built-in butterfly leaf. Seats 2 to 4 (6 extended). Shown extended (130 x 100). Set width to 100 to plan it closed.'
   }
 ];

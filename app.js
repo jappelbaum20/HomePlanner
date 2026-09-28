@@ -193,6 +193,7 @@
       link: p.link || '', notes: p.notes || '', photos: Array.isArray(p.photos) ? p.photos.slice() : [] };
     if (type === 'cornersofa') o.side = p.side === 'left' ? 'left' : 'right';
     if (isLight(type)) { o.kelvin = KELVIN[p.kelvin] ? Number(p.kelvin) : 2700; o.power = POWER[p.power] ? p.power : 'medium'; }
+    if (p.seedRev) o.seedRev = p.seedRev;
     return o;
   }
   function normState(s) {
@@ -201,7 +202,18 @@
     o.activeRoomId = o.rooms.some((r) => r.id === s.activeRoomId) ? s.activeRoomId : o.rooms[0].id;
     // Pieces Claude adds to house-data.js appear in My pieces once; deleting one keeps it out
     o.removedPieces = Array.isArray(s.removedPieces) ? s.removedPieces.slice() : [];
-    (window.HOUSE_PIECES || []).forEach((p) => { if (p.id && !o.catalog.some((c) => c.id === p.id) && !o.removedPieces.includes(p.id)) o.catalog.push(normPiece(p)); });
+    // A higher `rev` on a seeded piece updates its size, look, name and notes (status and photos stay yours)
+    (window.HOUSE_PIECES || []).forEach((p) => {
+      if (!p.id || o.removedPieces.includes(p.id)) return;
+      const ex = o.catalog.find((c) => c.id === p.id), rev = p.rev || 1;
+      if (!ex) { o.catalog.push(normPiece(Object.assign({}, p, { seedRev: rev }))); return; }
+      if ((ex.seedRev || 1) < rev) {
+        const n = normPiece(p);
+        ['type', 'name', 'w', 'd', 'h', 'color', 'link', 'notes', 'side'].forEach((k) => { if (n[k] !== undefined) ex[k] = n[k]; });
+        ex.seedRev = rev;
+        o.rooms.forEach((r) => r.items.forEach((it) => { if (it.catalogId === ex.id) SHARED.forEach((k) => { if (ex[k] !== undefined) it[k] = ex[k]; }); }));
+      }
+    });
     return o;
   }
 
@@ -456,7 +468,8 @@
     const base = `<rect class="body" x="${x0}" y="${y0}" width="${w}" height="${d}" rx="2" fill="${c}"/>`;
     switch (it.type) {
       case 'rug': return `<rect class="body" x="${x0}" y="${y0}" width="${w}" height="${d}" fill="${c}" fill-opacity=".75" stroke-dasharray="6 4"/>`;
-      case 'plant': case 'roundtable': return `<ellipse class="body" rx="${w / 2}" ry="${d / 2}" fill="${c}"/>`;
+      case 'plant': return `<ellipse class="body" rx="${w / 2}" ry="${d / 2}" fill="${c}"/>`;
+      case 'roundtable': { const r = Math.min(w, d) / 2; return `<rect class="body" x="${x0}" y="${y0}" width="${w}" height="${d}" rx="${r}" ry="${r}" fill="${c}"/>`; }
       case 'bed': {
         const n = w >= 140 ? 2 : 1, gap = 10, pw = (w - gap * (n + 1)) / n; let p = '';
         for (let k = 0; k < n; k++) p += `<rect class="detail" x="${x0 + gap + k * (pw + gap)}" y="${y0 + 8}" width="${pw}" height="${Math.min(40, d * 0.2)}" rx="6"/>`;
