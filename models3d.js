@@ -720,13 +720,11 @@
     if (TR) return TR;
     const canvas = document.createElement('canvas'), r = new T3.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
     r.setPixelRatio(1); r.setSize(240, 180, false); r.outputEncoding = T3.sRGBEncoding; r.toneMapping = T3.ACESFilmicToneMapping; r.toneMappingExposure = 1;
-    r.shadowMap.enabled = true; r.shadowMap.type = T3.PCFSoftShadowMap;
-    const scene = new T3.Scene();
+    const scene = new T3.Scene(); // no shadow pass: pieces carry their own soft contact shadow
     if (T3.RoomEnvironment) { const pm = new T3.PMREMGenerator(r); scene.environment = pm.fromScene(new T3.RoomEnvironment(), 0.04).texture; pm.dispose(); }
     scene.add(new T3.HemisphereLight(0xffffff, 0xb9ae9e, 0.35));
-    const sun = new T3.DirectionalLight(0xfff4e5, 1.3); sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024); sun.shadow.radius = 6; scene.add(sun); scene.add(sun.target);
-    const ground = new T3.Mesh(new T3.PlaneGeometry(2000, 2000), new T3.ShadowMaterial({ opacity: 0.16 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
-    TR = { r, scene, sun, ground, cam: new T3.PerspectiveCamera(28, 4 / 3, 1, 20000) };
+    const sun = new T3.DirectionalLight(0xfff4e5, 1.3); scene.add(sun); scene.add(sun.target);
+    TR = { r, scene, sun, cam: new T3.PerspectiveCamera(28, 4 / 3, 1, 20000) };
     return TR;
   }
   HM.thumbnail = (it, opts) => {
@@ -738,8 +736,6 @@
     dir.normalize(); t.cam.position.copy(c).addScaledVector(dir, rad / Math.sin((t.cam.fov * Math.PI / 180) / 2) * 0.95); t.cam.lookAt(c);
     t.cam.near = rad * 0.1; t.cam.far = rad * 20; t.cam.updateProjectionMatrix();
     t.sun.position.set(c.x + rad * 1.5, c.y + rad * 3, c.z + rad * 2); t.sun.target.position.copy(c);
-    Object.assign(t.sun.shadow.camera, { left: -rad * 2, right: rad * 2, top: rad * 2, bottom: -rad * 2, near: 1, far: rad * 10 }); t.sun.shadow.camera.updateProjectionMatrix();
-    t.ground.position.y = wall ? -1e5 : box.min.y;
     t.r.render(t.scene, t.cam);
     const url = t.r.domElement.toDataURL('image/png');
     t.scene.remove(g);

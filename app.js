@@ -103,6 +103,9 @@
     const run = async (store, mode, fn) => { const d = await open(); return new Promise((res, rej) => { const t = d.transaction(store, mode); const r = fn(t.objectStore(store)); t.oncomplete = () => res(r && r.result); t.onerror = () => rej(t.error); }); };
     return {
       putPhoto: (id, url) => run('photos', 'readwrite', (s) => s.put(url, id)),
+      // rendered thumbnails share the photo store under a 'thumb:' key (small PNGs, safe to lose)
+      getThumb: (key) => run('photos', 'readonly', (s) => s.get('thumb:' + key)),
+      putThumb: (key, url) => run('photos', 'readwrite', (s) => s.put(url, 'thumb:' + key)),
       getPhoto: (id) => run('photos', 'readonly', (s) => s.get(id)),
       delPhoto: (id) => run('photos', 'readwrite', (s) => s.delete(id)).catch(() => {}),
       putVersion: (v) => run('versions', 'readwrite', (s) => s.put(v)),
@@ -528,24 +531,34 @@
   const thumbs = new Map(), thumbQueue = [];
   let thumbBusy = false, thumbFail = false;
   const libFrame = (color) => color === '#F4F3EF' ? 'none' : color === '#C49A6C' ? 'oak' : color === '#C9A06A' ? 'oakpanel' : 'black';
-  const thumbKey = (o) => JSON.stringify(['type', 'w', 'd', 'h', 'color', 'style', 'doors', 'books', 'side', 'frame', 'mat', 'image', 'kelvin'].map((k) => o[k]));
+  const THUMB_VERSION = 1; // bump when models change so saved thumbnails are redrawn
+  const thumbKey = (o) => JSON.stringify([THUMB_VERSION].concat(['type', 'w', 'd', 'h', 'color', 'style', 'doors', 'books', 'side', 'frame', 'mat', 'image', 'kelvin'].map((k) => o[k])));
+  const showThumb = (key, url) => $$('img[data-thumb]').forEach((img) => { if (img.dataset.thumb === key) img.src = url; });
   function thumbImg(o, cls) {
     const key = thumbKey(o), url = thumbs.get(key);
     if (!url && !thumbFail && window.THREE && window.HouseModels) { if (!thumbQueue.some((q) => q.key === key)) thumbQueue.push({ key, o: clone(o) }); pumpThumbs(); }
     return `<img class="${cls || 'thumb3d'}" data-thumb="${esc(key)}" ${url ? `src="${url}"` : ''} alt="">`;
   }
+  // Thumbnails only render while you are not dragging, typing or orbiting, so they never get in the way
+  let lastInput = 0;
+  ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchmove'].forEach((ev) => window.addEventListener(ev, (e) => { if (ev !== 'pointermove' || e.buttons) lastInput = performance.now(); }, { capture: true, passive: true }));
   function pumpThumbs() {
     if (thumbBusy || !thumbQueue.length) return;
+    const quiet = performance.now() - lastInput;
+    if (quiet < 800) { setTimeout(pumpThumbs, 800 - quiet + 20); return; }
     thumbBusy = true;
-    (window.requestIdleCallback || ((f) => setTimeout(f, 16)))(() => {
-      const job = thumbQueue.shift();
-      try {
-        HouseModels.init(THREE);
-        const url = HouseModels.thumbnail(job.o, { photo: photoFor3D });
-        thumbs.set(job.key, url);
-        $$('img[data-thumb]').forEach((img) => { if (img.dataset.thumb === job.key) img.src = url; });
-      } catch (e) { thumbFail = true; thumbQueue.length = 0; }
-      thumbBusy = false; pumpThumbs();
+    const job = thumbQueue.shift(), done = () => { thumbBusy = false; setTimeout(pumpThumbs, 30); };
+    // saved from an earlier visit? then no rendering at all
+    Store.getThumb(job.key).catch(() => null).then((saved) => {
+      if (saved) { thumbs.set(job.key, saved); showThumb(job.key, saved); return done(); }
+      (window.requestIdleCallback || ((f) => setTimeout(f, 50)))(() => {
+        try {
+          HouseModels.init(THREE);
+          const url = HouseModels.thumbnail(job.o, { photo: photoFor3D });
+          thumbs.set(job.key, url); showThumb(job.key, url); Store.putThumb(job.key, url).catch(() => {});
+        } catch (e) { thumbFail = true; thumbQueue.length = 0; }
+        done();
+      }, { timeout: 2000 });
     });
   }
   function pieceCard(p) {
@@ -1165,6 +1178,7 @@
     const so = t.closest('[data-select-opening]'); if (so) { selected = { kind: 'opening', id: so.dataset.selectOpening }; renderRoomPanel(); renderInspector(); renderPlan(); return; }
     if (t.id === 'dupRoom') {
       const c = Object.assign(clone(r), { id: 'r' + uid(), name: r.name + ' copy', photos: [] });
+      delete c.seedId; delete c.seedRev; // a copy is your own room, not the starter
       c.items.forEach((i) => { i.id = 'i' + uid(); }); c.openings.forEach((o) => { o.id = 'o' + uid(); });
       state.rooms.push(c); state.activeRoomId = c.id; selected = null; commit(); toast('Room duplicated (photos stay with the original)'); return;
     }
