@@ -437,7 +437,7 @@ window.HOUSE_ROOMS = [
   },
   {
     "id": "kitchen",
-    "rev": 6,
+    "rev": 7,
     "resize": true,
     "ensure": true,
     "name": "Kitchen",
@@ -470,7 +470,8 @@ window.HOUSE_ROOMS = [
         "wall": "e",
         "offset": 241,
         "width": 73,
-        "height": 200
+        "height": 200,
+        "hinge": "end"
       }
     ],
     "tourPhotos": [

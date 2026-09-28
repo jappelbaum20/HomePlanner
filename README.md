@@ -59,7 +59,7 @@ To send the current state back to Claude, use Claude handoff, then Copy this roo
 - Piece `status`: own, considering, ordered.
 - Room `floorFinish`: parquet, wood, marble, stone, tile, concrete, terrazzo, carpet, plain (default parquet). Sets the floor texture in 3D.
 - Room `wallFinish`: per wall (`n`, `e`, `s`, `w`), one of paint, panelling, oakpanels, marble, tiles (default paint).
-- Window `radiator`: true draws a panel radiator under it (default true when the sill is 50 cm or higher). Door `color`: door leaf color.
+- Window `radiator`: true draws a panel radiator under it (default true when the sill is 50 cm or higher). Door `color`: door leaf color. Door `hinge`: start (default, the hinge at the opening's `offset` end) or end (hinged at the far end).
 - `cornersofa` items and pieces take `side`: right or left (chaise side seen from the front). Beds: `h` up to 80 is the mattress top; above 80 it is the headboard height.
 - Pieces listed in `window.HOUSE_PIECES` in `house-data.js` are added to My pieces once. Deleting one in the app keeps it out. A higher `rev` on a piece pushes a changed size or look to browsers that already have it.
 - `window.HOUSE_PLACEMENTS` places a piece once in a room: the room with a matching name (for example Office, Büro), else a starter room from `window.HOUSE_ROOMS`. A deleted starter room is not recreated.

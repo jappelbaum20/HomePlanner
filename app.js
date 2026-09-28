@@ -223,6 +223,7 @@
         color: hex(p.color, '#F7F6F2'), radiator: type === 'window' && (p.radiator != null ? !!p.radiator : num(p.sill, 0, 800, 90) >= 50),
         leaf: type === 'door' ? p.leaf !== false : false,
         swing: p.swing === 'out' ? 'out' : 'in', // door opens into this room ('in') or into the room next door ('out')
+        hinge: type === 'door' && p.hinge === 'end' ? 'end' : 'start', // hinge at the start of the opening (offset) or at its far end
         niche: type === 'window' ? num(p.niche, 0, 100, 0) : 0, nicheShelf: type === 'window' && !!p.nicheShelf };
     });
     o.items = (r.items || []).map((it) => normItem(it, o));
@@ -391,9 +392,10 @@
     return { x0: it.x - hw, x1: it.x + hw, y0: it.y - hd, y1: it.y + hd, z0: it.elev || 0, z1: (it.elev || 0) + it.h };
   }
   // The quarter circle a door leaf sweeps as it opens into the room: hinge at the start of the opening
-  // (offset along the wall), radius = door width. Kept in the wall's own frame (x along the wall, y into the room).
+  // (offset along the wall) or, with hinge 'end', at its far end; radius = door width.
+  // Kept in the wall's own frame (x along the wall, y into the room).
   function doorZones(r) {
-    return r.openings.filter((o) => o.type === 'door' && o.leaf !== false && o.swing !== 'out').map((o) => ({ wall: o.wall, a: o.offset, w: o.width }));
+    return r.openings.filter((o) => o.type === 'door' && o.leaf !== false && o.swing !== 'out').map((o) => ({ wall: o.wall, a: o.offset, w: o.width, h: o.hinge === 'end' ? o.offset + o.width : o.offset }));
   }
   // An item's footprint in a wall's frame (all four walls are axis-aligned, so a box stays a box)
   function toWallFrame(r, k, b) {
@@ -410,7 +412,7 @@
     return zones.some((z) => {
       const f = toWallFrame(r, z.wall, b), x0 = Math.max(f.x0, z.a), x1 = Math.min(f.x1, z.a + z.w), y0 = Math.max(f.y0, 0), y1 = Math.min(f.y1, z.w);
       if (x1 - x0 <= 6 || y1 - y0 <= 6) return false;
-      const nx = Math.max(x0, Math.min(z.a, x1)) - z.a, ny = Math.max(y0, Math.min(0, y1));
+      const nx = Math.max(x0, Math.min(z.h, x1)) - z.h, ny = Math.max(y0, Math.min(0, y1));
       return Math.hypot(nx, ny) < z.w - 6;
     });
   };
@@ -593,6 +595,7 @@
           <label class="check"><input type="checkbox" data-op="radiator" ${op.radiator ? 'checked' : ''}> Radiator below</label>`
           : `<label class="check"><input type="checkbox" data-op="leaf" ${op.leaf !== false ? 'checked' : ''}> Door leaf (untick for an open passage)</label>
              ${op.leaf !== false ? `<label class="check"><input type="checkbox" data-op="swingIn" ${op.swing !== 'out' ? 'checked' : ''}> Opens into this room (keeps the swing area clear)</label>` : ''}
+             ${op.leaf !== false ? `<label class="check"><input type="checkbox" data-op="hingeEnd" ${op.hinge === 'end' ? 'checked' : ''}> Hinged on the other side</label>` : ''}
              ${op.leaf !== false ? `<div class="wallrow"><input type="color" data-op="color" value="${op.color}" aria-label="Door color"><span>Door color</span><code>${op.color.toUpperCase()}</code></div>` : ''}`}
         <p class="note">Offset is from the top corner on side walls, or the left corner on top and bottom walls.</p>
         <div class="btnrow" style="margin-top:12px"><button class="btn danger" data-act="delete">Remove</button></div>`;
@@ -818,9 +821,10 @@
     for (const o of r.openings) {
       let g = `<rect x="${o.offset}" y="${-T - 1}" width="${o.width}" height="${T + 2}" fill="${r.floor}"/>`;
       if (o.niche > 0) g += `<rect class="niche" x="${o.offset}" y="${-o.niche}" width="${o.width}" height="${o.niche}" fill="${r.floor}"/>`;
-      if (o.type === 'door' && o.leaf !== false && o.swing !== 'out') g += `<path class="swing" d="M${o.offset} 0H${o.offset + o.width}A${o.width} ${o.width} 0 0 1 ${o.offset} ${o.width}Z" fill="url(#swingHatch)"/>`;
+      const hEnd = o.hinge === 'end', hx = hEnd ? o.offset + o.width : o.offset, fx = hEnd ? o.offset : o.offset + o.width, sweep = hEnd ? 0 : 1; // hinge and free edge along the wall
+      if (o.type === 'door' && o.leaf !== false && o.swing !== 'out') g += `<path class="swing" d="M${hx} 0H${fx}A${o.width} ${o.width} 0 0 ${sweep} ${hx} ${o.width}Z" fill="url(#swingHatch)"/>`;
       if (o.type === 'door' && o.leaf !== false && o.swing === 'out') g += `<line class="line" x1="${o.offset}" x2="${o.offset + o.width}" y1="${-T / 2}" y2="${-T / 2}" stroke-dasharray="4 3"/>`;
-      else if (o.type === 'door' && o.leaf !== false) g += `<rect x="${o.offset}" y="0" width="${o.width}" height="${o.width}" fill="transparent"/><path class="line" d="M${o.offset} 0L${o.offset} ${o.width}M${o.offset + o.width} 0A${o.width} ${o.width} 0 0 1 ${o.offset} ${o.width}"/>`;
+      else if (o.type === 'door' && o.leaf !== false) g += `<rect x="${o.offset}" y="0" width="${o.width}" height="${o.width}" fill="transparent"/><path class="line" d="M${hx} 0L${hx} ${o.width}M${fx} 0A${o.width} ${o.width} 0 0 ${sweep} ${hx} ${o.width}"/>`;
       else g += `<rect class="glass" x="${o.offset}" y="${-T}" width="${o.width}" height="${T}"/><line class="line" x1="${o.offset}" x2="${o.offset + o.width}" y1="${-T / 2}" y2="${-T / 2}"/>`;
       if (selected && selected.id === o.id) g += `<rect class="sel-outline" x="${o.offset - 3}" y="${-T - 3}" width="${o.width + 6}" height="${(o.type === 'door' ? o.width + T : T) + 6}"/>`;
       h += `<g class="opening" data-opening="${o.id}" transform="${M[o.wall]}">${g}</g>`;
@@ -969,7 +973,7 @@
         if (s.axis === 'x') add(mesh, mid, y0 + hh / 2, o); else add(mesh, o, y0 + hh / 2, mid);
         if (!mats.includes(m)) mats.push(m); return mesh;
       };
-      const ops = r.openings.filter((o) => o.wall === k).map((o) => ({ a: o.offset, b: o.offset + o.width, sill: o.sill, top: Math.min(o.sill + o.height, H), type: o.type, radiator: o.radiator, color: o.color, leaf: o.leaf, niche: o.niche || 0, nicheShelf: o.nicheShelf })).sort((p, q) => p.a - q.a);
+      const ops = r.openings.filter((o) => o.wall === k).map((o) => ({ a: o.offset, b: o.offset + o.width, sill: o.sill, top: Math.min(o.sill + o.height, H), type: o.type, radiator: o.radiator, color: o.color, leaf: o.leaf, hinge: o.hinge, niche: o.niche || 0, nicheShelf: o.nicheShelf })).sort((p, q) => p.a - q.a);
       let cur = s.start;
       const skirt = (a, b) => along(Math.max(a, 0), Math.min(b, s.axis === 'x' ? W : L), 0, 8, 1.5, T / 2 + 0.75, skirtM);
       for (const o of ops) {
@@ -1010,7 +1014,7 @@
             }
           } else if (o.leaf !== false) {
             const leaf = along(a + 1, o.b - 1, 0, o.top - 0.5, 4, T / 2 - 2, HM.mat(o.color, { rough: 0.45 }));
-            if (leaf) { const hm = HM.mat('#9A9C9E', { rough: 0.25, metal: 1 }); const hx = s.inward > 0 ? o.b - 8 : o.b - 8; along(hx - 7, hx, 100, 102.5, 2, T / 2 + 1, hm); }
+            if (leaf) { const hm = HM.mat('#9A9C9E', { rough: 0.25, metal: 1 }), hx = o.hinge === 'end' ? a + 15 : o.b - 8; along(hx - 7, hx, 100, 102.5, 2, T / 2 + 1, hm); } // handle on the side away from the hinge
           }
         }
         cur = Math.max(cur, o.b);
@@ -1436,6 +1440,7 @@
       else if (f === 'radiator') op.radiator = t.checked;
       else if (f === 'leaf') op.leaf = t.checked;
       else if (f === 'swingIn') op.swing = t.checked ? 'in' : 'out';
+      else if (f === 'hingeEnd') op.hinge = t.checked ? 'end' : 'start';
       else if (f === 'nicheShelf') op.nicheShelf = t.checked;
       else if (f === 'niche') op.niche = num(t.value, 0, 100, 0);
       else if (f === 'color') op.color = hex(t.value, op.color);
