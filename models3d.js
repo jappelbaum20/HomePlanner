@@ -520,6 +520,19 @@
       }
     }
   };
+  // Straight staircase rising towards the back (-z): treads, risers, two stringers and a handrail on the right
+  B.stairs = (g, w, d, h, c) => {
+    const n = Math.max(3, Math.round(h / 18)), rise = h / n, run = d / n, m = wood(c, w, d), riserM = mat('#F4F3EF', { rough: 0.6 });
+    for (let i = 0; i < n; i++) {
+      const z = d / 2 - run * (i + 0.5), y = rise * (i + 1);
+      part(g, m, w - 4, 3, run + 2, 0, y - 1.5, z, 0.4);
+      part(g, riserM, w - 4, rise - 3, 1.5, 0, y - rise / 2 - 1.5, z + run / 2, 0);
+    }
+    const len = Math.hypot(h, d), ang = Math.atan2(h, d);
+    for (const sx of [-1, 1]) { const st = part(g, riserM, 3, 25, len, sx * (w / 2 - 1.5), h / 2 - 6, 0); st.rotation.x = ang; }
+    const rail = part(g, m, 5, 4, len, w / 2 - 3, h / 2 + 88, 0, 1.5); rail.rotation.x = ang;
+    for (let i = 0; i <= n; i += 2) { const z = d / 2 - run * (i + 0.5), y = rise * (i + 1); part(g, mat('#E8E4DC', { rough: 0.5 }), 2, 88, 2, w / 2 - 3, y + 44, z); }
+  };
   B.wardrobe = (g, w, d, h, c) => {
     const m = wood(c, w, h), n = Math.max(2, Math.round(w / 50)), dw = w / n;
     part(g, m, w, h - 6, d, 0, 6 + (h - 6) / 2, 0, 0.5);

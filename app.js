@@ -20,7 +20,7 @@
     sofa: 'Sofa', cornersofa: 'Corner sofa', armchair: 'Armchair', chair: 'Chair', table: 'Table, rectangular', roundtable: 'Table, round',
     desk: 'Desk', bed: 'Bed', cabinet: 'Cabinet or sideboard', shelf: 'Shelf', wardrobe: 'Wardrobe',
     counter: 'Counter or island', appliance: 'Appliance', rug: 'Rug', plant: 'Plant', art: 'Artwork (on a wall)', bath: 'Bathtub',
-    shower: 'Shower', vanity: 'Vanity', toilet: 'Toilet', box: 'Other'
+    shower: 'Shower', vanity: 'Vanity', toilet: 'Toilet', stairs: 'Stairs', box: 'Other'
   };
   const LIGHT_TYPES = {
     ceiling: 'Ceiling light', pendant: 'Pendant', spot: 'Spotlight', sconce: 'Wall light',
@@ -58,6 +58,7 @@
       ['wardrobe', 'Wardrobe', 200, 60, 220, '#EDEBE6'], ['cabinet', 'Dresser', 120, 50, 85, '#8B6A4E']
     ]],
     ['Office', [['desk', 'Desk', 140, 70, 75, '#8B6A4E'], ['chair', 'Office chair', 60, 60, 110, '#2F3337'], ['shelf', 'Shelf unit', 80, 40, 180, '#EDEBE6']]],
+    ['Structure', [['stairs', 'Stairs, straight', 85, 270, 225, '#B98A5A']]],
     ['Bathroom', [['bath', 'Bathtub', 170, 75, 58, '#F5F5F2'], ['shower', 'Shower tray', 90, 90, 200, '#E6ECEF'], ['vanity', 'Vanity', 80, 50, 85, '#EDEBE6'], ['toilet', 'Toilet', 38, 65, 40, '#F5F5F2']]]
   ];
   const TYPE_DEFAULTS = {};
@@ -238,12 +239,15 @@
       o.exampleRetired = true;
     } else o.exampleRetired = true;
     seedRooms.filter((t) => t.ensure).forEach((t) => findRoom(t.id));
-    // A higher `rev` on a starter room updates its doors, windows, wall finishes and notes (sizes and furniture stay yours)
+    // A higher `rev` on a starter room updates its doors, windows, wall finishes and notes; with `resize` also its
+    // measured size, level and floor. Furniture you placed stays; anything left outside the new walls is pulled back in.
+    const resized = [];
     o.rooms.forEach((r) => {
       const tpl = r.seedId && seedRooms.find((x) => x.id === r.seedId);
       if (!tpl || (r.seedRev || 1) >= (tpl.rev || 1)) return;
-      const n = normRoom(Object.assign({}, tpl, { width: r.width, length: r.length, height: r.height }));
+      const n = normRoom(tpl.resize ? tpl : Object.assign({}, tpl, { width: r.width, length: r.length, height: r.height }));
       r.openings = n.openings; r.wallFinish = n.wallFinish; r.notes = n.notes; r.seedRev = tpl.rev;
+      if (tpl.resize) { Object.assign(r, { width: n.width, length: n.length, height: n.height, level: n.level, floor: n.floor, floorFinish: n.floorFinish }); resized.push(r); }
     });
     if (!o.rooms.length) o.rooms.push(normRoom({ name: 'Room 1' }));
     o.activeRoomId = o.rooms.some((r) => r.id === s.activeRoomId) ? s.activeRoomId : o.rooms[0].id;
@@ -270,7 +274,7 @@
         const r = findRoom(pl.room), f = pl.from || {};
         const it = r && r.items.find((i) => (pl.catalogId ? i.catalogId === pl.catalogId : (i.type === pl.item.type && !i.catalogId)) &&
           Math.abs(i.x - f.x) < 2 && Math.abs(i.y - f.y) < 2 && (f.rot == null || i.rot === f.rot));
-        if (it) { it.x = Math.min(pl.x, r.width); it.y = Math.min(pl.y, r.length); it.rot = pl.rot || 0; if (it.type === 'art') snapArt(it, r); }
+        if (it) { Object.assign(it, pl.extra || {}); it.x = Math.min(pl.x, r.width); it.y = Math.min(pl.y, r.length); it.rot = pl.rot || 0; if (it.type === 'art') snapArt(it, r); }
         o.placedSeeds.push(mark); return;
       }
       const pc = pl.catalogId ? o.catalog.find((c) => c.id === pl.catalogId) : null, r = (pc || pl.item) && findRoom(pl.room);
@@ -280,6 +284,10 @@
       if (it.type === 'art') snapArt(it, r);
       r.items.push(it); o.placedSeeds.push(pl.id); if (mark) o.placedSeeds.push(mark);
     });
+    resized.forEach((r) => r.items.forEach((it) => {
+      if (it.type === 'art') return snapArt(it, r);
+      it.x = Math.min(Math.max(it.x, 0), r.width); it.y = Math.min(Math.max(it.y, 0), r.length);
+    }));
     return o;
   }
 
@@ -661,6 +669,11 @@
         if (it.type === 'vanity') p += `<ellipse class="detail" cx="0" cy="${d * 0.05}" rx="${w * 0.28}" ry="${d * 0.25}"/>`;
         if (it.type === 'counter' && w >= 120) p += `<rect class="detail" x="${w * 0.1}" y="${y0 + d * 0.2}" width="${Math.min(50, w * 0.3)}" height="${d * 0.55}" rx="4"/>`;
         return base + p + `<line class="detail" x1="${x0}" x2="${x0 + w}" y1="${y0 + d * 0.65}" y2="${y0 + d * 0.65}"/>`;
+      }
+      case 'stairs': { // one line per step and an arrow pointing up the flight
+        const n = Math.max(3, Math.round(it.h / 18)); let p = '';
+        for (let k = 1; k < n; k++) p += `<line class="detail" x1="${x0}" x2="${x0 + w}" y1="${y0 + (d * k) / n}" y2="${y0 + (d * k) / n}"/>`;
+        return base + p + `<path class="detail" d="M0 ${y0 + d - 8}V${y0 + 10}M-6 ${y0 + 18}L0 ${y0 + 8}L6 ${y0 + 18}"/>`;
       }
       case 'appliance': return base + `<rect class="detail" x="${x0 + 3}" y="${y0 + d - 5}" width="${w - 6}" height="3"/>`;
       case 'bath': return base + `<rect class="detail" x="${x0 + 8}" y="${y0 + 8}" width="${w - 16}" height="${d - 16}" rx="${Math.min(w, d) / 3}"/>`;
