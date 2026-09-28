@@ -35,6 +35,31 @@ window.HOUSE_PIECES = [
     link: 'https://www.ikea.com/ch/en/p/vadholma-kitchen-island-with-rack-black-oak-s59276228/',
     notes: 'IKEA VADHOLMA, CHF 543.20 (IKEA Family offer until 30.09; regular CHF 679). 126 x 79, worktop at 90, rack up to 193 (fits under the 225 cm kitchen ceiling). Solid oak / thick oak veneer top, black-painted solid beech frame, two open slatted shelves on both sides of a centre partition, no drawers. The rack has a top shelf and a rail for S-hooks: the rack-on-posts look you picked. Without the rack CHF 479.20; smaller 79 x 63 version CHF 319.20.'
   },
+  // Door-wall ideas you picked: IKEA METOD/MAXIMERA builds with NICKEBO grey-green fronts, oak KARLBY top, brass handles (not placed)
+  {
+    id: 'ikea-sage-madia', type: 'counter', style: 'metod3', name: 'Sage madia (IKEA METOD, 6 drawers)',
+    w: 160, d: 63.5, h: 91.8, color: '#8A9383', status: 'considering',
+    link: 'https://www.ikea.com/ch/en/p/metod-maximera-base-cabinet-with-3-drawers-white-nickebo-matt-grey-green-s19565334/',
+    notes: 'Low Italian sideboard for the door wall, from the north corner. Parts (IKEA CH, 28.09.2026): 2 x METOD/MAXIMERA base cabinet with 3 drawers 80 x 60, NICKEBO matt grey-green (CHF 367 each); NICKEBO cover panel 62 x 80 for the open end (CHF 40); NICKEBO plinth 220 x 8 (CHF 24); KARLBY oak worktop 246 x 3.8 cut to 160 (CHF 179, keep the offcut); 2 x KLAVRESTRÖM oak wall shelf 60 (CHF 29.95 each). About CHF 1,037, plus the copper wall rail and brass handles. Leaves about 98 cm to walk past the end of the sink run.'
+  },
+  {
+    id: 'ikea-slim-dresser', type: 'counter', style: 'metod4', name: 'Slim Italian dresser (IKEA METOD, 8 drawers)',
+    w: 160, d: 40, h: 91.8, color: '#8A9383', status: 'considering',
+    link: 'https://www.ikea.com/ch/en/p/metod-maximera-base-cab-4-frnts-4-drawers-white-nickebo-matt-grey-green-s69566388/',
+    notes: 'Only 40 cm deep, with oak shelves and the copper rail above like an Italian plate rack. Parts (IKEA CH, 28.09.2026): 2 x METOD/MAXIMERA base cabinet with 4 drawers 80 x 37, NICKEBO matt grey-green (CHF 383 each); NICKEBO cover panel 62 x 80 cut to 37 deep (CHF 40); NICKEBO plinth 220 x 8 (CHF 24); KARLBY oak worktop 246 x 3.8 cut to 160 x 40 (CHF 179; IKEA custom tops start at 45.1 cm deep, so cut it yourself or by a joiner); 4 x KLAVRESTRÖM oak wall shelf 60 for two 120 cm runs (CHF 29.95 each). About CHF 1,129.'
+  },
+  {
+    id: 'ikea-pantry-tower', type: 'counter', style: 'metod4', name: 'Pantry tower (IKEA METOD high cabinet)',
+    w: 60, d: 62, h: 208, color: '#8A9383', status: 'considering',
+    link: 'https://www.ikea.com/ch/en/p/metod-maximera-hi-cab-w-2-doors-4-drawers-white-nickebo-matt-grey-green-s19565782/',
+    notes: 'Goes in the north-east corner with the pantry counter beside it. METOD/MAXIMERA high cabinet with 2 doors and 4 drawers 60 x 60 x 200, NICKEBO matt grey-green (CHF 668), on legs: 208 cm, fits under the 225 cm ceiling. IKEA lists no tall NICKEBO cover panel, so the side above the counter stays white.'
+  },
+  {
+    id: 'ikea-pantry-counter', type: 'counter', style: 'metod3', name: 'Pantry counter (IKEA METOD, 3 drawers)',
+    w: 80, d: 63.5, h: 91.8, color: '#8A9383', status: 'considering',
+    link: 'https://www.ikea.com/ch/en/p/metod-maximera-base-cabinet-with-3-drawers-white-nickebo-matt-grey-green-s19565334/',
+    notes: 'Beside the pantry tower. METOD/MAXIMERA base cabinet with 3 drawers 80 x 60, NICKEBO matt grey-green (CHF 367); NICKEBO cover panel 62 x 80 (CHF 40); NICKEBO plinth (CHF 24); KARLBY oak worktop cut to 80 (CHF 179); KLAVRESTRÖM oak shelf 60 (CHF 29.95) and a 70 cm copper wall rail above. Tower and counter together about CHF 1,308.'
+  },
   {
     id: 'pcd-hanging-rail', type: 'potrack', style: 'rail', name: 'Copper hanging pot rail 70 cm',
     w: 70, d: 20, h: 52, color: '#B87333', status: 'considering',
