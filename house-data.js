@@ -76,11 +76,13 @@ window.HOUSE_PIECES = [
 const WHITE = '#F7F7F4';
 window.HOUSE_ROOMS = [
   {
-    id: 'living', ensure: true, name: 'Living room', match: ['living', 'wohnzimmer', 'stube', 'lounge'], level: 'Ground floor',
-    width: 620, length: 480, height: 245, floor: '#D9B98A', floorFinish: 'parquet', wallFinish: { e: 'oakpanels' },
-    notes: 'Placeholder size until measured. East wall: oak 3D panels as in the listing photo.',
-    openings: [{ type: 'window', wall: 'n', offset: 80, width: 140, height: 130, sill: 85 }, { type: 'window', wall: 'n', offset: 330, width: 110, height: 130, sill: 85 },
-      { type: 'window', wall: 'w', offset: 60, width: 120, height: 130, sill: 85 }, { type: 'door', wall: 's', offset: 480, width: 90, height: 205, color: '#1F2A36' }]
+    // Layout from the listing photos: two windows on the long wall, the third on the short wall next to that corner,
+    // an oak 3D feature panel (about 150 x 200) on the opposite long wall beside the open doorway to the hall.
+    id: 'living', rev: 2, ensure: true, name: 'Living room', match: ['living', 'wohnzimmer', 'stube', 'lounge'], level: 'Ground floor',
+    width: 620, length: 480, height: 245, floor: '#D9B98A', floorFinish: 'parquet',
+    notes: 'Placeholder size until measured. Two windows on the north wall, one on the east wall by the corner, oak feature panel on the south wall next to the open doorway to the hall.',
+    openings: [{ type: 'window', wall: 'n', offset: 180, width: 140, height: 130, sill: 85 }, { type: 'window', wall: 'n', offset: 400, width: 110, height: 130, sill: 85 },
+      { type: 'window', wall: 'e', offset: 45, width: 110, height: 130, sill: 85 }, { type: 'door', wall: 's', offset: 40, width: 90, height: 205, leaf: false }]
   },
   {
     id: 'bedroom', ensure: true, name: 'Bedroom', match: ['schlafzimmer', 'main bedroom', 'master bedroom'], level: 'Ground floor',
@@ -115,13 +117,14 @@ window.HOUSE_PLACEMENTS = [
   { id: 'office-hektar', room: 'office', catalogId: 'hektar-floor', x: 330, y: 45, rot: 200 },
   { id: 'living-billy-1', room: 'living', catalogId: 'billy', x: 15, y: 260, rot: 270 },
   { id: 'living-billy-2', room: 'living', catalogId: 'billy', x: 15, y: 341, rot: 270 },
-  { id: 'living-sofa', room: 'living', catalogId: 'dellia-sofa', x: 240, y: 389, rot: 180 },
-  { id: 'living-table', room: 'living', catalogId: 'amburwood-table', x: 450, y: 150, rot: 0 },
-  { id: 'living-chair-1', room: 'living', catalogId: 'tub-chair', x: 417, y: 88, rot: 0 },
-  { id: 'living-chair-2', room: 'living', catalogId: 'tub-chair', x: 483, y: 88, rot: 0 },
-  { id: 'living-chair-3', room: 'living', catalogId: 'tub-chair', x: 417, y: 212, rot: 180 },
-  { id: 'living-chair-4', room: 'living', catalogId: 'tub-chair', x: 483, y: 212, rot: 180 },
-  { id: 'living-art', room: 'living', x: 240, y: 470, item: { type: 'art', name: 'Artwork above the sofa', w: 100, d: 3, h: 70, frame: 'oak', mat: true, elev: 115 } },
+  { id: 'living-sofa', rev: 2, from: { x: 240, y: 389, rot: 180 }, room: 'living', catalogId: 'dellia-sofa', x: 240, y: 300, rot: 0 },
+  { id: 'living-table', rev: 2, from: { x: 450, y: 150 }, room: 'living', catalogId: 'amburwood-table', x: 480, y: 150, rot: 0 },
+  { id: 'living-chair-1', rev: 2, from: { x: 417, y: 88 }, room: 'living', catalogId: 'tub-chair', x: 447, y: 88, rot: 0 },
+  { id: 'living-chair-2', rev: 2, from: { x: 483, y: 88 }, room: 'living', catalogId: 'tub-chair', x: 513, y: 88, rot: 0 },
+  { id: 'living-chair-3', rev: 2, from: { x: 417, y: 212 }, room: 'living', catalogId: 'tub-chair', x: 447, y: 212, rot: 180 },
+  { id: 'living-chair-4', rev: 2, from: { x: 483, y: 212 }, room: 'living', catalogId: 'tub-chair', x: 513, y: 212, rot: 180 },
+  { id: 'living-art', rev: 2, from: { x: 240, y: 478.5 }, room: 'living', x: 620, y: 340, item: { type: 'art', name: 'Artwork', w: 100, d: 3, h: 70, frame: 'oak', mat: true, elev: 115 } },
+  { id: 'living-oakpanel', room: 'living', x: 305, y: 480, item: { type: 'art', name: 'Oak 3D wall panel', w: 150, d: 2, h: 200, frame: 'oakpanel', mat: false, elev: 8 } },
   { id: 'bedroom-bed', room: 'bedroom', catalogId: 'mattis-bed', x: 210, y: 108, rot: 0 },
   { id: 'kitchen-counter', room: 'kitchen', x: 170, y: 30, item: { type: 'counter', name: 'Kitchen counter', w: 280, d: 60, h: 90, color: '#F4F4F2' } },
   { id: 'kitchen-tall', room: 'kitchen', x: 20, y: 170, rot: 270, item: { type: 'appliance', name: 'Tall units with oven', w: 60, d: 40, h: 225, color: '#3A3634' } }

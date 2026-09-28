@@ -637,6 +637,11 @@
   const FRAME_COLORS = { black: '#1D1D1D', white: '#F2F1EC', oak: '#C49A6C', brass: '#B89559' };
   // Local space: back against the wall at -z, picture facing +z, from y = 0 (bottom edge) to h
   B.art = (g, w, d, h, c, it, opts) => {
+    if (it && it.frame === 'oakpanel') { // oak 3D feature panel mounted on the wall
+      const m = HM.wallMaterial('#C9A06A', 'oakpanels', w, h); m.transparent = false;
+      part(g, m, w, h, Math.max(d, 2), 0, h / 2, -d / 2 + Math.max(d, 2) / 2);
+      return;
+    }
     const frame = (it && it.frame) || 'black', canvasOnly = frame === 'none', fw = canvasOnly ? 0 : Math.max(1.5, Math.min(4, Math.min(w, h) * 0.035));
     const depth = canvasOnly ? Math.max(d, 3) : Math.max(d, 2);
     const matW = !canvasOnly && it && it.mat ? Math.min(w, h) * 0.1 : 0;
@@ -706,6 +711,40 @@
     const bodyH = h * 0.5; cyl(g, mat(c, { rough: 0.3 }), w * 0.2, w * 0.28, bodyH, 0, bodyH / 2, 0, 24);
     sphere(g, mat(c, { rough: 0.3 }), w * 0.28, 0, bodyH * 0.45, 0, 1.1);
     const s = cyl(g, shadeMat('#F1EBDF', on, k), w * 0.33, w / 2, h - bodyH, 0, bodyH + (h - bodyH) / 2, 0, 32); s.castShadow = false; return bodyH + 4;
+  };
+
+  // ---------- Thumbnails ----------
+  // One small offscreen renderer draws a 3/4 view of any piece; results are cached by the caller
+  let TR = null;
+  function thumbRig() {
+    if (TR) return TR;
+    const canvas = document.createElement('canvas'), r = new T3.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+    r.setPixelRatio(1); r.setSize(240, 180, false); r.outputEncoding = T3.sRGBEncoding; r.toneMapping = T3.ACESFilmicToneMapping; r.toneMappingExposure = 1;
+    r.shadowMap.enabled = true; r.shadowMap.type = T3.PCFSoftShadowMap;
+    const scene = new T3.Scene();
+    if (T3.RoomEnvironment) { const pm = new T3.PMREMGenerator(r); scene.environment = pm.fromScene(new T3.RoomEnvironment(), 0.04).texture; pm.dispose(); }
+    scene.add(new T3.HemisphereLight(0xffffff, 0xb9ae9e, 0.35));
+    const sun = new T3.DirectionalLight(0xfff4e5, 1.3); sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024); sun.shadow.radius = 6; scene.add(sun); scene.add(sun.target);
+    const ground = new T3.Mesh(new T3.PlaneGeometry(2000, 2000), new T3.ShadowMaterial({ opacity: 0.16 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+    TR = { r, scene, sun, ground, cam: new T3.PerspectiveCamera(28, 4 / 3, 1, 20000) };
+    return TR;
+  }
+  HM.thumbnail = (it, opts) => {
+    const t = thumbRig(), wall = it.type === 'art', light = ['ceiling', 'pendant', 'spot', 'sconce', 'floorlamp', 'tablelamp'].includes(it.type);
+    const g = HM.buildItem(Object.assign({}, it, { elev: 0 }), Object.assign({ evening: false, roomTop: it.type === 'pendant' ? it.h + 25 : it.h }, opts || {}));
+    t.scene.add(g);
+    const box = new T3.Box3().setFromObject(g), c = box.getCenter(new T3.Vector3()), size = box.getSize(new T3.Vector3()), rad = Math.max(size.length() / 2, 5);
+    const dir = wall ? new T3.Vector3(0.28, 0.12, 1) : light ? new T3.Vector3(0.6, 0.35, 1) : new T3.Vector3(0.85, 0.75, 1.25);
+    dir.normalize(); t.cam.position.copy(c).addScaledVector(dir, rad / Math.sin((t.cam.fov * Math.PI / 180) / 2) * 0.95); t.cam.lookAt(c);
+    t.cam.near = rad * 0.1; t.cam.far = rad * 20; t.cam.updateProjectionMatrix();
+    t.sun.position.set(c.x + rad * 1.5, c.y + rad * 3, c.z + rad * 2); t.sun.target.position.copy(c);
+    Object.assign(t.sun.shadow.camera, { left: -rad * 2, right: rad * 2, top: rad * 2, bottom: -rad * 2, near: 1, far: rad * 10 }); t.sun.shadow.camera.updateProjectionMatrix();
+    t.ground.position.y = wall ? -1e5 : box.min.y;
+    t.r.render(t.scene, t.cam);
+    const url = t.r.domElement.toDataURL('image/png');
+    t.scene.remove(g);
+    g.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach((m) => { ['map', 'bumpMap'].forEach((k) => { if (m[k] && !m[k].keep && !texCache.has(m[k])) m[k].dispose(); }); m.dispose(); }); });
+    return url;
   };
 
   // Build one item. opts: { evening, kelvinHex, roomTop (cm above item base, for pendant cords) }

@@ -39,7 +39,8 @@
     ]],
     ['Wall art', [
       ['art', 'Artwork 50 x 70', 50, 3, 70, '#1D1D1D'], ['art', 'Artwork 70 x 100', 70, 3, 100, '#1D1D1D'],
-      ['art', 'Canvas 100 x 70', 100, 4, 70, '#F4F3EF'], ['art', 'Small print 30 x 40', 30, 2, 40, '#C49A6C']
+      ['art', 'Canvas 100 x 70', 100, 4, 70, '#F4F3EF'], ['art', 'Small print 30 x 40', 30, 2, 40, '#C49A6C'],
+      ['art', 'Oak 3D wall panel', 150, 2, 200, '#C9A06A']
     ]],
     ['Lights', [
       ['ceiling', 'Ceiling light', 40, 40, 10, '#F2F0EA'], ['pendant', 'Pendant', 40, 40, 30, '#2F3337'],
@@ -62,7 +63,7 @@
   const TYPE_DEFAULTS = {};
   LIBRARY.forEach(([, items]) => items.forEach(([t, , w, d, h, c]) => { if (!TYPE_DEFAULTS[t]) TYPE_DEFAULTS[t] = { w, d, h, color: c }; }));
   const SHARED = ['name', 'type', 'w', 'd', 'h', 'color', 'kelvin', 'power', 'doors', 'books', 'style', 'image', 'frame', 'mat'];
-  const ART_FRAMES = { black: 'Black frame', white: 'White frame', oak: 'Oak frame', brass: 'Brass frame', none: 'No frame (canvas)' };
+  const ART_FRAMES = { black: 'Black frame', white: 'White frame', oak: 'Oak frame', brass: 'Brass frame', none: 'No frame (canvas)', oakpanel: 'Oak 3D wall panel' };
   const ART_WALL_ROT = { n: 0, e: 90, s: 180, w: 270 };
   const SHELF_DOORS = { none: 'No doors', lower: 'Doors on the lower half', full: 'Full-height doors' };
 
@@ -171,7 +172,7 @@
     if (type === 'cornersofa') o.side = it.side === 'left' ? 'left' : 'right';
     if (type === 'shelf') { o.doors = SHELF_DOORS[it.doors] ? it.doors : 'none'; o.books = it.books !== false; }
     if (it.style) o.style = String(it.style);
-    if (type === 'art') { o.frame = ART_FRAMES[it.frame] ? it.frame : 'black'; o.mat = it.mat !== false && o.frame !== 'none'; if (it.image) o.image = String(it.image); }
+    if (type === 'art') { o.frame = ART_FRAMES[it.frame] ? it.frame : 'black'; o.mat = it.mat !== false && !['none', 'oakpanel'].includes(o.frame); if (it.image) o.image = String(it.image); }
     if (isLight(type)) { o.kelvin = KELVIN[it.kelvin] ? Number(it.kelvin) : 2700; o.power = POWER[it.power] ? it.power : 'medium'; }
     return o;
   }
@@ -183,6 +184,7 @@
       openings: [], items: []
     };
     if (r.seedId) o.seedId = r.seedId;
+    if (r.seedRev) o.seedRev = r.seedRev;
     const wc = r.walls || {};
     WALLS.forEach(([k]) => { o.walls[k] = hex(wc[k], typeof r.walls === 'string' ? hex(r.walls, '#F7F7F4') : '#F7F7F4'); });
     const wf = r.wallFinish || {};
@@ -192,7 +194,8 @@
       return { id: p.id || 'o' + uid(), type, wall: ['n', 'e', 's', 'w'].includes(p.wall) ? p.wall : 's',
         offset: num(p.offset, 0, 3000, 20), width: num(p.width, 20, 1000, type === 'door' ? 90 : 120),
         height: num(p.height, 20, 800, type === 'door' ? 205 : 130), sill: type === 'door' ? 0 : num(p.sill, 0, 800, 90),
-        color: hex(p.color, '#F7F6F2'), radiator: type === 'window' && (p.radiator != null ? !!p.radiator : num(p.sill, 0, 800, 90) >= 50) };
+        color: hex(p.color, '#F7F6F2'), radiator: type === 'window' && (p.radiator != null ? !!p.radiator : num(p.sill, 0, 800, 90) >= 50),
+        leaf: type === 'door' ? p.leaf !== false : false };
     });
     o.items = (r.items || []).map((it) => normItem(it, o));
     return o;
@@ -206,7 +209,7 @@
     if (type === 'cornersofa') o.side = p.side === 'left' ? 'left' : 'right';
     if (type === 'shelf') { o.doors = SHELF_DOORS[p.doors] ? p.doors : 'none'; o.books = p.books !== false; }
     if (p.style) o.style = String(p.style);
-    if (type === 'art') { o.frame = ART_FRAMES[p.frame] ? p.frame : 'black'; o.mat = p.mat !== false && o.frame !== 'none'; if (p.image) o.image = String(p.image); }
+    if (type === 'art') { o.frame = ART_FRAMES[p.frame] ? p.frame : 'black'; o.mat = p.mat !== false && !['none', 'oakpanel'].includes(o.frame); if (p.image) o.image = String(p.image); }
     if (isLight(type)) { o.kelvin = KELVIN[p.kelvin] ? Number(p.kelvin) : 2700; o.power = POWER[p.power] ? p.power : 'medium'; }
     if (p.seedRev) o.seedRev = p.seedRev;
     return o;
@@ -218,11 +221,11 @@
     o.removedRooms = Array.isArray(s.removedRooms) ? s.removedRooms.slice() : [];
     // Starter rooms from house-data.js. A room is matched by name (so your own "Büro" counts as the office);
     // a starter room you deleted is never recreated.
-    const seedRooms = window.HOUSE_ROOMS || [];
+    const seedRooms = (window.HOUSE_ROOMS || []).filter(Boolean);
     const findRoom = (rid) => {
       const tpl = seedRooms.find((x) => x.id === rid), names = [rid].concat(tpl ? [tpl.name].concat(tpl.match || []) : []).map((n) => n.toLowerCase());
       let r = o.rooms.find((x) => x.seedId === rid) || o.rooms.find((x) => names.includes(x.name.trim().toLowerCase()));
-      if (!r && tpl && !o.removedRooms.includes(rid)) { r = normRoom(Object.assign({}, tpl, { id: 'r' + uid() })); r.seedId = rid; o.rooms.push(r); }
+      if (!r && tpl && !o.removedRooms.includes(rid)) { r = normRoom(Object.assign({}, tpl, { id: 'r' + uid() })); r.seedId = rid; r.seedRev = tpl.rev || 1; o.rooms.push(r); }
       if (r && !r.seedId) r.seedId = rid;
       return r;
     };
@@ -232,6 +235,13 @@
       o.exampleRetired = true;
     } else o.exampleRetired = true;
     seedRooms.filter((t) => t.ensure).forEach((t) => findRoom(t.id));
+    // A higher `rev` on a starter room updates its doors, windows, wall finishes and notes (sizes and furniture stay yours)
+    o.rooms.forEach((r) => {
+      const tpl = r.seedId && seedRooms.find((x) => x.id === r.seedId);
+      if (!tpl || (r.seedRev || 1) >= (tpl.rev || 1)) return;
+      const n = normRoom(Object.assign({}, tpl, { width: r.width, length: r.length, height: r.height }));
+      r.openings = n.openings; r.wallFinish = n.wallFinish; r.notes = n.notes; r.seedRev = tpl.rev;
+    });
     if (!o.rooms.length) o.rooms.push(normRoom({ name: 'Room 1' }));
     o.activeRoomId = o.rooms.some((r) => r.id === s.activeRoomId) ? s.activeRoomId : o.rooms[0].id;
     // Pieces Claude adds to house-data.js appear in My pieces once; deleting one keeps it out.
@@ -247,15 +257,25 @@
         o.rooms.forEach((r) => r.items.forEach((it) => { if (it.catalogId === ex.id) SHARED.forEach((k) => { if (ex[k] !== undefined) it[k] = ex[k]; }); }));
       }
     });
-    // Placements Claude adds to house-data.js are made once
+    // Placements Claude adds to house-data.js are made once. A placement with a `rev` and `from` moves the piece
+    // it made earlier, but only if it is still where it was put (anything you moved stays put).
     (window.HOUSE_PLACEMENTS || []).forEach((pl) => {
-      if (!pl.id || o.placedSeeds.includes(pl.id)) return;
+      if (!pl.id) return;
+      const mark = pl.rev ? pl.id + '@' + pl.rev : null;
+      if (o.placedSeeds.includes(pl.id)) {
+        if (!mark || o.placedSeeds.includes(mark)) return;
+        const r = findRoom(pl.room), f = pl.from || {};
+        const it = r && r.items.find((i) => (pl.catalogId ? i.catalogId === pl.catalogId : (i.type === pl.item.type && !i.catalogId)) &&
+          Math.abs(i.x - f.x) < 2 && Math.abs(i.y - f.y) < 2 && (f.rot == null || i.rot === f.rot));
+        if (it) { it.x = Math.min(pl.x, r.width); it.y = Math.min(pl.y, r.length); it.rot = pl.rot || 0; if (it.type === 'art') snapArt(it, r); }
+        o.placedSeeds.push(mark); return;
+      }
       const pc = pl.catalogId ? o.catalog.find((c) => c.id === pl.catalogId) : null, r = (pc || pl.item) && findRoom(pl.room);
       if (!r) return;
       const base = pc ? Object.assign({}, pc, { id: undefined, catalogId: pc.id, photos: undefined, status: undefined, link: undefined, notes: undefined }) : pl.item;
       const it = normItem(Object.assign({}, base, { x: Math.min(pl.x, r.width), y: Math.min(pl.y, r.length), rot: pl.rot || 0 }, pl.extra || {}), r);
       if (it.type === 'art') snapArt(it, r);
-      r.items.push(it); o.placedSeeds.push(pl.id);
+      r.items.push(it); o.placedSeeds.push(pl.id); if (mark) o.placedSeeds.push(mark);
     });
     return o;
   }
@@ -415,6 +435,7 @@
     if (it) {
       const p = it.catalogId && piece(it.catalogId), light = isLight(it.type);
       el.innerHTML = `<h2>${esc(it.name)}</h2>
+        <div class="ins-thumb">${thumbImg(it, 'thumb3d big')}</div>
         ${p ? `<div class="linked">${p.photos[0] ? `<img data-photo="${p.photos[0]}" alt="">` : ''}<span>From My pieces. Size, color and label changes apply to every placement of this piece (${placements(p.id)}).</span></div>` : ''}
         <label class="field"><span>Label</span><input data-item="name" value="${esc(it.name)}"></label>
         <div class="row3">
@@ -462,7 +483,8 @@
           ${isWin ? `<label class="field"><span>Sill height, cm</span><input type="number" data-op="sill" value="${op.sill}"></label>` : '<span></span>'}
         </div>
         ${isWin ? `<label class="check"><input type="checkbox" data-op="radiator" ${op.radiator ? 'checked' : ''}> Radiator below</label>`
-          : `<div class="wallrow"><input type="color" data-op="color" value="${op.color}" aria-label="Door color"><span>Door color</span><code>${op.color.toUpperCase()}</code></div>`}
+          : `<label class="check"><input type="checkbox" data-op="leaf" ${op.leaf !== false ? 'checked' : ''}> Door leaf (untick for an open passage)</label>
+             ${op.leaf !== false ? `<div class="wallrow"><input type="color" data-op="color" value="${op.color}" aria-label="Door color"><span>Door color</span><code>${op.color.toUpperCase()}</code></div>` : ''}`}
         <p class="note">Offset is from the top corner on side walls, or the left corner on top and bottom walls.</p>
         <div class="btnrow" style="margin-top:12px"><button class="btn danger" data-act="delete">Remove</button></div>`;
     } else {
@@ -474,8 +496,8 @@
     const r = room(), k = artWall(it), along = Math.round((k === 'n' || k === 's') ? it.x : it.y), centre = Math.round(it.elev + it.h / 2), p = it.catalogId && piece(it.catalogId);
     el.innerHTML = `<h2>${esc(it.name)}</h2>
       ${p ? `<div class="linked"><span>From My pieces. Changes apply to every placement of this piece (${placements(p.id)}).</span></div>` : ''}
-      <div class="art-pick">${it.image ? `<img data-photo="${it.image}" alt="">` : '<span class="art-empty">No picture yet: a placeholder is shown</span>'}
-        <div class="btnrow"><button class="btn small" data-act="artPicture">${it.image ? 'Change picture' : 'Add picture'}</button>${it.image ? '<button class="btn light small" data-act="artClear">Remove picture</button>' : ''}</div></div>
+      ${it.frame === 'oakpanel' ? '' : `<div class="art-pick">${it.image ? `<img data-photo="${it.image}" alt="">` : '<span class="art-empty">No picture yet: a placeholder is shown</span>'}
+        <div class="btnrow"><button class="btn small" data-act="artPicture">${it.image ? 'Change picture' : 'Add picture'}</button>${it.image ? '<button class="btn light small" data-act="artClear">Remove picture</button>' : ''}</div></div>`}
       <label class="field"><span>Label</span><input data-item="name" value="${esc(it.name)}"></label>
       <div class="row2">
         <label class="field"><span>Width, cm</span><input type="number" data-item="w" value="${it.w}"></label>
@@ -488,7 +510,7 @@
       </div>
       <div class="row2">
         <label class="field"><span>Frame</span><select data-item="frame">${Object.entries(ART_FRAMES).map(([f, n]) => `<option value="${f}" ${it.frame === f ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-        <label class="check" style="margin-top:22px"><input type="checkbox" data-item="mat" ${it.mat ? 'checked' : ''} ${it.frame === 'none' ? 'disabled' : ''}> White mat</label>
+        <label class="check" style="margin-top:22px"><input type="checkbox" data-item="mat" ${it.mat ? 'checked' : ''} ${['none', 'oakpanel'].includes(it.frame) ? 'disabled' : ''}> White mat</label>
       </div>
       <p class="note">Along wall is the picture's centre, from the ${k === 'n' || k === 's' ? 'left' : 'top'} corner. Drag it on the plan to slide it along a wall or move it to another wall. 150 cm is a usual centre height.</p>
       <div class="btnrow" style="margin-top:12px">
@@ -502,9 +524,33 @@
 
   // ================= Render: catalog =================
   const dims = (o) => `${o.w} x ${o.d} x ${o.h} cm`;
+  // 3D thumbnails of pieces, rendered one at a time in the background and cached for the session
+  const thumbs = new Map(), thumbQueue = [];
+  let thumbBusy = false, thumbFail = false;
+  const libFrame = (color) => color === '#F4F3EF' ? 'none' : color === '#C49A6C' ? 'oak' : color === '#C9A06A' ? 'oakpanel' : 'black';
+  const thumbKey = (o) => JSON.stringify(['type', 'w', 'd', 'h', 'color', 'style', 'doors', 'books', 'side', 'frame', 'mat', 'image', 'kelvin'].map((k) => o[k]));
+  function thumbImg(o, cls) {
+    const key = thumbKey(o), url = thumbs.get(key);
+    if (!url && !thumbFail && window.THREE && window.HouseModels) { if (!thumbQueue.some((q) => q.key === key)) thumbQueue.push({ key, o: clone(o) }); pumpThumbs(); }
+    return `<img class="${cls || 'thumb3d'}" data-thumb="${esc(key)}" ${url ? `src="${url}"` : ''} alt="">`;
+  }
+  function pumpThumbs() {
+    if (thumbBusy || !thumbQueue.length) return;
+    thumbBusy = true;
+    (window.requestIdleCallback || ((f) => setTimeout(f, 16)))(() => {
+      const job = thumbQueue.shift();
+      try {
+        HouseModels.init(THREE);
+        const url = HouseModels.thumbnail(job.o, { photo: photoFor3D });
+        thumbs.set(job.key, url);
+        $$('img[data-thumb]').forEach((img) => { if (img.dataset.thumb === job.key) img.src = url; });
+      } catch (e) { thumbFail = true; thumbQueue.length = 0; }
+      thumbBusy = false; pumpThumbs();
+    });
+  }
   function pieceCard(p) {
     const st = p.status === 'own' ? '' : `<span class="badge want">${p.status === 'ordered' ? 'Ordered' : 'Considering'}</span>`;
-    return `<li class="piece"><div class="pic" style="--c:${p.color}">${p.photos[0] ? `<img data-photo="${p.photos[0]}" alt="">` : ''}</div>
+    return `<li class="piece"><div class="pic" style="--c:${p.color}">${p.photos[0] ? `<img data-photo="${p.photos[0]}" alt="">` : thumbImg(p)}</div>
       <div class="txt"><b>${esc(p.name)}</b><small>${dims(p)}${st}${placements(p.id) ? `<span class="badge">${placements(p.id)} placed</span>` : ''}</small></div>
       <div class="acts"><button class="btn small" data-place="${p.id}">Place</button><button class="btn light small" data-edit-piece="${p.id}">Edit</button></div></li>`;
   }
@@ -518,7 +564,7 @@
         : `<p class="empty">Add the furniture and lights you own or are considering, with photos and sizes. Each piece can then be placed in any room, and editing it updates every placement.</p>`;
     } else {
       body = LIBRARY.map(([cat, items], ci) => `<h3>${cat}</h3><div class="lib-grid">${items.map(([type, name, w, d, h], ii) =>
-        `<button data-lib="${ci}:${ii}"><span>${name}</span><small>${w} x ${d} x ${h} cm</small></button>`).join('')}</div>`).join('');
+        `<button data-lib="${ci}:${ii}">${thumbImg(Object.assign({ type, w, d, h, color: LIBRARY[ci][1][ii][5] }, type === 'art' ? { frame: libFrame(LIBRARY[ci][1][ii][5]), mat: !['#F4F3EF', '#C9A06A'].includes(LIBRARY[ci][1][ii][5]) } : {}))}<span>${name}</span><small>${w} x ${d} x ${h} cm</small></button>`).join('')}</div>`).join('');
     }
     el.innerHTML = `<div class="sec-head"><h2>Furniture and lights</h2><button class="btn small" data-new-piece>New piece</button></div>
       <div class="tabs" role="tablist">
@@ -580,6 +626,30 @@
         return `<path class="body" fill="${c}" d="${outline}"/>` +
           `<rect class="detail" x="${x0}" y="${y0}" width="${w}" height="${back}"/><line class="detail" x1="${cx}" x2="${cx + cw}" y1="${y0 + md}" y2="${y0 + md}"/>`;
       }
+      case 'chair': {
+        if (it.style === 'tub') { // rounded shell with arms, open at the front
+          const r = w / 2; return `<path class="body" fill="${c}" d="M${x0} ${y0 + r * 0.9}A${r} ${r * 0.9} 0 0 1 ${x0 + w} ${y0 + r * 0.9}V${y0 + d * 0.8}Q${x0 + w} ${y0 + d} ${x0 + w * 0.8} ${y0 + d}H${x0 + w * 0.2}Q${x0} ${y0 + d} ${x0} ${y0 + d * 0.8}Z"/>` +
+            `<path class="detail" d="M${x0 + 6} ${y0 + d * 0.72}V${y0 + r * 0.9}A${r - 6} ${r * 0.9 - 6} 0 0 1 ${x0 + w - 6} ${y0 + r * 0.9}V${y0 + d * 0.72}"/>`;
+        }
+        const bk = Math.min(8, d * 0.18); return base + `<rect class="detail" x="${x0 + 2}" y="${y0}" width="${w - 4}" height="${bk}" rx="2"/>`;
+      }
+      case 'table': case 'desk': { // top with the legs shown as corner dots
+        const k = Math.min(6, Math.min(w, d) * 0.08), t = Math.max(2, k * 0.6);
+        return base + [[1, 1], [1, -1], [-1, 1], [-1, -1]].map(([sx, sy]) => `<circle class="detail" cx="${sx * (w / 2 - k)}" cy="${sy * (d / 2 - k)}" r="${t}"/>`).join('');
+      }
+      case 'shelf': { // shelf front with uprights; doors drawn as a line across
+        let p = ''; const n = Math.max(1, Math.round(w / 40)); for (let k = 1; k < n; k++) p += `<line class="detail" x1="${x0 + (w * k) / n}" x2="${x0 + (w * k) / n}" y1="${y0}" y2="${y0 + d}"/>`;
+        return base + p + `<line class="detail" x1="${x0}" x2="${x0 + w}" y1="${y0 + d - 2}" y2="${y0 + d - 2}"/>`;
+      }
+      case 'cabinet': case 'wardrobe': case 'counter': case 'vanity': { // doors along the front
+        const n = Math.max(1, Math.round(w / (it.type === 'wardrobe' ? 50 : 55))); let p = '';
+        for (let k = 1; k < n; k++) p += `<line class="detail" x1="${x0 + (w * k) / n}" x2="${x0 + (w * k) / n}" y1="${y0 + d * 0.65}" y2="${y0 + d}"/>`;
+        if (it.type === 'wardrobe') p += `<line class="detail" stroke-dasharray="4 3" x1="${x0 + 4}" x2="${x0 + w - 4}" y1="0" y2="0"/>`;
+        if (it.type === 'vanity') p += `<ellipse class="detail" cx="0" cy="${d * 0.05}" rx="${w * 0.28}" ry="${d * 0.25}"/>`;
+        if (it.type === 'counter' && w >= 120) p += `<rect class="detail" x="${w * 0.1}" y="${y0 + d * 0.2}" width="${Math.min(50, w * 0.3)}" height="${d * 0.55}" rx="4"/>`;
+        return base + p + `<line class="detail" x1="${x0}" x2="${x0 + w}" y1="${y0 + d * 0.65}" y2="${y0 + d * 0.65}"/>`;
+      }
+      case 'appliance': return base + `<rect class="detail" x="${x0 + 3}" y="${y0 + d - 5}" width="${w - 6}" height="3"/>`;
       case 'bath': return base + `<rect class="detail" x="${x0 + 8}" y="${y0 + 8}" width="${w - 16}" height="${d - 16}" rx="${Math.min(w, d) / 3}"/>`;
       case 'toilet': return `<rect class="body" x="${x0}" y="${y0}" width="${w}" height="${d * 0.28}" rx="3" fill="${c}"/><ellipse class="body" cx="0" cy="${y0 + d * 0.62}" rx="${w / 2}" ry="${d * 0.36}" fill="${c}"/>`;
       case 'shower': return base + `<path class="detail" d="M${x0} ${y0}L${x0 + w} ${y0 + d}M${x0 + w} ${y0}L${x0} ${y0 + d}"/>`;
@@ -597,7 +667,7 @@
     const M = { n: 'matrix(1 0 0 1 0 0)', e: `matrix(0 1 -1 0 ${W} 0)`, s: `matrix(1 0 0 -1 0 ${L})`, w: 'matrix(0 1 1 0 0 0)' };
     for (const o of r.openings) {
       let g = `<rect x="${o.offset}" y="${-T - 1}" width="${o.width}" height="${T + 2}" fill="${r.floor}"/>`;
-      if (o.type === 'door') g += `<rect x="${o.offset}" y="0" width="${o.width}" height="${o.width}" fill="transparent"/><path class="line" d="M${o.offset} 0L${o.offset} ${o.width}M${o.offset + o.width} 0A${o.width} ${o.width} 0 0 1 ${o.offset} ${o.width}"/>`;
+      if (o.type === 'door' && o.leaf !== false) g += `<rect x="${o.offset}" y="0" width="${o.width}" height="${o.width}" fill="transparent"/><path class="line" d="M${o.offset} 0L${o.offset} ${o.width}M${o.offset + o.width} 0A${o.width} ${o.width} 0 0 1 ${o.offset} ${o.width}"/>`;
       else g += `<rect class="glass" x="${o.offset}" y="${-T}" width="${o.width}" height="${T}"/><line class="line" x1="${o.offset}" x2="${o.offset + o.width}" y1="${-T / 2}" y2="${-T / 2}"/>`;
       if (selected && selected.id === o.id) g += `<rect class="sel-outline" x="${o.offset - 3}" y="${-T - 3}" width="${o.width + 6}" height="${(o.type === 'door' ? o.width + T : T) + 6}"/>`;
       h += `<g class="opening" data-opening="${o.id}" transform="${M[o.wall]}">${g}</g>`;
@@ -729,7 +799,7 @@
         if (s.axis === 'x') add(mesh, mid, y0 + hh / 2, o); else add(mesh, o, y0 + hh / 2, mid);
         if (!mats.includes(m)) mats.push(m); return mesh;
       };
-      const ops = r.openings.filter((o) => o.wall === k).map((o) => ({ a: o.offset, b: o.offset + o.width, sill: o.sill, top: Math.min(o.sill + o.height, H), type: o.type, radiator: o.radiator, color: o.color })).sort((p, q) => p.a - q.a);
+      const ops = r.openings.filter((o) => o.wall === k).map((o) => ({ a: o.offset, b: o.offset + o.width, sill: o.sill, top: Math.min(o.sill + o.height, H), type: o.type, radiator: o.radiator, color: o.color, leaf: o.leaf })).sort((p, q) => p.a - q.a);
       let cur = s.start;
       const skirt = (a, b) => along(Math.max(a, 0), Math.min(b, s.axis === 'x' ? W : L), 0, 8, 1.5, T / 2 + 0.75, skirtM);
       for (const o of ops) {
@@ -760,7 +830,7 @@
               if (s.inward < 0) rad.rotation.y += Math.PI;
               g.add(rad); rad.traverse((m) => { if (m.material && !mats.includes(m.material)) mats.push(m.material); });
             }
-          } else {
+          } else if (o.leaf !== false) {
             const leaf = along(a + 1, o.b - 1, 0, o.top - 0.5, 4, T / 2 - 2, HM.mat(o.color, { rough: 0.45 }));
             if (leaf) { const hm = HM.mat('#9A9C9E', { rough: 0.25, metal: 1 }); const hx = s.inward > 0 ? o.b - 8 : o.b - 8; along(hx - 7, hx, 100, 102.5, 2, T / 2 + 1, hm); }
           }
@@ -986,7 +1056,11 @@
   function addFromLibrary(ci, ii) {
     const [type, name, w, d, h, color] = LIBRARY[ci][1][ii], r = room();
     const it = normItem({ type, name, w, d, h, color, x: snap(r.width / 2), y: snap(r.length / 2) }, r);
-    if (type === 'art') { it.frame = color === '#F4F3EF' ? 'none' : color === '#C49A6C' ? 'oak' : 'black'; it.mat = it.frame !== 'none'; snapArt(it, r, wallTarget !== 'all' ? wallTarget : 'n'); }
+    if (type === 'art') {
+      it.frame = libFrame(color); it.mat = !['none', 'oakpanel'].includes(it.frame);
+      if (it.frame === 'oakpanel') it.elev = 8; // sits on the skirting
+      snapArt(it, r, wallTarget !== 'all' ? wallTarget : 'n');
+    }
     r.items.push(it); selected = { kind: 'item', id: it.id }; commit();
   }
   function addOpening(type) {
@@ -1121,7 +1195,7 @@
       else if (f === 'side') it.side = t.value === 'left' ? 'left' : 'right';
       else if (f === 'doors') it.doors = SHELF_DOORS[t.value] ? t.value : 'none';
       else if (f === 'books') it.books = t.checked;
-      else if (f === 'frame') { it.frame = ART_FRAMES[t.value] ? t.value : 'black'; if (it.frame === 'none') it.mat = false; }
+      else if (f === 'frame') { it.frame = ART_FRAMES[t.value] ? t.value : 'black'; if (['none', 'oakpanel'].includes(it.frame)) it.mat = false; }
       else if (f === 'mat') it.mat = t.checked;
       else it[f] = num(t.value, 1, 3000, it[f]);
       syncToPiece(it); commit();
@@ -1139,6 +1213,7 @@
       if (f === 'type') { op.type = t.value; if (op.type === 'door') { op.sill = 0; op.height = 205; op.radiator = false; op.color = op.color || '#F7F6F2'; } else { op.sill = 90; op.height = 130; op.radiator = true; } }
       else if (f === 'wall') op.wall = t.value;
       else if (f === 'radiator') op.radiator = t.checked;
+      else if (f === 'leaf') op.leaf = t.checked;
       else if (f === 'color') op.color = hex(t.value, op.color);
       else op[f] = num(t.value, 0, 3000, op[f]);
       commit();
