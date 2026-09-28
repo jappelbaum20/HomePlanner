@@ -116,7 +116,9 @@
     };
   })();
   const photoCache = new Map();
+  // Photos are either stored in this browser (IndexedDB) or, for tour photos shipped with the app, a file path ('url:...')
   async function getPhoto(id) {
+    if (id.startsWith('url:')) return id.slice(4);
     if (photoCache.has(id)) return photoCache.get(id);
     try { const u = await Store.getPhoto(id); if (u) photoCache.set(id, u); return u; } catch (e) { return null; }
   }
@@ -190,6 +192,7 @@
     };
     if (r.seedId) o.seedId = r.seedId;
     if (r.seedRev) o.seedRev = r.seedRev;
+    o.photoLabels = {}; Object.entries(r.photoLabels || {}).forEach(([k, v]) => { if (o.photos.includes(k)) o.photoLabels[k] = String(v); });
     const wc = r.walls || {};
     WALLS.forEach(([k]) => { o.walls[k] = hex(wc[k], typeof r.walls === 'string' ? hex(r.walls, '#F7F7F4') : '#F7F7F4'); });
     const wf = r.wallFinish || {};
@@ -249,6 +252,16 @@
       const n = normRoom(tpl.resize ? tpl : Object.assign({}, tpl, { width: r.width, length: r.length, height: r.height }));
       r.openings = n.openings; r.wallFinish = n.wallFinish; r.notes = n.notes; r.seedRev = tpl.rev;
       if (tpl.resize) { Object.assign(r, { width: n.width, length: n.length, height: n.height, level: n.level, floor: n.floor, floorFinish: n.floorFinish }); resized.push(r); }
+    });
+    // Tour photos listed on a starter room are added once, with their label; a photo you delete stays deleted
+    o.removedPhotos = Array.isArray(s.removedPhotos) ? s.removedPhotos.slice() : [];
+    o.rooms.forEach((r) => {
+      const tpl = r.seedId && seedRooms.find((x) => x.id === r.seedId);
+      (tpl && tpl.tourPhotos || []).forEach((ph) => {
+        const id = 'url:' + ph.src;
+        if (o.removedPhotos.includes(id) || r.photos.includes(id)) return;
+        r.photos.push(id); r.photoLabels[id] = ph.label;
+      });
     });
     if (!o.rooms.length) o.rooms.push(normRoom({ name: 'Room 1' }));
     o.activeRoomId = o.rooms.some((r) => r.id === s.activeRoomId) ? s.activeRoomId : o.rooms[0].id;
@@ -361,8 +374,9 @@
   }
 
   // ================= Shared UI pieces =================
-  const photoStrip = (ids, owner) => `<div class="photos" data-owner="${owner}">${(ids || []).map((id) =>
-    `<button type="button" class="thumb" data-photo-open="${id}" data-owner="${owner}" aria-label="Open photo"><img data-photo="${id}" alt=""></button>`).join('')}
+  const photoLabel = (owner, id) => { const [k, rid] = owner.split(':'); const r = k === 'room' && state.rooms.find((x) => x.id === rid); return (r && r.photoLabels && r.photoLabels[id]) || ''; };
+  const photoStrip = (ids, owner) => `<div class="photos" data-owner="${owner}">${(ids || []).map((id) => { const lab = photoLabel(owner, id);
+    return `<button type="button" class="thumb${lab ? ' labelled' : ''}" data-photo-open="${id}" data-owner="${owner}" aria-label="${esc(lab || 'Open photo')}" title="${esc(lab)}"><img data-photo="${id}" alt="${esc(lab)}" loading="lazy">${lab ? `<span class="cap">${esc(lab)}</span>` : ''}</button>`; }).join('')}
     <button type="button" class="thumb add" data-photo-add="${owner}">Add photos</button></div>`;
   function ownerPhotos(owner) {
     if (owner === 'draft') return draft && draft.obj.photos;
@@ -540,7 +554,7 @@
   const thumbs = new Map(), thumbQueue = [];
   let thumbBusy = false, thumbFail = false;
   const libFrame = (color) => color === '#F4F3EF' ? 'none' : color === '#C49A6C' ? 'oak' : color === '#C9A06A' ? 'oakpanel' : 'black';
-  const THUMB_VERSION = 2; // bump when models change so saved thumbnails are redrawn
+  const THUMB_VERSION = 3; // bump when models change so saved thumbnails are redrawn
   const thumbKey = (o) => JSON.stringify([THUMB_VERSION].concat(['type', 'w', 'd', 'h', 'color', 'style', 'doors', 'books', 'side', 'frame', 'mat', 'image', 'kelvin'].map((k) => o[k])));
   const showThumb = (key, url) => $$('img[data-thumb]').forEach((img) => { if (img.dataset.thumb === key) img.src = url; });
   function thumbImg(o, cls) {
@@ -1061,14 +1075,28 @@
 
   // Lightbox
   const lb = $('#lightbox'); let lbCur = null;
-  async function openLightbox(owner, id) { lbCur = { owner, id }; $('#lbImg').src = (await getPhoto(id)) || ''; lb.showModal(); }
+  async function openLightbox(owner, id) {
+    lbCur = { owner, id }; $('#lbImg').src = (await getPhoto(id)) || '';
+    const cap = $('#lbCap'), room = owner.startsWith('room:');
+    cap.hidden = !room; cap.value = photoLabel(owner, id); lb.showModal();
+  }
+  $('#lbCap').addEventListener('change', (e) => {
+    if (!lbCur || !lbCur.owner.startsWith('room:')) return;
+    const r = state.rooms.find((x) => x.id === lbCur.owner.split(':')[1]); if (!r) return;
+    const v = e.target.value.trim(); if (v) r.photoLabels[lbCur.id] = v; else delete r.photoLabels[lbCur.id];
+    save(); refreshStrips(lbCur.owner);
+  });
   lb.addEventListener('click', (e) => {
     const a = e.target.closest('[data-lb]'); if (!a && e.target !== lb) return;
     if (a && a.dataset.lb === 'delete' && lbCur) {
       const arr = ownerPhotos(lbCur.owner);
       if (arr) { const i = arr.indexOf(lbCur.id); if (i >= 0) arr.splice(i, 1); }
       if (lbCur.owner === 'draft') { if (draft.newPhotos.includes(lbCur.id)) Store.delPhoto(lbCur.id); else draft.removed.push(lbCur.id); }
-      else { Store.delPhoto(lbCur.id); save(); renderRooms(); }
+      else {
+        if (lbCur.id.startsWith('url:')) { if (!state.removedPhotos.includes(lbCur.id)) state.removedPhotos.push(lbCur.id); } else Store.delPhoto(lbCur.id);
+        const r = lbCur.owner.startsWith('room:') && state.rooms.find((x) => x.id === lbCur.owner.split(':')[1]); if (r) delete r.photoLabels[lbCur.id];
+        save(); renderRooms();
+      }
       refreshStrips(lbCur.owner); toast('Photo deleted');
     }
     lb.close();
@@ -1118,7 +1146,7 @@
 
   async function exportBackup() {
     const ids = new Set(); state.rooms.forEach((r) => r.photos.forEach((i) => ids.add(i))); state.catalog.forEach((p) => p.photos.forEach((i) => ids.add(i)));
-    const photos = {}; for (const id of ids) { const u = await getPhoto(id); if (u) photos[id] = u; }
+    const photos = {}; for (const id of ids) { if (id.startsWith('url:')) continue; const u = await getPhoto(id); if (u) photos[id] = u; } // tour photos ship with the app
     const blob = new Blob([JSON.stringify({ format: 'house-planner-backup', version: 2, exportedAt: new Date().toISOString(), state, photos })], { type: 'application/json' });
     const slug = (state.name || 'House').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'House';
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${today()}_${slug}_Planner-Backup_v1.json`;

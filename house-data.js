@@ -78,7 +78,7 @@ window.HOUSE_PIECES = [
 window.HOUSE_ROOMS = [
   {
     "id": "hall0",
-    "rev": 3,
+    "rev": 4,
     "resize": true,
     "ensure": true,
     "name": "Entrance hall",
@@ -96,7 +96,7 @@ window.HOUSE_ROOMS = [
     "floor": "#D9B98A",
     "floorFinish": "parquet",
     "wallFinish": {},
-    "notes": "Measured from the Giraffe360 tour floor plan (about ±4 %). Stairs up along the west wall, front door at the north end.",
+    "notes": "Measured from the Giraffe360 tour floor plan (about ±4 %). Stairs up along the west wall, front door at the north end. Front door dark teal; stairs with dark wood treads, white risers and a glass balustrade.",
     "openings": [
       {
         "type": "door",
@@ -104,7 +104,7 @@ window.HOUSE_ROOMS = [
         "offset": 92,
         "width": 89,
         "height": 210,
-        "color": "#1F2A36"
+        "color": "#1E4B57"
       },
       {
         "type": "door",
@@ -119,6 +119,56 @@ window.HOUSE_ROOMS = [
         "offset": 352,
         "width": 73,
         "height": 200
+      }
+    ],
+    "tourPhotos": [
+      {
+        "src": "photos/tour/01_hall0_view1.jpg",
+        "label": "Entrance hall (by the front door), looking south (tour photo)"
+      },
+      {
+        "src": "photos/tour/01_hall0_view2.jpg",
+        "label": "Entrance hall (by the front door), looking south-west (tour photo)"
+      },
+      {
+        "src": "photos/tour/01_hall0_view3.jpg",
+        "label": "Entrance hall (by the front door), looking north-west (tour photo)"
+      },
+      {
+        "src": "photos/tour/01_hall0_view4.jpg",
+        "label": "Entrance hall (by the front door), looking north (tour photo)"
+      },
+      {
+        "src": "photos/tour/01_hall0_view5.jpg",
+        "label": "Entrance hall (by the front door), looking north-east (tour photo)"
+      },
+      {
+        "src": "photos/tour/01_hall0_view6.jpg",
+        "label": "Entrance hall (by the front door), looking south-east (tour photo)"
+      },
+      {
+        "src": "photos/tour/02_hall0_view1.jpg",
+        "label": "Entrance hall (by the living-room door), looking south-east (tour photo)"
+      },
+      {
+        "src": "photos/tour/02_hall0_view2.jpg",
+        "label": "Entrance hall (by the living-room door), looking south-west (tour photo)"
+      },
+      {
+        "src": "photos/tour/02_hall0_view3.jpg",
+        "label": "Entrance hall (by the living-room door), looking west (tour photo)"
+      },
+      {
+        "src": "photos/tour/02_hall0_view4.jpg",
+        "label": "Entrance hall (by the living-room door), looking north-west (tour photo)"
+      },
+      {
+        "src": "photos/tour/02_hall0_view5.jpg",
+        "label": "Entrance hall (by the living-room door), looking north-east (tour photo)"
+      },
+      {
+        "src": "photos/tour/02_hall0_view6.jpg",
+        "label": "Entrance hall (by the living-room door), looking east (tour photo)"
       }
     ]
   },
@@ -178,6 +228,32 @@ window.HOUSE_ROOMS = [
         "width": 69,
         "height": 200
       }
+    ],
+    "tourPhotos": [
+      {
+        "src": "photos/tour/03_living_view1.jpg",
+        "label": "Living room, looking south (tour photo)"
+      },
+      {
+        "src": "photos/tour/03_living_view2.jpg",
+        "label": "Living room, looking south-west (tour photo)"
+      },
+      {
+        "src": "photos/tour/03_living_view3.jpg",
+        "label": "Living room, looking north-west (tour photo)"
+      },
+      {
+        "src": "photos/tour/03_living_view4.jpg",
+        "label": "Living room, looking north (tour photo)"
+      },
+      {
+        "src": "photos/tour/03_living_view5.jpg",
+        "label": "Living room, looking north-east (tour photo)"
+      },
+      {
+        "src": "photos/tour/03_living_view6.jpg",
+        "label": "Living room, looking south-east (tour photo)"
+      }
     ]
   },
   {
@@ -214,6 +290,32 @@ window.HOUSE_ROOMS = [
         "offset": 234,
         "width": 73,
         "height": 200
+      }
+    ],
+    "tourPhotos": [
+      {
+        "src": "photos/tour/04_kitchen_view1.jpg",
+        "label": "Kitchen, looking south (tour photo)"
+      },
+      {
+        "src": "photos/tour/04_kitchen_view2.jpg",
+        "label": "Kitchen, looking south-west (tour photo)"
+      },
+      {
+        "src": "photos/tour/04_kitchen_view3.jpg",
+        "label": "Kitchen, looking north-west (tour photo)"
+      },
+      {
+        "src": "photos/tour/04_kitchen_view4.jpg",
+        "label": "Kitchen, looking north (tour photo)"
+      },
+      {
+        "src": "photos/tour/04_kitchen_view5.jpg",
+        "label": "Kitchen, looking north-east (tour photo)"
+      },
+      {
+        "src": "photos/tour/04_kitchen_view6.jpg",
+        "label": "Kitchen, looking south-east (tour photo)"
       }
     ]
   },
@@ -257,6 +359,32 @@ window.HOUSE_ROOMS = [
         "offset": 50,
         "width": 83,
         "height": 200
+      }
+    ],
+    "tourPhotos": [
+      {
+        "src": "photos/tour/05_landing1_view1.jpg",
+        "label": "Landing, looking south (tour photo)"
+      },
+      {
+        "src": "photos/tour/05_landing1_view2.jpg",
+        "label": "Landing, looking south-west (tour photo)"
+      },
+      {
+        "src": "photos/tour/05_landing1_view3.jpg",
+        "label": "Landing, looking west (tour photo)"
+      },
+      {
+        "src": "photos/tour/05_landing1_view4.jpg",
+        "label": "Landing, looking north (tour photo)"
+      },
+      {
+        "src": "photos/tour/05_landing1_view5.jpg",
+        "label": "Landing, looking north-east (tour photo)"
+      },
+      {
+        "src": "photos/tour/05_landing1_view6.jpg",
+        "label": "Landing, looking east (tour photo)"
       }
     ]
   },
@@ -305,6 +433,32 @@ window.HOUSE_ROOMS = [
         "width": 83,
         "height": 200
       }
+    ],
+    "tourPhotos": [
+      {
+        "src": "photos/tour/08_office_view1.jpg",
+        "label": "Office, looking south (tour photo)"
+      },
+      {
+        "src": "photos/tour/08_office_view2.jpg",
+        "label": "Office, looking south-west (tour photo)"
+      },
+      {
+        "src": "photos/tour/08_office_view3.jpg",
+        "label": "Office, looking north-west (tour photo)"
+      },
+      {
+        "src": "photos/tour/08_office_view4.jpg",
+        "label": "Office, looking north (tour photo)"
+      },
+      {
+        "src": "photos/tour/08_office_view5.jpg",
+        "label": "Office, looking north-east (tour photo)"
+      },
+      {
+        "src": "photos/tour/08_office_view6.jpg",
+        "label": "Office, looking south-east (tour photo)"
+      }
     ]
   },
   {
@@ -350,6 +504,32 @@ window.HOUSE_ROOMS = [
         "width": 73,
         "height": 200
       }
+    ],
+    "tourPhotos": [
+      {
+        "src": "photos/tour/06_bedroom2_view1.jpg",
+        "label": "Second bedroom, looking north-east (tour photo)"
+      },
+      {
+        "src": "photos/tour/06_bedroom2_view2.jpg",
+        "label": "Second bedroom, looking south-east (tour photo)"
+      },
+      {
+        "src": "photos/tour/06_bedroom2_view3.jpg",
+        "label": "Second bedroom, looking south (tour photo)"
+      },
+      {
+        "src": "photos/tour/06_bedroom2_view4.jpg",
+        "label": "Second bedroom, looking south-west (tour photo)"
+      },
+      {
+        "src": "photos/tour/06_bedroom2_view5.jpg",
+        "label": "Second bedroom, looking north-west (tour photo)"
+      },
+      {
+        "src": "photos/tour/06_bedroom2_view6.jpg",
+        "label": "Second bedroom, looking north (tour photo)"
+      }
     ]
   },
   {
@@ -392,11 +572,37 @@ window.HOUSE_ROOMS = [
         "width": 62,
         "height": 200
       }
+    ],
+    "tourPhotos": [
+      {
+        "src": "photos/tour/07_bathroom_view1.jpg",
+        "label": "Bathroom, looking north (tour photo)"
+      },
+      {
+        "src": "photos/tour/07_bathroom_view2.jpg",
+        "label": "Bathroom, looking east (tour photo)"
+      },
+      {
+        "src": "photos/tour/07_bathroom_view3.jpg",
+        "label": "Bathroom, looking south-east (tour photo)"
+      },
+      {
+        "src": "photos/tour/07_bathroom_view4.jpg",
+        "label": "Bathroom, looking south (tour photo)"
+      },
+      {
+        "src": "photos/tour/07_bathroom_view5.jpg",
+        "label": "Bathroom, looking west (tour photo)"
+      },
+      {
+        "src": "photos/tour/07_bathroom_view6.jpg",
+        "label": "Bathroom, looking north-west (tour photo)"
+      }
     ]
   },
   {
     "id": "landing2",
-    "rev": 3,
+    "rev": 4,
     "resize": true,
     "ensure": true,
     "name": "Attic landing",
@@ -408,10 +614,15 @@ window.HOUSE_ROOMS = [
     "width": 186,
     "length": 444,
     "height": 225,
-    "floor": "#D9B98A",
-    "floorFinish": "parquet",
-    "wallFinish": {},
-    "notes": "Measured from the Giraffe360 tour floor plan (about ±4 %). ",
+    "floor": "#E4D3B5",
+    "floorFinish": "wood",
+    "wallFinish": {
+      "n": "panelling",
+      "e": "panelling",
+      "s": "panelling",
+      "w": "panelling"
+    },
+    "notes": "Measured from the Giraffe360 tour floor plan (about ±4 %).  White wood panelling, mirrored built-in wardrobe, light laminate floor.",
     "openings": [
       {
         "type": "door",
@@ -426,6 +637,32 @@ window.HOUSE_ROOMS = [
         "offset": 114,
         "width": 73,
         "height": 200
+      }
+    ],
+    "tourPhotos": [
+      {
+        "src": "photos/tour/09_landing2_view1.jpg",
+        "label": "Attic landing, looking west (tour photo)"
+      },
+      {
+        "src": "photos/tour/09_landing2_view2.jpg",
+        "label": "Attic landing, looking north (tour photo)"
+      },
+      {
+        "src": "photos/tour/09_landing2_view3.jpg",
+        "label": "Attic landing, looking north-east (tour photo)"
+      },
+      {
+        "src": "photos/tour/09_landing2_view4.jpg",
+        "label": "Attic landing, looking east (tour photo)"
+      },
+      {
+        "src": "photos/tour/09_landing2_view5.jpg",
+        "label": "Attic landing, looking south (tour photo)"
+      },
+      {
+        "src": "photos/tour/09_landing2_view6.jpg",
+        "label": "Attic landing, looking south-west (tour photo)"
       }
     ]
   },
@@ -476,6 +713,32 @@ window.HOUSE_ROOMS = [
         "sill": 0,
         "radiator": false
       }
+    ],
+    "tourPhotos": [
+      {
+        "src": "photos/tour/10_bedroom_view1.jpg",
+        "label": "Bedroom, looking south-east (tour photo)"
+      },
+      {
+        "src": "photos/tour/10_bedroom_view2.jpg",
+        "label": "Bedroom, looking south (tour photo)"
+      },
+      {
+        "src": "photos/tour/10_bedroom_view3.jpg",
+        "label": "Bedroom, looking south-west (tour photo)"
+      },
+      {
+        "src": "photos/tour/10_bedroom_view4.jpg",
+        "label": "Bedroom, looking north-west (tour photo)"
+      },
+      {
+        "src": "photos/tour/10_bedroom_view5.jpg",
+        "label": "Bedroom, looking north (tour photo)"
+      },
+      {
+        "src": "photos/tour/10_bedroom_view6.jpg",
+        "label": "Bedroom, looking north-east (tour photo)"
+      }
     ]
   },
   {
@@ -512,6 +775,32 @@ window.HOUSE_ROOMS = [
         "height": 200,
         "leaf": false
       }
+    ],
+    "tourPhotos": [
+      {
+        "src": "photos/tour/11_attic_view1.jpg",
+        "label": "Attic room, looking south-east (tour photo)"
+      },
+      {
+        "src": "photos/tour/11_attic_view2.jpg",
+        "label": "Attic room, looking south (tour photo)"
+      },
+      {
+        "src": "photos/tour/11_attic_view3.jpg",
+        "label": "Attic room, looking south-west (tour photo)"
+      },
+      {
+        "src": "photos/tour/11_attic_view4.jpg",
+        "label": "Attic room, looking north-west (tour photo)"
+      },
+      {
+        "src": "photos/tour/11_attic_view5.jpg",
+        "label": "Attic room, looking north (tour photo)"
+      },
+      {
+        "src": "photos/tour/11_attic_view6.jpg",
+        "label": "Attic room, looking north-east (tour photo)"
+      }
     ]
   }
 ];
@@ -541,8 +830,10 @@ window.HOUSE_PLACEMENTS = [
     item: { type: 'appliance', style: 'tallovens', name: 'Tall units with ovens', w: 100, d: 60, h: 225, color: '#4A4440' } },
   { id: 'bath-toilet', room: 'bathroom', x: 30, y: 27, item: { type: 'toilet', name: 'Wall-hung WC', w: 37, d: 54, h: 42, color: '#FAFAF8' } },
   { id: 'bath-vanity', room: 'bathroom', x: 103, y: 20, item: { type: 'vanity', name: 'Basin on vanity', w: 59, d: 40, h: 85, color: '#C49A6C' } },
-  { id: 'bath-tub', room: 'bathroom', x: 223, y: 40, item: { type: 'bath', name: 'Bathtub', w: 167, d: 80, h: 58, color: '#FAFAF8' } },
-  { id: 'hall0-stairs', room: 'hall0', x: 40, y: 211, item: { type: 'stairs', name: 'Stairs up', w: 81, d: 271, h: 225, color: '#9A6B3F' } },
+  { id: 'bath-tub', rev: 2, from: { x: 223, y: 40 }, room: 'bathroom', x: 223, y: 40, extra: { style: 'screen', name: 'Bath with shower screen' },
+    item: { type: 'bath', style: 'screen', name: 'Bath with shower screen', w: 167, d: 80, h: 58, color: '#FAFAF8' } },
+  { id: 'hall0-stairs', rev: 2, from: { x: 40, y: 211 }, room: 'hall0', x: 40, y: 211, extra: { color: '#5E3A20', style: 'glass' },
+    item: { type: 'stairs', style: 'glass', name: 'Stairs up', w: 81, d: 271, h: 225, color: '#5E3A20' } },
   { id: 'landing1-stairs', room: 'landing1', x: 51, y: 136, item: { type: 'stairs', name: 'Stairs up', w: 87, d: 272, h: 213, color: '#9A6B3F' } },
   { id: 'landing1-cupboard', room: 'landing1', x: 159, y: 472, rot: 90, item: { type: 'wardrobe', name: 'Built-in cupboard', w: 145, d: 38, h: 200, color: '#F2F1EC' } },
   { id: 'landing2-stairs', room: 'landing2', x: 48, y: 129, item: { type: 'stairs', name: 'Stairs up', w: 91, d: 260, h: 225, color: '#C8A77E' } }

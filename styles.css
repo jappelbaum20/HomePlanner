@@ -215,3 +215,9 @@ dialog::backdrop { background: rgba(29,33,36,.55); }
 .lib-grid button .thumb3d { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #F3F2EE; border-radius: 3px; margin-bottom: 4px; display: block; }
 .ins-thumb { margin: -2px 0 10px; }
 .ins-thumb .thumb3d.big { width: 100%; max-height: 150px; aspect-ratio: 4 / 3; object-fit: contain; background: #F3F2EE; border-radius: 6px; display: block; }
+
+/* Photo labels */
+.thumb { position: relative; }
+.thumb .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 2px 4px; font-size: 10px; line-height: 1.25; color: #fff; background: linear-gradient(transparent, rgba(0,0,0,.72)); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.photos { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+.lb-cap { width: 100%; margin: 10px 0 4px; border: 1px solid var(--line); border-radius: 4px; padding: 7px 9px; font: inherit; font-size: 14px; }
