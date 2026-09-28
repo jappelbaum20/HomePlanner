@@ -305,9 +305,11 @@
       const mark = pl.rev ? pl.id + '@' + pl.rev : null;
       if (o.placedSeeds.includes(pl.id)) {
         if (!mark || o.placedSeeds.includes(mark)) return;
-        const r = findRoom(pl.room), froms = [].concat(pl.from || {});
-        const it = r && r.items.find((i) => (pl.catalogId ? i.catalogId === pl.catalogId : (i.type === pl.item.type && !i.catalogId)) &&
-          froms.some((f) => Math.abs(i.x - f.x) < 2 && Math.abs(i.y - f.y) < 2 && (f.rot == null || i.rot === f.rot)));
+        // `fromRoom` moves the piece over from another room; `from: 'any'` takes it wherever it stands there
+        const r = findRoom(pl.room), src = pl.fromRoom ? findRoom(pl.fromRoom) : r, froms = [].concat(pl.from || {});
+        const it = r && src && src.items.find((i) => (pl.catalogId ? i.catalogId === pl.catalogId : (i.type === pl.item.type && !i.catalogId)) &&
+          (pl.from === 'any' || froms.some((f) => Math.abs(i.x - f.x) < 2 && Math.abs(i.y - f.y) < 2 && (f.rot == null || i.rot === f.rot))));
+        if (it && src !== r) { src.items.splice(src.items.indexOf(it), 1); r.items.push(it); }
         if (it) { Object.assign(it, pl.extra || {}); it.x = Math.min(pl.x, r.width); it.y = Math.min(pl.y, r.length); it.rot = pl.rot || 0; if (it.type === 'art') snapArt(it, r); }
         o.placedSeeds.push(mark); return;
       }
@@ -473,12 +475,7 @@
         <label class="field"><span>Floor or level</span><input data-room="level" list="levelList" value="${esc(r.level)}"></label>
       </div>
       <datalist id="levelList">${levels().map((l) => `<option value="${esc(l)}">`).join('')}</datalist>
-      <div class="row3">
-        <label class="field"><span>Width, cm</span><input type="number" inputmode="numeric" data-room="width" value="${r.width}"></label>
-        <label class="field"><span>Length, cm</span><input type="number" inputmode="numeric" data-room="length" value="${r.length}"></label>
-        <label class="field"><span>Ceiling, cm</span><input type="number" inputmode="numeric" data-room="height" value="${r.height}"></label>
-      </div>
-      <p class="note">Width runs left to right on the plan, length top to bottom. ${(r.width * r.length / 10000).toFixed(1)} m².</p>
+      <p class="note">${r.width} x ${r.length} cm, ceiling ${r.height} cm (${(r.width * r.length / 10000).toFixed(1)} m²). Sizes come from the architect plans and are fixed.</p>
       <h3>Wall colors</h3>
       ${WALLS.map(([k, name, side]) => `
         <div class="wallrow ${wallTarget === k ? 'on' : ''}" data-target="${k}">
@@ -1300,9 +1297,7 @@
   });
   rp.addEventListener('change', (e) => {
     const r = room(), t = e.target, f = t.dataset.room;
-    if (f === 'width' || f === 'length') { r[f] = num(t.value, 50, 3000, r[f]); commit(); }
-    else if (f === 'height') { r.height = num(t.value, 150, 800, r.height); commit(); }
-    else if (f === 'level') { r.level = t.value.trim() || 'Ground floor'; commit(); }
+    if (f === 'level') { r.level = t.value.trim() || 'Ground floor'; commit(); }
     else if (f === 'floorFinish') { r.floorFinish = FLOOR_FINISHES[t.value] ? t.value : 'parquet'; commit(); }
     else if (t.dataset.wallfinish) { r.wallFinish[t.dataset.wallfinish] = WALL_FINISHES[t.value] ? t.value : 'paint'; commit(); }
     else if (t.id === 'wallTarget') { wallTarget = t.value; renderRoomPanel(); renderPlan(); }

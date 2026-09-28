@@ -470,7 +470,69 @@
     for (const [px, pz] of [[a + k, k], [a + k, -k], [-a - k, k], [-a - k, -k]]) { const x = alongX ? px : pz, z = alongX ? pz : px; const leg = cyl(g, oak, 2.9, 1.9, h - top, x, (h - top) / 2, z, 16); leg.rotation.z = (x > 0 ? -1 : 1) * 0.02; }
   };
   // Upholstered bed. h up to 80 = mattress top (headboard 45 cm above); over 80 = overall height to the top of the headboard.
-  B.bed = (g, w, d, h, c) => {
+  // Mattress, duvet, throw and pillows for a w-wide sleeping area, mattress top at y = top, from z0 (head) to z1 (foot)
+  function bedding(g, w, z0, z1, base, mattH, c) {
+    const L = z1 - z0, mz = (z0 + z1) / 2, top = base + mattH;
+    part(g, mat('#F4F2EE', { rough: 0.9 }), w, mattH, L, 0, base + mattH / 2, mz, 5);
+    part(g, fabric('#F1EEE8', w, L), w + 2, 7, L * 0.62, 0, top + 2, mz + L * 0.19, 4); // duvet
+    part(g, fabric(shade(c, 0.85), w, 40), w + 4, 3, 40, 0, top + 5.5, z1 - 28, 1.5); // throw
+    const n = w >= 140 ? 2 : 1, pw = (w - 2 - (n - 1) * 6) / n;
+    for (let k = 0; k < n; k++) { const x = -w / 2 + 1 + pw / 2 + k * (pw + 6); const pl = pillow(g, fabric('#FBFAF7', pw, 40), pw - 6, 12, 36, x, top + 7, z0 + 22, 2); pl.rotation.x = -0.25; }
+  }
+  // VINAY: olive corduroy, low frame on hidden feet, headboard of thick padded bolsters over the full width
+  B.vinay = (g, w, d, h, c) => {
+    const f = cord(c, w, d), fd = cord(shade(c, 0.9), w, d), frameH = 30, headD = 20;
+    part(g, fd, w, frameH - 2, d - headD, 0, 2 + (frameH - 2) / 2, headD / 2, 4); // upholstered frame
+    part(g, mat('#2A2622', { rough: 0.7 }), w - 12, 2, d - headD - 12, 0, 1, headD / 2); // recessed feet
+    part(g, fd, w, h, 8, 0, h / 2, -d / 2 + 4, 3); // headboard back
+    const rows = 3, rh = (h - frameH - 4) / rows;
+    for (let i = 0; i < rows; i++) pillow(g, f, w - 2, 14, rh, 0, frameH + 2 + rh * (i + 0.5), -d / 2 + 14, 3).rotation.x = Math.PI / 2 - 0.08;
+    bedding(g, w - 16, -d / 2 + headD + 1, d / 2 - 6, frameH - 11, 22, c);
+  };
+  // Storage bed (Ti'me / BOXXX): box base down to a recessed plinth, tall headboard with vertical channel stitching
+  B.boxbed = (g, w, d, h, c) => {
+    const f = fabric(c, w, d), fd = fabric(shade(c, 0.92), w, d), plinth = 5, baseH = 38, headD = 12;
+    part(g, mat('#2A2622', { rough: 0.7 }), w - 10, plinth, d - headD - 10, 0, plinth / 2, headD / 2);
+    part(g, fd, w, baseH - plinth, d - headD, 0, plinth + (baseH - plinth) / 2, headD / 2, 3);
+    part(g, mat(shade(c, 0.75), { rough: 0.9 }), w - 1, 0.6, 0.6, 0, plinth + (baseH - plinth) * 0.45, d / 2 + 0.1); // lid seam of the storage box
+    part(g, fd, w, h, 6, 0, h / 2, -d / 2 + 3, 3); // headboard back
+    const n = Math.max(6, Math.round(w / 22)), cw = w / n;
+    for (let i = 0; i < n; i++) pillow(g, f, cw - 0.6, 7, h - baseH + 6, -w / 2 + cw * (i + 0.5), baseH - 3 + (h - baseH + 6) / 2, -d / 2 + 8, 1.2).rotation.x = Math.PI / 2;
+    bedding(g, w - 12, -d / 2 + headD + 1, d / 2 - 5, baseH - 6, 24, c);
+  };
+  // Upholstered bed on slim black metal legs with a softly padded, piped headboard (Livetastic)
+  B.metalbed = (g, w, d, h, c) => {
+    const f = fabric(c, w, d), fd = fabric(shade(c, 0.9), w, d), legH = 12, frameH = 34, headD = 10, metal = METAL_DARK();
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) part(g, metal, 2.5, legH, 2.5, sx * (w / 2 - 8), legH / 2, sz * (d / 2 - 8) + (sz < 0 ? headD : 0));
+    part(g, fd, w, frameH - legH, d - headD, 0, legH + (frameH - legH) / 2, headD / 2, 3);
+    part(g, fd, w, h - legH + 4, headD, 0, legH - 4 + (h - legH + 4) / 2, -d / 2 + headD / 2, headD * 0.45);
+    pillow(g, f, w - 10, 6, h - frameH - 6, 0, frameH + (h - frameH) / 2, -d / 2 + headD + 1, 1.8).rotation.x = Math.PI / 2;
+    bedding(g, w - 14, -d / 2 + headD + 4, d / 2 - 5, frameH - 8, 24, c);
+  };
+  // ZEN: low ash platform on short legs, wide headboard with bouclé panels framed in wood, two flat side tables
+  B.zen = (g, w, d, h, c) => {
+    const ash = wood(c, w, d), dark = wood(shade(c, 0.8), w, d), boucle = mat('#EEE9E0', { rough: 1, map: texFor('fabric', 30, 30), bump: texFor('fabric', 30, 30), bumpScale: 0.9 });
+    const bw = Math.min(w, 220), legH = 8, frameH = 30, headD = 8, tableW = (w - bw) / 2, tableD = 42;
+    legs(g, dark, bw - 10, d - headD - 10, legH, 6, 5, false);
+    part(g, ash, bw, frameH - legH, d - headD, 0, legH + (frameH - legH) / 2, headD / 2, 1); // platform frame
+    part(g, ash, bw, h, headD, 0, h / 2, -d / 2 + headD / 2, 1); // headboard
+    const pn = 3, pw = (bw - 8 - (pn - 1) * 3) / pn, ph = h - frameH - 14;
+    for (let i = 0; i < pn; i++) pillow(g, boucle, pw, 5, ph, -bw / 2 + 4 + pw / 2 + i * (pw + 3), frameH + 6 + ph / 2, -d / 2 + headD + 1, 1.2).rotation.x = Math.PI / 2;
+    for (const sx of [-1, 1]) if (tableW > 10) { // flat side tables fixed to the headboard
+      const x = sx * (bw / 2 + tableW / 2);
+      part(g, ash, tableW, 3, tableD, x, frameH + 12, -d / 2 + tableD / 2, 0.8);
+      part(g, ash, tableW, 3, tableD - 4, x, legH + 6, -d / 2 + tableD / 2, 0.8);
+      part(g, dark, 3, frameH + 9 - legH, 3, x + sx * (tableW / 2 - 3), (frameH + 9 + legH) / 2, -d / 2 + tableD - 4);
+      part(g, ash, tableW, h * 0.55, 3, x, h * 0.275, -d / 2 + 1.5, 0.5);
+    }
+    bedding(g, 180, -d / 2 + headD + 2, d / 2 - 6, frameH - 4, 22, '#B9A58A');
+  };
+  B.bed = (g, w, d, h, c, it) => {
+    const st = it && it.style;
+    if (st === 'vinay') return B.vinay(g, w, d, h, c);
+    if (st === 'boxbed') return B.boxbed(g, w, d, h, c);
+    if (st === 'metalbed') return B.metalbed(g, w, d, h, c);
+    if (st === 'zen') return B.zen(g, w, d, h, c);
     const top = h > 80 ? Math.min(55, h * 0.48) : h, headH = h > 80 ? h : h + 45;
     const frame = fabric(shade(c, 0.92), w, d), feetM = wood('#6B4A2E', 5, 15), feetH = Math.min(15, top * 0.3);
     const frameH = Math.min(top - 18, feetH + 28), mattH = top - frameH + 8;
@@ -834,20 +896,68 @@
   }
   const FRAME_COLORS = { black: '#1D1D1D', white: '#F2F1EC', oak: '#C49A6C', limewash: '#CDBFA6', pine: '#A56E3D', walnut: '#5C3A22', brass: '#B89559' };
   const MAT_COLORS = { white: '#F7F5EF', cream: '#EDE3CC' };
-  // Presentation oar hung flat on the wall: varnished shaft, painted blade (two colours), leather straps
+  // Presentation oar on two leather wall hooks, as on the wall at home: dark green painted blade (on the left) with the
+  // crew painted on in gold and the college crest, a green collar tapering onto a pale varnished shaft, rounded handle end
+  let oarFace = null;
+  function oarTexture() {
+    if (oarFace) return oarFace;
+    const W = 1024, H = 272, c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+    const gr = x.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#1B4B2E'); gr.addColorStop(0.5, '#143D25'); gr.addColorStop(1, '#0E2E1B');
+    x.fillStyle = gr; x.fillRect(0, 0, W, H);
+    const gold = '#D9B45A', tx = 0.66 * W; // lettering stays on the full-height part of the blade
+    x.strokeStyle = gold; x.lineWidth = 3; x.beginPath(); x.moveTo(18, 34); x.lineTo(tx, 34); x.moveTo(18, H - 30); x.lineTo(tx, H - 30); x.stroke();
+    x.fillStyle = gold; x.textBaseline = 'middle';
+    let fs = 28; do { x.font = `bold ${fs}px Georgia, serif`; fs--; } while (x.measureText("GREEN TEMPLETON COLLEGE MEN'S 1st TORPID").width > tx - 30 && fs > 12);
+    x.fillText("GREEN TEMPLETON COLLEGE MEN'S 1st TORPID", 22, 18);
+    // the crew, painted in gold script (made-up names: it only has to read as lettering from across the room)
+    let sd = 11; const r = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+    const syl = ['al', 'ben', 'ca', 'dor', 'el', 'fin', 'gar', 'har', 'is', 'jon', 'ker', 'lan', 'mor', 'nel', 'or', 'per', 'ros', 'sam', 'tor', 'wen'];
+    const word = (n) => { let t = ''; for (let k = 0; k < n; k++) t += syl[Math.floor(r() * syl.length)]; return t[0].toUpperCase() + t.slice(1); };
+    const column = (x0, labels) => labels.forEach((lb, k) => {
+      const y = 66 + k * 44; x.font = 'bold 24px Georgia, serif'; x.fillText(lb, x0, y);
+      x.font = 'italic 27px "Brush Script MT", "Apple Chancery", "Snell Roundhand", "URW Chancery L", cursive, Georgia, serif';
+      x.fillText(word(1 + Math.floor(r() * 2)) + ' ' + word(2), x0 + 58, y, 0.2 * W);
+    });
+    column(22, ['Bow', '2', '3', '4']); column(0.385 * W, ['5', '6', '7', 'Str']);
+    // crest: white shield with a green chevron
+    const cx = 0.335 * W, cy = H / 2 + 4; // between the two columns
+    x.fillStyle = '#F4F1E8'; x.beginPath(); x.moveTo(cx - 30, cy - 38); x.lineTo(cx + 30, cy - 38); x.lineTo(cx + 30, cy + 6); x.quadraticCurveTo(cx + 30, cy + 34, cx, cy + 44); x.quadraticCurveTo(cx - 30, cy + 34, cx - 30, cy + 6); x.closePath(); x.fill();
+    x.strokeStyle = gold; x.lineWidth = 3; x.stroke();
+    x.strokeStyle = '#1F5634'; x.lineWidth = 9; x.beginPath(); x.moveTo(cx - 24, cy + 16); x.lineTo(cx, cy - 12); x.lineTo(cx + 24, cy + 16); x.stroke();
+    x.fillStyle = '#1F5634'; x.beginPath(); x.arc(cx, cy - 24, 6, 0, 7); x.fill();
+    oarFace = new T3.CanvasTexture(c); oarFace.encoding = T3.sRGBEncoding; oarFace.anisotropy = 8; oarFace.keep = true;
+    return oarFace;
+  }
   B.oar = (g, w, d, h, c) => {
-    const shaftM = wood('#C9955A', w, 6), r = Math.min(h * 0.12, 2.3), z = -d / 2 + r + 0.5, y = h / 2, bladeL = Math.min(w * 0.4, 58), bladeH = h;
-    const shaftL = w - bladeL + 4, sx = -w / 2 + shaftL / 2;
-    const sh = cyl(g, shaftM, r, r, shaftL, sx, y, z, 16); sh.rotation.z = Math.PI / 2;
-    const grip = cyl(g, wood('#B07C45', 20, 6), r * 1.15, r * 1.15, 18, -w / 2 + 9, y, z, 16); grip.rotation.z = Math.PI / 2;
-    const leather = mat('#9B6A3F', { rough: 0.8 });
-    [0.34, 0.5].forEach((f) => { const l = cyl(g, leather, r * 1.25, r * 1.25, 6, -w / 2 + w * f, y, z, 16); l.rotation.z = Math.PI / 2; });
-    const bx = w / 2 - bladeL / 2, bt = 1.6, navy = mat('#1F2B3E', { rough: 0.35 }), green = mat('#27463A', { rough: 0.35 }), gold = mat('#C9A45C', { rough: 0.35, metal: 0.6 });
-    part(g, navy, bladeL, bladeH / 2, bt, bx, y + bladeH / 4, -d / 2 + bt / 2 + 0.3, 0.6);
-    part(g, green, bladeL, bladeH / 2, bt, bx, y - bladeH / 4, -d / 2 + bt / 2 + 0.3, 0.6);
-    part(g, shaftM, 12, r * 1.6, r * 1.6, w / 2 - bladeL - 4, y, z, 0.6); // neck where the shaft meets the blade
-    for (let i = 0; i < 4; i++) part(g, gold, bladeL * 0.6, 0.6, 0.3, bx + 2, y + bladeH * (0.3 - i * 0.2), -d / 2 + bt + 0.5); // painted lettering
+    const R = 1.9, zc = -d / 2 + 5.2, yc = h / 2, x0 = -w / 2, bladeL = Math.min(64, w * 0.43), hh = h / 2, bt = 1.1;
+    // blade outline (local x from the tip, y from the blade centre line)
+    const sh = new T3.Shape(), L = bladeL;
+    sh.moveTo(0, -hh + 3); sh.quadraticCurveTo(0, -hh, 3, -hh); sh.lineTo(L * 0.67, -hh);
+    sh.bezierCurveTo(L * 0.8, -hh, L * 0.84, -R * 1.25, L, -R * 1.05); sh.lineTo(L, R * 1.05);
+    sh.bezierCurveTo(L * 0.84, R * 1.25, L * 0.8, hh, L * 0.67, hh); sh.lineTo(3, hh); sh.quadraticCurveTo(0, hh, 0, hh - 3);
+    const geo = new T3.ExtrudeGeometry(sh, { depth: bt, bevelEnabled: true, bevelThickness: 0.35, bevelSize: 0.35, bevelSegments: 2, curveSegments: 24 });
+    const tex = oarTexture().clone(); tex.needsUpdate = true; tex.repeat.set(1 / L, 1 / h); tex.offset.set(0, 0.5); tex.keep = true;
+    const face = new T3.MeshPhysicalMaterial({ map: tex, roughness: 0.28, clearcoat: 0.8, clearcoatRoughness: 0.15 }), edge = mat('#0F2F1C', { rough: 0.3 });
+    const blade = new T3.Mesh(geo, [face, edge]); blade.position.set(x0, yc, zc - bt / 2); blade.castShadow = true; g.add(blade);
+    // green collar tapering onto the shaft, then the varnished pine shaft and a slightly fatter rounded handle
+    const green = new T3.MeshPhysicalMaterial({ color: lin('#143D25'), roughness: 0.3, clearcoat: 0.8 });
+    const col = cyl(g, green, R * 1.05, R * 1.25, 22, x0 + L + 9, yc, zc, 24); col.rotation.z = Math.PI / 2;
+    const pine = new T3.MeshPhysicalMaterial({ color: lin('#C58A4C'), roughness: 0.35, clearcoat: 0.7, clearcoatRoughness: 0.2, map: texFor('grain', 60, 6) });
+    const shaftL = w - L - 20 - 14;
+    const shaft = cyl(g, pine, R, R, shaftL, x0 + L + 20 + shaftL / 2, yc, zc, 24); shaft.rotation.z = Math.PI / 2;
+    const hnd = cyl(g, pine, R * 1.15, R, 14, w / 2 - 7, yc, zc, 24); hnd.rotation.z = Math.PI / 2;
+    sphere(g, pine, R * 1.15, w / 2 - 0.2, yc, zc, 1).scale.set(0.35, 1, 1);
+    // two leather hooks: a strap screwed to the wall, looping over and round the front of the shaft
+    const leather = mat('#8A4B24', { rough: 0.6 });
+    for (const f of [0.47, 0.93]) {
+      const hx = x0 + w * f;
+      part(g, leather, 3, 7, 0.5, hx, yc + R + 3.5, -d / 2 + 0.25, 0.2);
+      part(g, leather, 3, 0.5, 2 * R + 3.6, hx, yc + R + 0.25, zc - 0.4, 0.2);
+      part(g, leather, 3, 2 * R + 1.5, 0.5, hx, yc + 0.2, zc + R + 0.25, 0.2);
+      sphere(g, mat('#B89559', { rough: 0.3, metal: 0.9 }), 0.5, hx, yc + R + 5, -d / 2 + 0.6, 0.6);
+    }
   };
+
   // Local space: back against the wall at -z, picture facing +z, from y = 0 (bottom edge) to h
   B.art = (g, w, d, h, c, it, opts) => {
     if (it && it.style === 'oar') return B.oar(g, w, d, h, c);

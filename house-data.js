@@ -16,14 +16,38 @@ window.HOUSE_SEED = {
 // to the copy already in the browser. Sizes are W x D x H in cm.
 window.HOUSE_PIECES = [
   {
+    id: 'bed-vinay', type: 'bed', style: 'vinay', name: 'VINAY cord bed 180 x 200 (olive)',
+    w: 196, d: 233, h: 90, color: '#6E7045', status: 'considering',
+    link: 'https://www.beliani.ch/polsterbett-cord-olivgrun-180-x-200-cm-vinay.html',
+    notes: 'Beliani VINAY, 180 x 200, CHF 579.99. Olive green corduroy, thick padded headboard (186 x 90), feet 2 cm, slatted base (14 slats). Outer size 196 x 233 x 90 (Beliani listing).'
+  },
+  {
+    id: 'bed-time', type: 'bed', style: 'boxbed', name: 'Ti\u2019me storage bed 180 x 200 (beige)',
+    w: 196, d: 215, h: 110, color: '#D6C9B3', status: 'considering',
+    link: 'https://www.xxxlutz.ch/p/ti-me-polsterbett-180-200-cm-beige-002555000801',
+    notes: 'XXXLutz Ti\u2019me (BOXXX) upholstered bed, 180 x 200, beige, slatted base and storage box. XXXLutz blocks automated access, so the outer size (196 x 215 x 110) and look are estimates: check the listing.'
+  },
+  {
+    id: 'bed-livetastic', type: 'bed', style: 'metalbed', name: 'Livetastic bed 180 x 200 (light brown)',
+    w: 190, d: 212, h: 105, color: '#A57F5C', status: 'considering',
+    link: 'https://www.xxxlutz.ch/p/livetastic-polsterbett-200-200-cm-hellbraun-001073004152',
+    notes: 'XXXLutz Livetastic upholstered bed in light brown on metal feet. The link is the 200 x 200 version; shown as 180 x 200. XXXLutz blocks automated access, so the outer size (190 x 212 x 105) and look are estimates: check the listing.'
+  },
+  {
+    id: 'bed-zen', type: 'bed', style: 'zen', name: 'ZEN bed 180 x 200 with side tables (ash)',
+    w: 328, d: 229, h: 86, color: '#8A6444', status: 'considering',
+    link: 'https://www.beliani.ch/bett-mit-lattenrost-zen-180-x-200-cm-braune-esche-36178.html',
+    notes: 'Beliani ZEN, 180 x 200, CHF 1,029.99. Brown ash veneer, Japanese-style low frame on 8 cm legs, headboard 220 x 86 with bouclé panels, two flat side tables built in. Outer size 328 x 229 x 86 including the side tables (Beliani listing).'
+  },
+  {
     id: 'grey-sofabed', type: 'sofa', style: 'sofabed', name: 'Grey sofa bed',
     w: 190, d: 86, h: 82, color: '#8C8883', status: 'own',
     notes: 'Mid-century style click-clack sofa bed in light grey tweed: rolled arms, two buttoned back cushions, two seat cushions with piping, splayed light wood legs, two small arm pillows. Folds flat into a bed (about 140 cm by your estimate). Bought from a Swiss web shop; the order was not found in Gmail. Sizes estimated from the photo: measure to confirm.'
   },
   {
-    id: 'rowing-oar', type: 'art', style: 'oar', frame: 'none', mat: false, name: 'Presentation oar (wall)',
-    w: 138, d: 6, h: 21, color: '#C9955A', status: 'own',
-    notes: 'Varnished wooden oar hung flat on the wall. Blade painted in two colours (navy and green) with gold lettering, two leather straps on the shaft. Size estimated from the photo (about 138 cm long, blade about 55 x 21): measure to confirm.'
+    id: 'rowing-oar', rev: 2, type: 'art', style: 'oar', frame: 'none', mat: false, name: 'Presentation oar (wall)',
+    w: 150, d: 9, h: 18, color: '#D9A866', status: 'own',
+    notes: 'Green Templeton College Men\u2019s 1st Torpid presentation oar on two leather wall hooks. Dark green blade with the crew painted on in gold and the college crest, pale varnished shaft. Size estimated from the photo (about 150 cm long, blade about 18 cm high): measure to confirm.'
   },
   {
     id: 'painting-limed-oak', type: 'art', frame: 'limewash', mat: 'cream', image: 'url:photos/art/painting-limed-oak.jpg', name: 'Painting in limed oak frame',
@@ -921,7 +945,8 @@ window.HOUSE_PLACEMENTS = [
   { id: 'living-art', rev: 3, from: { x: 618.5, y: 340 }, room: 'living', x: 481, y: 230, item: { type: 'art', name: 'Artwork above the sofa', w: 100, d: 3, h: 70, frame: 'oak', mat: true, elev: 115 } },
   { id: 'living-oakpanel', builtin: true, rev: 3, from: { x: 305, y: 479 }, room: 'living', x: 178, y: 0, extra: { w: 208, h: 205, elev: 10 },
     item: { type: 'art', name: 'Oak 3D wall panel', w: 208, d: 2, h: 205, frame: 'oakpanel', mat: false, elev: 10 } },
-  { id: 'bedroom-bed', rev: 5, from: [{ x: 115, y: 277 }, { x: 153, y: 277 }], room: 'bedroom', catalogId: 'mattis-bed', x: 153, y: 277, rot: 180 }, // centred; clears the door's arc
+  // rev 6: the Mattis bed moves to the second bedroom, headboard against the west wall, clear of the door's arc
+  { id: 'bedroom-bed', rev: 6, fromRoom: 'bedroom', from: 'any', room: 'bedroom2', catalogId: 'mattis-bed', x: 108, y: 160, rot: 270 },
   // rev 4: the kitchen as in the tour (fitted run with sink, hob and wall units; dark oak tall units with two ovens)
   { id: 'kitchen-counter', builtin: true, rev: 6, from: [{ x: 105, y: 287 }, { x: 110, y: 287 }], room: 'kitchen', x: 105, y: 287, rot: 180, extra: { w: 210, style: 'fitted', name: 'Kitchen run', fixed: true },
     item: { type: 'counter', style: 'fitted', name: 'Kitchen run', fixed: true, w: 210, d: 60, h: 90, color: '#F4F4F2' } },
