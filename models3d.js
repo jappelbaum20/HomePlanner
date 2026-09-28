@@ -956,6 +956,62 @@
     part(g, glass, 60, 185, 1, -w / 2 + 45, 95, d / 2 + 0.3, 0.5);
     part(g, mat('#C9CCCE', { rough: 0.2, metal: 0.9 }), 2, 30, 3, -w / 2 + 70, 100, d / 2 + 2, 0.8);
   };
+  // Copper pot racks (Proper Copper Design style): 22 mm pipe, S-hooks, copper and cast-iron pans.
+  // h runs from the lowest pan up to the top: the ceiling for ceiling racks (rail 20 cm below it), the rail for wall rails.
+  const pipeX = (g, m, len, r, x, y, z) => { const p = cyl(g, m, r, r, len, x, y, z, 16); p.rotation.z = Math.PI / 2; return p; };
+  const pipeZ = (g, m, len, r, x, y, z) => { const p = cyl(g, m, r, r, len, x, y, z, 16); p.rotation.x = Math.PI / 2; return p; };
+  // One pan on an S-hook. face: +1 / -1 = open side towards +z / -z; 'wall' = hangs flat, bottom out, against a wall at wallZ
+  function hangPan(g, M, x, yHook, z, span, k, face, wallZ) {
+    const [R0, dep, kind] = [[9, 9, 'pan'], [12.5, 4.5, 'fry'], [7.5, 7.5, 'pan'], [11, 4, 'iron']][k % 4], off = [0, 3, 1.5, 4.5][k % 4], hookL = 4;
+    const R = Math.min(R0, (span - hookL - 6 - off) / 2); if (R < 3) return;
+    const handle = span - hookL - off - 2 * R, bodyZ = face === 'wall' ? wallZ + dep / 2 + 0.4 : z;
+    const ring = new T3.Mesh(new T3.TorusGeometry(1.5, 0.22, 6, 16), M.steel); ring.position.set(x, yHook, z); ring.rotation.y = Math.PI / 2; g.add(ring);
+    cyl(g, M.steel, 0.22, 0.22, hookL - 1.5, x, yHook - 1.5 - (hookL - 1.5) / 2, z, 6);
+    const hy = yHook - hookL, hm = kind === 'iron' ? M.iron : M.steel;
+    part(g, hm, 1.8, handle, 1, x, hy - handle / 2, (z + bodyZ) / 2);
+    const cy = hy - handle - R + 0.5, body = cyl(g, kind === 'iron' ? M.iron : M.copper, R, R * 0.97, dep, x, cy, bodyZ, 40); body.rotation.x = Math.PI / 2;
+    if (face !== 'wall') { const inner = cyl(g, kind === 'iron' ? M.iron : M.steel, R - 0.8, R - 0.8, 0.4, x, cy, bodyZ + face * dep / 2, 32); inner.rotation.x = Math.PI / 2; }
+  }
+  B.potrack = (g, w, d, h, c, it, opts) => {
+    const style = (it && it.style) || 'rail', cu = mat(c, { rough: 0.28, metal: 1 }), pr = 1.1;
+    const M = { copper: mat('#C27A45', { rough: 0.24, metal: 1 }), steel: mat('#D2D5D7', { rough: 0.22, metal: 1 }), iron: mat('#2A2B2E', { rough: 0.55, metal: 0.5 }) };
+    const along = (x0, x1, n) => Array.from({ length: n }, (_, k) => x0 + ((x1 - x0) * (k + 0.5)) / n);
+    if (style === 'wall') { // one rail on brass wall brackets, pans hanging flat against the wall
+      const railY = h - 3, z0 = -d / 2 + 4.5;
+      pipeX(g, cu, w, pr, 0, railY, z0);
+      [-1, 1].forEach((s) => pipeX(g, cu, 1.2, pr + 0.25, s * (w / 2 - 0.6), railY, z0));
+      (w > 100 ? [-w / 2 + 5, 0, w / 2 - 5] : [-w / 2 + 5, w / 2 - 5]).forEach((x) => {
+        part(g, METAL_BRASS(), 1.6, 1.6, 4.5, x, railY, -d / 2 + 2.25);
+        pipeZ(g, METAL_BRASS(), 0.4, 2.2, x, railY, -d / 2 + 0.2);
+      });
+      along(-w / 2 + 8, w / 2 - 8, Math.max(2, Math.floor((w - 16) / 24))).forEach((x, k) => hangPan(g, M, x, railY - pr, z0, railY - pr - 1, k, 'wall', -d / 2));
+      g.userData.wallMounted = g;
+      return;
+    }
+    // ceiling racks: rods up to the ceiling (roomTop), with a small ceiling cup
+    const railY = h - 20, top = Math.max(h, (opts && opts.roomTop) || h), span = railY - pr - 1;
+    const rod = (x, z) => { cyl(g, cu, 0.55, 0.55, top - railY, x, (top + railY) / 2, z, 8); cyl(g, cu, 2.2, 2.2, 0.8, x, top - 0.4, z, 20); };
+    if (style === 'rail') {
+      pipeX(g, cu, w, pr, 0, railY, 0);
+      [-1, 1].forEach((s) => { pipeX(g, cu, 1.2, pr + 0.25, s * (w / 2 - 0.6), railY, 0); rod(s * (w / 2 - 6), 0); });
+      along(-w / 2 + 8, w / 2 - 8, Math.max(2, Math.floor((w - 16) / 17))).forEach((x, k) => hangPan(g, M, x, railY - pr, 0, span, k, k % 2 ? 1 : -1));
+      return;
+    }
+    const zs = (d - 8) / 2, rc = Math.min(zs - 1, 11);
+    if (style === 'curved') { // one bent loop with two cross struts
+      const pts = [], q = [[w / 2 - rc, zs - rc, 0], [-(w / 2 - rc), zs - rc, Math.PI / 2], [-(w / 2 - rc), -(zs - rc), Math.PI], [w / 2 - rc, -(zs - rc), Math.PI * 1.5]];
+      q.forEach(([cx, cz, a0]) => { for (let s = 0; s <= 6; s++) { const a = a0 + (s / 6) * Math.PI / 2; pts.push(new T3.Vector3(cx + Math.cos(a) * rc, railY, cz + Math.sin(a) * rc)); } });
+      const loop = new T3.Mesh(new T3.TubeGeometry(new T3.CatmullRomCurve3(pts, true, 'centripetal'), 160, pr, 10, true), cu); loop.castShadow = true; g.add(loop);
+      [-0.22, 0.22].forEach((k) => pipeZ(g, cu, 2 * zs, pr * 0.8, w * k, railY, 0));
+      [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(([sx, sz]) => rod(sx * (w / 2 - rc), sz * zs));
+    } else { // ladder: two long rails and three rungs
+      [-1, 1].forEach((s) => pipeX(g, cu, w, pr, 0, railY, s * zs));
+      [-w / 2 + 2, 0, w / 2 - 2].forEach((x) => pipeZ(g, cu, 2 * zs, pr, x, railY + 0.3, 0));
+      [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(([sx, sz]) => rod(sx * (w / 2 - 14), sz * zs));
+    }
+    const inset = style === 'curved' ? rc + 2 : 6, n = Math.max(2, Math.floor((w - 2 * inset) / 20));
+    [-1, 1].forEach((s, j) => along(-w / 2 + inset, w / 2 - inset, n).forEach((x, k) => hangPan(g, M, x, railY - pr, s * zs, span, k + j * 2, s)));
+  };
   B.box = (g, w, d, h, c, it) => {
     if (it && it.style === 'sauna') return B.sauna(g, w, d, h, c); part(g, mat(c, { rough: 0.7 }), w, h, d, 0, h / 2, 0, 1.5); };
 
@@ -1176,7 +1232,7 @@
     if (L[it.type]) bulbY = L[it.type](g, w, d, h, it.color, opts.evening, opts.kelvinHex, opts.roomTop, it);
     else {
       (B[it.type] || B.box)(g, w, d, h, it.color, it, opts);
-      if (!['rug', 'vanity', 'toilet', 'cornersofa', 'art'].includes(it.type) && !(it.elev > 0)) g.add(HM.contactShadow(w, d));
+      if (!['rug', 'vanity', 'toilet', 'cornersofa', 'art', 'potrack'].includes(it.type) && !(it.elev > 0)) g.add(HM.contactShadow(w, d));
     }
     g.userData.bulbY = bulbY;
     return g;

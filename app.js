@@ -20,7 +20,7 @@
     sofa: 'Sofa', cornersofa: 'Corner sofa', armchair: 'Armchair', chair: 'Chair', table: 'Table, rectangular', roundtable: 'Table, round',
     desk: 'Desk', bed: 'Bed', cabinet: 'Cabinet or sideboard', shelf: 'Shelf', wardrobe: 'Wardrobe',
     counter: 'Counter or island', appliance: 'Appliance', rug: 'Rug', plant: 'Plant', art: 'Artwork (on a wall)', bath: 'Bathtub',
-    shower: 'Shower', vanity: 'Vanity', toilet: 'Toilet', stairs: 'Stairs', box: 'Other'
+    shower: 'Shower', vanity: 'Vanity', toilet: 'Toilet', stairs: 'Stairs', potrack: 'Pot rack or rail', box: 'Other'
   };
   const LIGHT_TYPES = {
     ceiling: 'Ceiling light', pendant: 'Pendant', spot: 'Spotlight', sconce: 'Wall light',
@@ -51,7 +51,8 @@
       ['table', 'Dining table', 180, 90, 75, '#8B6A4E'], ['roundtable', 'Round table', 110, 110, 75, '#8B6A4E'],
       ['chair', 'Dining chair', 45, 50, 90, '#4A4F55'], ['counter', 'Kitchen counter', 120, 60, 90, '#DCDCD6'],
       ['counter', 'Kitchen island', 180, 90, 90, '#DCDCD6'], ['appliance', 'Fridge', 60, 65, 185, '#E8E8E4'],
-      ['counter', 'Fitted kitchen run', 220, 60, 90, '#F4F4F2', { style: 'fitted' }], ['appliance', 'Tall units with ovens', 100, 60, 225, '#4A4440', { style: 'tallovens' }]
+      ['counter', 'Fitted kitchen run', 220, 60, 90, '#F4F4F2', { style: 'fitted' }], ['appliance', 'Tall units with ovens', 100, 60, 225, '#4A4440', { style: 'tallovens' }],
+      ['potrack', 'Ceiling pot rail', 70, 20, 52, '#B87333', { style: 'rail' }], ['potrack', 'Wall pan rail', 100, 14, 34, '#B87333', { style: 'wall' }]
     ]],
     ['Bedroom', [
       ['bed', 'Bed 160 x 200', 160, 200, 50, '#D9D4CC'], ['bed', 'Bed 180 x 200', 180, 200, 50, '#D9D4CC'],
@@ -155,8 +156,9 @@
   }
 
   // ================= Data normalization =================
-  function defaultElev(type, roomH, h) {
+  function defaultElev(type, roomH, h, style) {
     switch (type) {
+      case 'potrack': return style === 'wall' ? 110 : Math.max(0, roomH - h); // ceiling racks hang from the ceiling; h runs from the lowest pan up
       case 'ceiling': case 'spot': return roomH - h;
       case 'pendant': return Math.max(0, Math.min(roomH - h, 150));
       case 'sconce': return 170;
@@ -172,7 +174,7 @@
       id: it.id || 'i' + uid(), type, name: it.name || typeName(type), w, d, h,
       x: num(it.x, -1000, 5000, r.width / 2), y: num(it.y, -1000, 5000, r.length / 2),
       rot: ((num(it.rot, -3600, 3600, 0) % 360) + 360) % 360,
-      elev: num(it.elev, 0, 800, defaultElev(type, r.height, h)),
+      elev: num(it.elev, 0, 800, defaultElev(type, r.height, h, it.style)),
       color: hex(it.color, '#9A9A94')
     };
     if (it.catalogId) o.catalogId = it.catalogId;
@@ -752,6 +754,16 @@
         return base + p + `<path class="detail" d="M0 ${y0 + d - 8}V${y0 + 10}M-6 ${y0 + 18}L0 ${y0 + 8}L6 ${y0 + 18}"/>`;
       }
       case 'appliance': return base + `<rect class="detail" x="${x0 + 3}" y="${y0 + d - 5}" width="${w - 6}" height="3"/>`;
+      case 'potrack': { // overhead, so a dashed outline; copper pipes as lines, pans as circles
+        const wall = it.style === 'wall', pipe = (a, b, e, f) => `<line x1="${a}" y1="${b}" x2="${e}" y2="${f}" stroke="${c}" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
+        const rails = wall ? [y0 + 4.5] : ['ladder', 'curved'].includes(it.style) ? [-(d - 8) / 2, (d - 8) / 2] : [0];
+        let p = `<rect class="body" x="${x0}" y="${y0}" width="${w}" height="${d}" rx="2" fill="${c}" fill-opacity=".12"${wall ? '' : ' stroke-dasharray="5 4"'}/>`;
+        if (it.style === 'curved') { const zs = (d - 8) / 2, rc = Math.min(zs - 1, 11); p += `<rect x="${x0}" y="${-zs}" width="${w}" height="${2 * zs}" rx="${rc}" fill="none" stroke="${c}" stroke-width="3" vector-effect="non-scaling-stroke"/>` + [-0.22, 0.22].map((k) => pipe(w * k, -zs, w * k, zs)).join(''); }
+        else { rails.forEach((y) => { p += pipe(x0 + 1, y, x0 + w - 1, y); }); if (it.style === 'ladder') [x0 + 2, 0, x0 + w - 2].forEach((x) => { p += pipe(x, rails[0], x, rails[1]); }); }
+        const n = Math.max(2, Math.floor((w - 16) / (wall ? 24 : 20))), pr = Math.min(4.5, d / 4);
+        rails.forEach((y) => { for (let k = 0; k < n; k++) p += `<circle cx="${x0 + 8 + ((w - 16) * (k + 0.5)) / n}" cy="${wall ? y0 + d - pr - 1 : y}" r="${pr}" fill="#C27A45" fill-opacity=".55"/>`; });
+        return p;
+      }
       case 'bath': return base + `<rect class="detail" x="${x0 + 8}" y="${y0 + 8}" width="${w - 16}" height="${d - 16}" rx="${Math.min(w, d) / 3}"/>`;
       case 'toilet': return `<rect class="body" x="${x0}" y="${y0}" width="${w}" height="${d * 0.28}" rx="3" fill="${c}"/><ellipse class="body" cx="0" cy="${y0 + d * 0.62}" rx="${w / 2}" ry="${d * 0.36}" fill="${c}"/>`;
       case 'shower': return base + `<path class="detail" d="M${x0} ${y0}L${x0 + w} ${y0 + d}M${x0 + w} ${y0}L${x0} ${y0 + d}"/>`;
@@ -777,11 +789,11 @@
       if (selected && selected.id === o.id) g += `<rect class="sel-outline" x="${o.offset - 3}" y="${-T - 3}" width="${o.width + 6}" height="${(o.type === 'door' ? o.width + T : T) + 6}"/>`;
       h += `<g class="opening" data-opening="${o.id}" transform="${M[o.wall]}">${g}</g>`;
     }
-    const layer = (i) => i.type === 'rug' ? 0 : isLight(i.type) ? 2 : 1;
+    const layer = (i) => i.type === 'rug' ? 0 : isLight(i.type) || (i.type === 'potrack' && i.style !== 'wall') ? 2 : 1;
     for (const it of [...r.items].sort((a, b) => layer(a) - layer(b))) {
       const on = selected && selected.id === it.id, light = isLight(it.type);
       const lf = Math.max(fs * 0.45, Math.min(fs * 0.8, it.w / Math.max(5, it.name.length) * 1.5));
-      const show = !light && it.w > 35 && it.d > 25, flip = it.rot > 90 && it.rot <= 270;
+      const show = !light && it.type !== 'potrack' && it.w > 35 && it.d > 25, flip = it.rot > 90 && it.rot <= 270;
       const sw = light ? Math.max(Math.max(it.w, it.d) / 2, fs * 0.45) * 2 : 0;
       h += `<g class="item ${bad.has(it.id) ? 'clash' : ''}" data-item="${it.id}" transform="translate(${it.x} ${it.y}) rotate(${it.rot})"><title>${esc(it.name)}</title>
         ${itemShape(it, fs)}

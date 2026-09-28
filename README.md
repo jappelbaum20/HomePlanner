@@ -54,7 +54,7 @@ To send the current state back to Claude, use Claude handoff, then Copy this roo
 - Opening `offset`: from the top corner on side walls, the left corner on top and bottom walls.
 - Item `x`, `y`: center point from the top-left interior corner. `rot`: degrees clockwise. `elev`: underside height above the floor.
 - Items with `catalogId` take size, color and name from the catalog piece.
-- Furniture types: sofa, cornersofa, armchair, chair, art, table, roundtable, desk, bed, cabinet, shelf, wardrobe, counter, appliance, rug, plant, bath, shower, vanity, toilet, stairs, box.
+- Furniture types: sofa, cornersofa, armchair, chair, art, table, roundtable, desk, bed, cabinet, shelf, wardrobe, counter, appliance, rug, plant, bath, shower, vanity, toilet, stairs, potrack, box.
 - Light types: ceiling, pendant, spot, sconce, floorlamp, tablelamp. `kelvin`: 2200, 2700, 3000, 4000. `power`: soft, medium, bright.
 - Piece `status`: own, considering, ordered.
 - Room `floorFinish`: parquet, wood, marble, stone, tile, concrete, terrazzo, carpet, plain (default parquet). Sets the floor texture in 3D.
@@ -68,6 +68,7 @@ To send the current state back to Claude, use Claude handoff, then Copy this roo
 - Artwork: `type: "art"`, `w` and `h` = picture size, `d` = depth, `elev` = bottom edge height, `frame` (black, white, oak, brass, none), `mat` (true or false). It hangs on the wall it is nearest to and faces into the room. Pictures are uploaded in the app and stay in the browser (and backups).
 - Default rooms: Haus 53, sized from the architect plans (BF areas) and checked against the Giraffe360 tour: Laundry and cellar, Boiler room (basement); Entrance hall, Living room, Kitchen (ground floor); Landing, Office, Second bedroom, Bathroom (first floor); Attic landing, Bedroom, En-suite bathroom (attic). Defined in `HOUSE_ROOMS` with `ensure: true`; a deleted default room is not recreated. A higher `rev` with `resize: true` pushes corrected sizes, doors and windows to browsers that already have the room.
 - `style` picks a specific model: desk `standing` (FlexiSpot style), cabinet `fjallbo`, floorlamp `hektar`.
+- Copper pot racks: `type: "potrack"` with `style` rail, ladder or curved (hung from the ceiling) or wall (a rail on wall brackets, back against the wall). `h` runs from the lowest pan up to the ceiling (ceiling racks, rail 20 cm below it) or up to the rail (wall). Ceiling racks default to hanging from the ceiling; wall rails default to `elev` 110. Drawn with sample copper and cast-iron pans.
 - Photos are never part of the handoff; they stay in the browser and in backup files.
 
 ## Storage notes

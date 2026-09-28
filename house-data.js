@@ -15,6 +15,31 @@ window.HOUSE_SEED = {
 // if you delete one in the app it stays deleted. Raising `rev` pushes a changed size or look
 // to the copy already in the browser. Sizes are W x D x H in cm.
 window.HOUSE_PIECES = [
+  // Copper for the Italian kitchen. h runs from the lowest pan to the ceiling (ceiling racks) or to the rail (wall rail)
+  {
+    id: 'pcd-hanging-rail', type: 'potrack', style: 'rail', name: 'Copper hanging pot rail 70 cm',
+    w: 70, d: 20, h: 52, color: '#B87333', status: 'considering',
+    link: 'https://propercopperdesign.com/products/copper-hanging-pot-and-pan-rail',
+    notes: 'Single copper bar on two rods, 70 cm, tested to 20 kg. £114 natural, £142 lacquered (also 50 and 100 cm). Standard hanging height is 57 cm, too low under the 225 cm kitchen ceiling: order a 20 cm drop, so the rack sits at about 205 cm and pans hang no lower than about 173 cm. Hang it over the island only, never over a walkway, into the concrete ceiling. Proper Copper Design, Brighton (UK): 22 mm copper pipe, natural or satin lacquered. Prices exclude VAT; ships to Switzerland, shipping and 8.1% import VAT extra. Copper S-hooks from the same shop, about 7.5 cm, £37 for 10: https://propercopperdesign.com/products/copper-s-hooks . Shown with sample pans.'
+  },
+  {
+    id: 'pcd-ladder-rack', type: 'potrack', style: 'ladder', name: 'Copper ceiling ladder rack (small)',
+    w: 75, d: 45, h: 52, color: '#B87333', status: 'considering',
+    link: 'https://propercopperdesign.com/products/copper-ceiling-ladder-rack',
+    notes: 'Two copper rails with three rungs, 75 x 37.5 cm, tested to 30 kg. £227 natural, £267 lacquered (medium 100 cm: £306 / £345). Standard hanging height is 57 cm, too low under the 225 cm kitchen ceiling: order a 20 cm drop, so the rack sits at about 205 cm and pans hang no lower than about 173 cm. Hang it over the island only, never over a walkway, into the concrete ceiling. Proper Copper Design, Brighton (UK): 22 mm copper pipe, natural or satin lacquered. Prices exclude VAT; ships to Switzerland, shipping and 8.1% import VAT extra. Copper S-hooks from the same shop, about 7.5 cm, £37 for 10: https://propercopperdesign.com/products/copper-s-hooks . Shown with sample pans.'
+  },
+  {
+    id: 'pcd-curved-rack', type: 'potrack', style: 'curved', name: 'Curved copper ceiling rack',
+    w: 60, d: 43, h: 52, color: '#B87333', status: 'considering',
+    link: 'https://propercopperdesign.com/products/curved-copper-ceiling-pot-and-pan-rack',
+    notes: 'One bent copper loop with two cross struts, 60 x 35 cm, tested to 30 kg. £245 natural, £285 lacquered. Custom sizes on request. Standard hanging height is 57 cm, too low under the 225 cm kitchen ceiling: order a 20 cm drop, so the rack sits at about 205 cm and pans hang no lower than about 173 cm. Hang it over the island only, never over a walkway, into the concrete ceiling. Proper Copper Design, Brighton (UK): 22 mm copper pipe, natural or satin lacquered. Prices exclude VAT; ships to Switzerland, shipping and 8.1% import VAT extra. Copper S-hooks from the same shop, about 7.5 cm, £37 for 10: https://propercopperdesign.com/products/copper-s-hooks . Shown with sample pans.'
+  },
+  {
+    id: 'pcd-wall-rail', type: 'potrack', style: 'wall', name: 'Wall-mounted copper pan rail 140 cm',
+    w: 140, d: 14, h: 34, color: '#B87333', status: 'considering',
+    link: 'https://propercopperdesign.com/products/wall-mounted-pot-and-pan-rail-22mm',
+    notes: 'Copper rail on brass wall brackets, 140 cm (two lengths joined with a coupling). £114 natural, £131 lacquered (also 50 cm £69 and 70 cm £81). The low-ceiling way to hang the heavy pans. Proper Copper Design, Brighton (UK): 22 mm copper pipe, natural or satin lacquered. Prices exclude VAT; ships to Switzerland, shipping and 8.1% import VAT extra. Copper S-hooks from the same shop, about 7.5 cm, £37 for 10: https://propercopperdesign.com/products/copper-s-hooks . Shown with sample pans.'
+  },
   {
     id: 'bed-vinay', type: 'bed', style: 'vinay', name: 'VINAY cord bed 180 x 200 (olive)',
     w: 196, d: 233, h: 90, color: '#6E7045', status: 'considering',
@@ -447,6 +472,14 @@ window.HOUSE_ROOMS = [
       {
         "src": "photos/tour/04_kitchen_view6.jpg",
         "label": "Kitchen, looking south-east (tour photo)"
+      },
+      {
+        "src": "photos/inspiration/kitchen-copper-wall-rails.jpg",
+        "label": "Look you picked: two rows of copper pans on wall rails (Annie Spratt, Unsplash)"
+      },
+      {
+        "src": "photos/inspiration/kitchen-rack-on-posts.jpg",
+        "label": "Look you picked: copper pans on a rack standing on posts from the work table (Zoshua Colah, Unsplash)"
       }
     ]
   },
@@ -947,6 +980,9 @@ window.HOUSE_PLACEMENTS = [
     item: { type: 'art', name: 'Oak 3D wall panel', w: 208, d: 2, h: 205, frame: 'oakpanel', mat: false, elev: 10 } },
   // rev 6: the Mattis bed moves to the second bedroom, headboard against the west wall, clear of the door's arc
   { id: 'bedroom-bed', rev: 6, fromRoom: 'bedroom', from: 'any', room: 'bedroom2', catalogId: 'mattis-bed', x: 108, y: 160, rot: 270 },
+  // Two rows of copper pans on the free north wall of the kitchen, beside the oven towers (rails at about 178 and 138 cm)
+  { id: 'kitchen-wallrail-upper', room: 'kitchen', catalogId: 'pcd-wall-rail', x: 190, y: 7, rot: 0, extra: { elev: 147 } },
+  { id: 'kitchen-wallrail-lower', room: 'kitchen', catalogId: 'pcd-wall-rail', x: 190, y: 7, rot: 0, extra: { elev: 107 } },
   // rev 4: the kitchen as in the tour (fitted run with sink, hob and wall units; dark oak tall units with two ovens)
   { id: 'kitchen-counter', builtin: true, rev: 6, from: [{ x: 105, y: 287 }, { x: 110, y: 287 }], room: 'kitchen', x: 105, y: 287, rot: 180, extra: { w: 210, style: 'fitted', name: 'Kitchen run', fixed: true },
     item: { type: 'counter', style: 'fitted', name: 'Kitchen run', fixed: true, w: 210, d: 60, h: 90, color: '#F4F4F2' } },
