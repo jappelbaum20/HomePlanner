@@ -1152,7 +1152,9 @@
   // Returns y (local) of the bulb so the caller can place a light source there
   const L = {};
   const shadeMat = (c, on, k) => mat(c, { rough: 0.85, side: T3.DoubleSide, emissive: on ? k : null, emissiveIntensity: on ? 0.9 : 0 });
-  L.pendant = (g, w, d, h, c, on, k, roomTop) => {
+  L.pendant = (g, w, d, h, c, on, k, roomTop, it) => {
+    const st = it && it.style;
+    if (st === 'cloud' || st === 'globe' || st === 'bamboo') return L[st](g, w, d, h, c, on, k, roomTop);
     const cord = Math.max(0, roomTop - h);
     if (cord > 0) cyl(g, METAL_DARK(), 0.4, 0.4, cord, 0, h + cord / 2, 0, 6);
     const s = new T3.Mesh(new T3.CylinderGeometry(w * 0.12, w / 2, h, 40, 1, true), shadeMat(c, false)); s.position.set(0, h / 2, 0); s.castShadow = true; g.add(s);
@@ -1164,11 +1166,15 @@
     const dif = cyl(g, mat('#FFFFFF', { rough: 0.4, emissive: on ? k : null, emissiveIntensity: on ? 2.5 : 0 }), w / 2 - 1, w / 2 - 3, h * 0.7, 0, h * 0.35, 0, 40);
     dif.castShadow = false; return 0;
   };
-  L.spot = (g, w, d, h, c, on, k) => {
+  L.spot = (g, w, d, h, c, on, k, top, it) => {
+    if (it && it.style === 'track') return L.track(g, w, d, h, c, on, k);
     cyl(g, mat(c, { rough: 0.4, metal: 0.4 }), w / 2, w / 2, h, 0, h / 2, 0, 20);
     const lens = cyl(g, mat('#FFFFFF', { emissive: on ? k : null, emissiveIntensity: on ? 4 : 0 }), w / 2 - 1.2, w / 2 - 1.2, 0.5, 0, -0.1, 0, 20); lens.castShadow = false; return -1;
   };
-  L.sconce = (g, w, d, h, c, on, k) => {
+  L.sconce = (g, w, d, h, c, on, k, top, it) => {
+    const st = it && it.style;
+    if (st === 'donut') return L.donut(g, w, d, h, c, on, k, false);
+    if (st === 'uplight') return L.wallup(g, w, d, h, c, on, k);
     part(g, mat(c, { rough: 0.3, metal: 0.8 }), w * 0.5, h * 0.5, 2, 0, h * 0.5, -d / 2 + 1, 1);
     const s = cyl(g, shadeMat('#F4EFE6', on, k), w * 0.35, w * 0.5, h * 0.55, 0, h * 0.55, 0, 32); s.castShadow = false; return h * 0.55;
   };
@@ -1185,15 +1191,172 @@
   };
   L.floorlamp = (g, w, d, h, c, on, k, top, it) => {
     if (it && it.style === 'hektar') return L.hektar(g, w, d, h, c, on, k);
+    if (it && ['uplighter', 'uplightread', 'arc', 'paper', 'globepole', 'lantern'].includes(it.style)) return L[it.style](g, w, d, h, c, on, k);
+    if (it && it.style === 'wood') { // wooden pole and foot (LAUTERS / KINNAHULT)
+      const wm = wood(c, 6, h); cyl(g, wm, w * 0.36, w * 0.4, 3, 0, 1.5, 0, 36); cyl(g, wm, 1.4, 1.6, h - 30, 0, (h - 30) / 2, 0, 12);
+      const s2 = cyl(g, shadeMat('#F3EEE4', on, k), w * 0.42, w / 2, 32, 0, h - 16, 0, 40); s2.castShadow = false; return h - 18;
+    }
     cyl(g, mat(c, { rough: 0.4, metal: 0.7 }), w * 0.4, w * 0.45, 2.5, 0, 1.25, 0, 32);
     cyl(g, mat(c, { rough: 0.4, metal: 0.7 }), 1, 1, h - 28, 0, (h - 28) / 2, 0, 10);
     const s = cyl(g, shadeMat('#F1EBDF', on, k), w * 0.35, w / 2, 30, 0, h - 15, 0, 36); s.castShadow = false; return h - 18;
   };
-  L.tablelamp = (g, w, d, h, c, on, k) => {
+  L.tablelamp = (g, w, d, h, c, on, k, top, it) => {
+    if (it && it.style === 'donut') return L.donut(g, w, d, h, c, on, k, true);
+    if (it && it.style === 'mushroom') return L.mushroom(g, w, d, h, c, on, k);
+    if (it && ['globe', 'pole', 'polewood', 'glassdome', 'lantern', 'cloud'].includes(it.style)) return L['t_' + it.style](g, w, d, h, c, on, k);
     const bodyH = h * 0.5; cyl(g, mat(c, { rough: 0.3 }), w * 0.2, w * 0.28, bodyH, 0, bodyH / 2, 0, 24);
     sphere(g, mat(c, { rough: 0.3 }), w * 0.28, 0, bodyH * 0.45, 0, 1.1);
     const s = cyl(g, shadeMat('#F1EBDF', on, k), w * 0.33, w / 2, h - bodyH, 0, bodyH + (h - bodyH) / 2, 0, 32); s.castShadow = false; return bodyH + 4;
   };
+
+
+  // ---------- More light fixtures (IKEA-style, and uplighters for indirect light) ----------
+  // Glowing glass: pale and a little glossy by day, lit from inside in the evening
+  const glassGlow = (c, on, k, i) => { const m = mat(c, { rough: 0.25, emissive: on ? (k || c) : null, emissiveIntensity: on ? (i || 1.6) : 0 }); m.envMapIntensity = 0.9; return m; };
+  // Soft wash of light on the wall or ceiling (indirect light), only drawn when the lights are on
+  let washTex = null;
+  function wash(g, w, h, x, y, z, k, up) {
+    if (!washTex) { // soft oval of light, brightest at the lamp and fading out in every direction
+      const c = document.createElement('canvas'); c.width = c.height = 128; const x2 = c.getContext('2d');
+      const gr = x2.createRadialGradient(64, 128, 4, 64, 128, 128); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(255,255,255,.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      x2.fillStyle = gr; x2.fillRect(0, 0, 128, 128); washTex = new T3.CanvasTexture(c);
+    }
+    const m = new T3.MeshBasicMaterial({ map: washTex, color: new T3.Color(k || '#FFD9A0'), transparent: true, opacity: 0.22, blending: T3.AdditiveBlending, depthWrite: false });
+    const pl = new T3.Mesh(new T3.PlaneGeometry(w, h), m); pl.position.set(x, y + (up === false ? -h / 2 : h / 2), z); if (up === false) pl.rotation.z = Math.PI; pl.renderOrder = 2; g.add(pl); return pl;
+  }
+  // Donut lamp (like IKEA VARMBLIXT): a thick ring of glass, on the wall or standing on a small base
+  L.donut = (g, w, d, h, c, on, k, standing) => {
+    const tube = Math.min(d / 2, w * 0.17), R = w / 2 - tube, cy = standing ? h - w / 2 : h / 2, z = standing ? 0 : -d / 2 + tube;
+    const ring = new T3.Mesh(new T3.TorusGeometry(R, tube, 28, 64), glassGlow(c, on, k, 1.8)); ring.position.set(0, cy, z); ring.castShadow = true; g.add(ring);
+    if (standing) { cyl(g, mat('#2A2826', { rough: 0.5 }), w * 0.22, w * 0.24, 2, 0, 1, 0, 32); cyl(g, mat('#2A2826', { rough: 0.5 }), 1.2, 1.2, cy - R - tube + 1, 0, (cy - R - tube + 3) / 2, 0, 10); }
+    else cyl(g, mat('#2A2826', { rough: 0.5 }), 2.2, 2.2, 1.5, 0, cy, -d / 2 + 0.75, 20).rotation.x = Math.PI / 2; // small mount behind
+    if (on && !standing) wash(g, w * 1.9, w * 1.1, 0, cy - w * 0.55, -d / 2 + 0.2, k);
+    return cy;
+  };
+  // Mushroom table lamp: opal glass dome on a slim stem and round foot
+  L.mushroom = (g, w, d, h, c, on, k) => {
+    const cap = w / 2, stemH = h - cap * 0.75, m = glassGlow(c, on, k, 1.4);
+    cyl(g, m, w * 0.3, w * 0.33, 2, 0, 1, 0, 40); cyl(g, m, w * 0.08, w * 0.12, stemH, 0, stemH / 2, 0, 24);
+    const dome = new T3.Mesh(new T3.SphereGeometry(cap, 40, 16, 0, Math.PI * 2, 0, Math.PI / 2), m); dome.scale.y = 0.75; dome.position.y = stemH; dome.castShadow = true; g.add(dome);
+    const lip = new T3.Mesh(new T3.CircleGeometry(cap, 40), m); lip.rotation.x = Math.PI / 2; lip.position.y = stemH; g.add(lip);
+    return stemH + 2;
+  };
+  // Cloud pendant (like IKEA VINDKAST): a soft cluster of white paper billows
+  L.cloud = (g, w, d, h, c, on, k, roomTop) => {
+    const cord = Math.max(0, roomTop - h); if (cord > 0) cyl(g, mat('#EDEBE6', { rough: 0.6 }), 0.35, 0.35, cord, 0, h + cord / 2, 0, 6);
+    const m = glassGlow(c, on, k, 1.2); m.roughness = 0.9; let sd = 5; const r = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < 11; i++) { const a = i / 11 * Math.PI * 2, rr = w * (0.18 + r() * 0.16); sphere(g, m, rr, Math.cos(a) * w * (0.2 + r() * 0.12), h * (0.35 + r() * 0.3), Math.sin(a) * d * (0.2 + r() * 0.12), 0.7); }
+    sphere(g, m, w * 0.3, 0, h * 0.5, 0, 0.8);
+    return h * 0.4;
+  };
+  // Opal glass globe pendant (like IKEA SIMRISHAMN / FADO)
+  L.globe = (g, w, d, h, c, on, k, roomTop) => {
+    const R = Math.min(w, h) / 2, cord = Math.max(0, roomTop - h); if (cord > 0) cyl(g, METAL_DARK(), 0.35, 0.35, cord, 0, h + cord / 2, 0, 6);
+    cyl(g, mat('#C9CCCE', { rough: 0.2, metal: 1 }), R * 0.18, R * 0.24, 4, 0, h - 2, 0, 24);
+    sphere(g, glassGlow(c, on, k, 1.6), R, 0, h - 4 - R, 0);
+    return h - 4 - R;
+  };
+  // Woven bamboo dome pendant (like IKEA SINNERLIG / KNIXHULT)
+  L.bamboo = (g, w, d, h, c, on, k, roomTop) => {
+    const R = w / 2, cord = Math.max(0, roomTop - h); if (cord > 0) cyl(g, mat('#3A2E22', { rough: 0.7 }), 0.4, 0.4, cord, 0, h + cord / 2, 0, 6);
+    const weave = mat(c, { rough: 0.8, map: texFor('grain', 20, 6), side: T3.DoubleSide, emissive: on ? k : null, emissiveIntensity: on ? 0.25 : 0 });
+    const dome = new T3.Mesh(new T3.SphereGeometry(R, 48, 20, 0, Math.PI * 2, 0, Math.PI / 2), weave); dome.scale.y = h / R * 0.95; dome.castShadow = true; g.add(dome);
+    for (let i = 1; i < 6; i++) { const t = i / 6, band = new T3.Mesh(new T3.TorusGeometry(Math.max(1, R * Math.sqrt(1 - t * t)), 0.35, 6, 48), mat(shade(c, 0.8), { rough: 0.8 })); band.rotation.x = Math.PI / 2; band.position.y = t * h * 0.95; g.add(band); } // woven bands
+    const bulb = sphere(g, mat('#FFF8EC', { rough: 0.2, emissive: on ? k : null, emissiveIntensity: on ? 3 : 0 }), 5, 0, h * 0.35, 0); bulb.castShadow = false;
+    return h * 0.3;
+  };
+  // Uplighter floor lamp: a wide bowl on a slim pole throws the light at the ceiling (indirect)
+  L.uplighter = (g, w, d, h, c, on, k) => {
+    const m = mat(c, { rough: 0.45, metal: 0.6 }), R = w / 2;
+    cyl(g, m, R * 0.55, R * 0.6, 2.5, 0, 1.25, 0, 40); cyl(g, m, 1.1, 1.1, h - 14, 0, (h - 14) / 2, 0, 12);
+    const bowl = new T3.Mesh(new T3.CylinderGeometry(R, R * 0.2, 14, 48, 1, true), mat(c, { rough: 0.45, metal: 0.6, side: T3.DoubleSide })); bowl.position.y = h - 7; bowl.castShadow = true; g.add(bowl);
+    const lit = new T3.Mesh(new T3.CircleGeometry(R * 0.9, 40), mat('#FFF6E6', { emissive: on ? k : null, emissiveIntensity: on ? 2.5 : 0 })); lit.rotation.x = -Math.PI / 2; lit.position.y = h - 3; g.add(lit);
+    return h + 8;
+  };
+  // Arc floor lamp: heavy base, a long steel arc, a dome shade hanging over the sofa or table
+  L.arc = (g, w, d, h, c, on, k) => {
+    const m = mat(c, { rough: 0.3, metal: 0.8 }), bx = -w / 2 + 18, sx = w / 2 - 20;
+    part(g, mat('#E6E3DD', { rough: 0.3 }), 30, 6, 22, bx, 3, 0, 1.5); // marble foot
+    const curve = new T3.CubicBezierCurve3(new T3.Vector3(bx, 6, 0), new T3.Vector3(bx, h * 1.05, 0), new T3.Vector3(sx, h * 1.05, 0), new T3.Vector3(sx, h - 22, 0));
+    const tube = new T3.Mesh(new T3.TubeGeometry(curve, 64, 1, 10), m); tube.castShadow = true; g.add(tube);
+    const shade = new T3.Mesh(new T3.SphereGeometry(20, 40, 12, 0, Math.PI * 2, 0, Math.PI / 2.3), mat(c, { rough: 0.3, metal: 0.8, side: T3.DoubleSide })); shade.position.set(sx, h - 36, 0); shade.castShadow = true; g.add(shade);
+    sphere(g, mat('#FFF8EC', { emissive: on ? k : null, emissiveIntensity: on ? 3 : 0 }), 5, sx, h - 32, 0).castShadow = false;
+    return h - 34;
+  };
+  // Paper column floor lamp: rice paper over thin rings, glows all over
+  L.paper = (g, w, d, h, c, on, k) => {
+    const R = w / 2, m = glassGlow(c, on, k, 1.1); m.roughness = 0.95; m.side = T3.DoubleSide;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) cyl(g, mat('#3A2E22', { rough: 0.6 }), 0.6, 0.6, 12, sx * R * 0.6, 6, sz * R * 0.6, 6);
+    const body = new T3.Mesh(new T3.CylinderGeometry(R, R, h - 12, 40, 1, true), m); body.position.y = 12 + (h - 12) / 2; body.castShadow = true; g.add(body);
+    for (let i = 0; i <= 10; i++) { const ring = new T3.Mesh(new T3.TorusGeometry(R + 0.1, 0.2, 4, 40), mat(shade(c, 0.85), { rough: 0.9 })); ring.rotation.x = Math.PI / 2; ring.position.y = 12 + i * (h - 12) / 10; g.add(ring); }
+    return 12 + (h - 12) * 0.55;
+  };
+  // Wall uplighter: a half bowl on the wall, light washing up the wall
+  L.wallup = (g, w, d, h, c, on, k) => {
+    const cup = new T3.Mesh(new T3.SphereGeometry(w / 2, 40, 12, 0, Math.PI, Math.PI / 2, Math.PI / 2), mat(c, { rough: 0.5, side: T3.DoubleSide })); cup.rotation.y = 0; cup.scale.z = (d - 1) / (w / 2); cup.position.set(0, h, -d / 2 + 0.5); cup.castShadow = true; g.add(cup);
+    if (on) wash(g, w * 2.2, 80, 0, h, -d / 2 + 0.2, k);
+    return h - 2;
+  };
+  // Track rail with three adjustable spots
+  L.track = (g, w, d, h, c, on, k) => {
+    const m = mat(c, { rough: 0.4, metal: 0.4 }); part(g, m, w, 2.5, 3.5, 0, h - 1.25, 0, 0.5);
+    for (const f of [-0.33, 0, 0.33]) {
+      const x = f * w; cyl(g, m, 0.6, 0.6, 5, x, h - 5, 0, 8);
+      const can = cyl(g, m, 3.4, 3.4, 10, x, h - 11, 2, 24); can.rotation.x = 0.5;
+      const lens = cyl(g, mat('#FFFFFF', { emissive: on ? k : null, emissiveIntensity: on ? 4 : 0 }), 2.8, 2.8, 0.4, x, h - 15.5, 4.4, 20); lens.rotation.x = 0.5; lens.castShadow = false;
+    }
+    return h - 16;
+  };
+
+
+
+  // ---------- IKEA floor and table lamps ----------
+  // Floor lamp with an opal glass globe on a chrome pole (SIMRISHAMN)
+  L.globepole = (g, w, d, h, c, on, k) => {
+    const m = mat(c, { rough: 0.15, metal: 1 }), R = w / 2;
+    cyl(g, m, R * 0.8, R * 0.85, 2, 0, 1, 0, 40); cyl(g, m, 0.9, 0.9, h - 2 * R, 0, (h - 2 * R) / 2, 0, 12);
+    cyl(g, m, R * 0.22, R * 0.28, 3, 0, h - 2 * R + 1, 0, 24); sphere(g, glassGlow('#F4F1EA', on, k, 1.6), R, 0, h - R, 0);
+    return h - R;
+  };
+  // Uplighter with a separate reading lamp on a side arm (ISJAKT)
+  L.uplightread = (g, w, d, h, c, on, k) => {
+    const y = L.uplighter(g, Math.min(w, d), Math.min(w, d), h, c, on, k), m = mat(c, { rough: 0.45, metal: 0.6 }), ay = h * 0.68;
+    const arm = cyl(g, m, 0.6, 0.6, w * 0.55, w * 0.22, ay + 8, 0, 8); arm.rotation.z = -1.1;
+    const cone = new T3.Mesh(new T3.CylinderGeometry(1.5, 5, 9, 24, 1, true), mat(c, { rough: 0.45, metal: 0.6, side: T3.DoubleSide })); cone.position.set(w * 0.44, ay + 16, 0); cone.rotation.z = 0.5; g.add(cone);
+    return y;
+  };
+  // Woven bamboo lantern (VARPTROSS), standing on the floor or a table
+  L.lantern = (g, w, d, h, c, on, k) => {
+    const R = w / 2, weave = mat(c, { rough: 0.8, map: texFor('grain', 20, 6), side: T3.DoubleSide, emissive: on ? k : null, emissiveIntensity: on ? 0.35 : 0 });
+    const prof = []; for (let i = 0; i <= 16; i++) { const t = i / 16; prof.push(new T3.Vector2(R * (0.35 + 0.65 * Math.sin(Math.PI * (0.08 + 0.84 * t))), t * h)); }
+    const body = new T3.Mesh(new T3.LatheGeometry(prof, 48), weave); body.castShadow = true; g.add(body);
+    for (let i = 1; i < 8; i++) { const t = i / 8, rr = R * (0.35 + 0.65 * Math.sin(Math.PI * (0.08 + 0.84 * t))); const band = new T3.Mesh(new T3.TorusGeometry(rr + 0.1, 0.3, 5, 48), mat(shade(c, 0.78), { rough: 0.8 })); band.rotation.x = Math.PI / 2; band.position.y = t * h; g.add(band); }
+    sphere(g, mat('#FFF8EC', { emissive: on ? k : null, emissiveIntensity: on ? 3 : 0 }), Math.min(5, R * 0.3), 0, h * 0.45, 0).castShadow = false;
+    return h * 0.45;
+  };
+  L.t_lantern = L.lantern;
+  // Opal glass globe on a small foot (FADO)
+  L.t_globe = (g, w, d, h, c, on, k) => {
+    const R = Math.min(w, h) / 2 * 0.96; cyl(g, glassGlow(c, on, k, 1.4), R * 0.35, R * 0.45, 2.5, 0, 1.25, 0, 32);
+    sphere(g, glassGlow(c, on, k, 1.7), R, 0, 1.5 + R, 0); return 1.5 + R;
+  };
+  // Thin rod on a round foot with a drum shade (ÅRSTID table lamp; STORSEGEL in ash)
+  const poleLamp = (g, w, h, m, on, k) => {
+    const shadeH = h * 0.36; cyl(g, m, w * 0.3, w * 0.32, 2, 0, 1, 0, 32); cyl(g, m, 0.6, 0.6, h - shadeH * 0.6, 0, (h - shadeH * 0.6) / 2, 0, 10);
+    const s2 = cyl(g, shadeMat('#F3EEE4', on, k), w * 0.42, w / 2, shadeH, 0, h - shadeH / 2, 0, 36); s2.castShadow = false; return h - shadeH * 0.6;
+  };
+  L.t_pole = (g, w, d, h, c, on, k) => poleLamp(g, w, h, mat(c, { rough: 0.3, metal: 0.9 }), on, k);
+  L.t_polewood = (g, w, d, h, c, on, k) => poleLamp(g, w, h, wood(c, 6, h), on, k);
+  // Brass foot with a smoked glass dome over the bulb (SOLKLINT)
+  L.t_glassdome = (g, w, d, h, c, on, k) => {
+    const m = mat(c, { rough: 0.3, metal: 0.9 }), R = w / 2;
+    cyl(g, m, R * 0.55, R * 0.6, 2, 0, 1, 0, 32); cyl(g, m, 0.8, 0.8, h - R, 0, (h - R) / 2, 0, 10);
+    sphere(g, mat('#FFF8EC', { emissive: on ? k : null, emissiveIntensity: on ? 3 : 0 }), R * 0.35, 0, h - R * 0.7, 0).castShadow = false;
+    const glass = new T3.Mesh(new T3.SphereGeometry(R, 40, 16, 0, Math.PI * 2, 0, Math.PI / 1.7), mat('#6E6A66', { rough: 0.05, transparent: true, opacity: 0.45 })); glass.position.y = h - R; glass.material.envMapIntensity = 1.2; glass.material.depthWrite = false; g.add(glass);
+    return h - R * 0.7;
+  };
+  // Paper cloud on a small white foot (VINDKAST table lamp)
+  L.t_cloud = (g, w, d, h, c, on, k) => { cyl(g, mat('#F2F0EA', { rough: 0.5 }), w * 0.18, w * 0.2, 2, 0, 1, 0, 24); return L.cloud(g, w, d, h, c, on, k, h); };
 
   // ---------- Thumbnails ----------
   // One small offscreen renderer draws a 3/4 view of any piece; results are cached by the caller

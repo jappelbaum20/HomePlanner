@@ -10,10 +10,6 @@
     ['Blush', '#E3C6BC'], ['Terracotta', '#BF7458'], ['Ochre', '#C99D4A'], ['Sage', '#B4BFA6'],
     ['Eucalyptus', '#8C9F90'], ['Forest', '#3E5544'], ['Dusty blue', '#A7B6C2'], ['Navy', '#2D394D'], ['Charcoal', '#46494D']
   ];
-  const FLOOR_SWATCHES = [
-    ['Oak parquet', '#D9B98A', 'parquet'], ['White marble', '#ECE9E3', 'marble'], ['Grey stone', '#9A9C9E', 'stone'], ['White oak', '#E4D3B5', 'wood'], ['Light oak', '#D6BA8E', 'wood'], ['Walnut', '#77543A', 'wood'], ['Grey tile', '#BCBCB6', 'tile'],
-    ['Concrete', '#A3A39E', 'concrete'], ['Terrazzo', '#D9D6CF', 'terrazzo'], ['Dark slate', '#55595C', 'tile']
-  ];
   const FLOOR_FINISHES = { parquet: 'Oak strip parquet', wood: 'Wood planks', marble: 'Marble tiles', stone: 'Stone tiles', tile: 'Tiles', concrete: 'Concrete', terrazzo: 'Terrazzo', carpet: 'Carpet', plain: 'Plain' };
   const WALL_FINISHES = { paint: 'Paint', panelling: 'Wood panelling', oakpanels: 'Oak 3D panels', marble: 'Marble', tiles: 'Tiles' };
   const FURNITURE_TYPES = {
@@ -30,40 +26,58 @@
   const KELVIN = { 2200: '#FFB266', 2700: '#FFC58F', 3000: '#FFD2A6', 4000: '#FFE8CF' };
   const POWER = { soft: 0.55, medium: 1, bright: 1.6 };
   const ROUND = new Set(['roundtable', 'plant', 'floorlamp', 'tablelamp', 'pendant', 'ceiling', 'spot']);
+  // Generic pieces to try out. No beds or sofas (only your own), nothing built into the house (kitchen, bathroom
+  // fittings, stairs, the oak wall panel: placed and locked by house-data.js), and no ceiling lights (the ceilings are low).
   const LIBRARY = [
     ['Living', [
-      ['sofa', 'Sofa, 3-seat', 220, 95, 85, '#6F7C8A'], ['cornersofa', 'Corner sofa', 280, 180, 85, '#D9C9B0'], ['sofa', 'Sofa, 2-seat', 170, 90, 85, '#6F7C8A'],
-      ['armchair', 'Armchair', 85, 85, 80, '#A0826D'], ['table', 'Coffee table', 110, 60, 40, '#8B6A4E'],
+      ['armchair', 'Armchair', 85, 85, 80, '#A0826D'], ['table', 'Coffee table', 110, 60, 40, '#8B6A4E'], ['roundtable', 'Side table', 45, 45, 50, '#8B6A4E'],
       ['cabinet', 'TV unit', 180, 40, 50, '#5B5048'], ['cabinet', 'Sideboard', 180, 45, 80, '#5B5048'],
-      ['shelf', 'Bookshelf', 80, 30, 200, '#8B6A4E'], ['rug', 'Rug', 200, 300, 1, '#C9BBA8'], ['plant', 'Plant', 40, 40, 120, '#5E7A55']
+      ['shelf', 'Bookshelf', 80, 30, 200, '#8B6A4E'], ['rug', 'Rug', 200, 300, 1, '#C9BBA8'], ['rug', 'Runner', 80, 250, 1, '#B8A993'],
+      ['plant', 'Plant', 40, 40, 120, '#5E7A55'], ['plant', 'Small plant', 25, 25, 50, '#5E7A55']
     ]],
     ['Wall art', [
       ['art', 'Artwork 50 x 70', 50, 3, 70, '#1D1D1D'], ['art', 'Artwork 70 x 100', 70, 3, 100, '#1D1D1D'],
-      ['art', 'Canvas 100 x 70', 100, 4, 70, '#F4F3EF'], ['art', 'Small print 30 x 40', 30, 2, 40, '#C49A6C'],
-      ['art', 'Oak 3D wall panel', 150, 2, 200, '#C9A06A']
+      ['art', 'Canvas 100 x 70', 100, 4, 70, '#F4F3EF'], ['art', 'Small print 30 x 40', 30, 2, 40, '#C49A6C']
     ]],
-    ['Lights', [
-      ['ceiling', 'Ceiling light', 40, 40, 10, '#F2F0EA'], ['pendant', 'Pendant', 40, 40, 30, '#2F3337'],
-      ['spot', 'Spotlight', 10, 10, 8, '#F2F0EA'], ['sconce', 'Wall light', 20, 15, 25, '#C9A66B'],
-      ['floorlamp', 'Floor lamp', 30, 30, 160, '#2F3337'], ['tablelamp', 'Table lamp', 30, 30, 50, '#E8E2D6']
+    ['Floor lamps (IKEA)', [
+      ['floorlamp', 'ÅRSTID floor lamp, brass/white', 38, 38, 155, '#B8914A'],
+      ['floorlamp', 'LAUTERS floor lamp, ash/white', 42, 42, 150, '#C8A57A', { style: 'wood' }],
+      ['floorlamp', 'TÅGARP uplighter (indirect)', 35, 35, 176, '#2F3337', { style: 'uplighter' }],
+      ['floorlamp', 'ISJAKT uplighter with reading lamp', 45, 35, 180, '#B8B9BA', { style: 'uplightread' }],
+      ['floorlamp', 'SKOTTORP/SKAFTET arc lamp', 170, 40, 200, '#C4C6C8', { style: 'arc' }],
+      ['floorlamp', 'SIMRISHAMN floor lamp, opal globe', 30, 30, 150, '#C9CCCE', { style: 'globepole' }],
+      ['floorlamp', 'VIDJA floor lamp, textile column', 33, 33, 138, '#F4EFE4', { style: 'paper' }],
+      ['floorlamp', 'VARPTROSS floor lamp, bamboo', 40, 40, 118, '#C9A36B', { style: 'lantern' }]
     ]],
-    ['Dining and kitchen', [
+    ['Table lamps (IKEA)', [
+      ['tablelamp', 'VARMBLIXT, orange glass donut', 30, 12, 34, '#E0863F', { style: 'donut' }],
+      ['tablelamp', 'VARMBLIXT, white glass donut', 30, 12, 34, '#F1EEE8', { style: 'donut' }],
+      ['tablelamp', 'FADO, opal globe', 25, 25, 25, '#F4F1EA', { style: 'globe' }],
+      ['tablelamp', 'DEJSA, beige opal glass', 28, 28, 28, '#E9DFCF', { style: 'mushroom' }],
+      ['tablelamp', 'TÄRNABY, dark yellow', 25, 25, 25, '#C99D4A', { style: 'mushroom' }],
+      ['tablelamp', 'BLIDVÄDER, cream ceramic', 30, 30, 50, '#EFE9DC'],
+      ['tablelamp', 'HALGATT, brown ceramic', 30, 30, 49, '#8A6A4E'],
+      ['tablelamp', 'ÅRSTID table lamp, brass/white', 22, 22, 55, '#B8914A', { style: 'pole' }],
+      ['tablelamp', 'STORSEGEL, ash/white', 22, 22, 44, '#C8A57A', { style: 'polewood' }],
+      ['tablelamp', 'SOLKLINT, brass/grey glass', 22, 22, 28, '#B8914A', { style: 'glassdome' }],
+      ['tablelamp', 'VARPTROSS table lamp, bamboo', 30, 30, 26, '#C9A36B', { style: 'lantern' }],
+      ['tablelamp', 'VINDKAST table lamp, white', 30, 25, 26, '#F6F5F1', { style: 'cloud' }]
+    ]],
+    ['Dining', [
       ['table', 'Dining table', 180, 90, 75, '#8B6A4E'], ['roundtable', 'Round table', 110, 110, 75, '#8B6A4E'],
-      ['chair', 'Dining chair', 45, 50, 90, '#4A4F55'], ['counter', 'Kitchen counter', 120, 60, 90, '#DCDCD6'],
-      ['counter', 'Kitchen island', 180, 90, 90, '#DCDCD6'], ['appliance', 'Fridge', 60, 65, 185, '#E8E8E4'],
-      ['counter', 'Fitted kitchen run', 220, 60, 90, '#F4F4F2', { style: 'fitted' }], ['appliance', 'Tall units with ovens', 100, 60, 225, '#4A4440', { style: 'tallovens' }],
-      ['potrack', 'Ceiling pot rail', 70, 20, 52, '#B87333', { style: 'rail' }], ['potrack', 'Wall pan rail', 100, 14, 34, '#B87333', { style: 'wall' }]
+      ['chair', 'Dining chair', 45, 50, 90, '#4A4F55'], ['cabinet', 'Buffet cabinet', 120, 45, 85, '#EDEBE6']
     ]],
-    ['Bedroom', [
-      ['bed', 'Bed 160 x 200', 160, 200, 50, '#D9D4CC'], ['bed', 'Bed 180 x 200', 180, 200, 50, '#D9D4CC'],
-      ['bed', 'Bed 90 x 200', 90, 200, 50, '#D9D4CC'], ['cabinet', 'Nightstand', 50, 40, 55, '#8B6A4E'],
-      ['wardrobe', 'Wardrobe', 200, 60, 220, '#EDEBE6'], ['cabinet', 'Dresser', 120, 50, 85, '#8B6A4E']
+    ['Bedroom and storage', [
+      ['cabinet', 'Nightstand', 50, 40, 55, '#8B6A4E'], ['wardrobe', 'Wardrobe', 200, 60, 220, '#EDEBE6'],
+      ['cabinet', 'Dresser', 120, 50, 85, '#8B6A4E'], ['cabinet', 'Chest of drawers', 80, 48, 100, '#EDEBE6']
     ]],
-    ['Office', [['desk', 'Desk', 140, 70, 75, '#8B6A4E'], ['chair', 'Office chair', 60, 60, 110, '#2F3337'], ['shelf', 'Shelf unit', 80, 40, 180, '#EDEBE6']]],
-    ['Structure', [['stairs', 'Stairs, straight', 85, 270, 225, '#B98A5A']]],
-    ['Bathroom', [['bath', 'Bathtub', 170, 75, 58, '#F5F5F2'], ['shower', 'Shower tray', 90, 90, 200, '#E6ECEF'], ['vanity', 'Vanity', 80, 50, 85, '#EDEBE6'], ['toilet', 'Toilet', 38, 65, 40, '#F5F5F2']]]
+    ['Office', [['desk', 'Desk', 140, 70, 75, '#8B6A4E'], ['chair', 'Office chair', 60, 60, 110, '#2F3337'], ['shelf', 'Shelf unit', 80, 40, 180, '#EDEBE6']]]
   ];
-  const TYPE_DEFAULTS = {};
+  // Sizes for a new piece of a type the library no longer shows (your own sofas and beds, built-in fittings)
+  const TYPE_DEFAULTS = { sofa: { w: 220, d: 95, h: 85, color: '#6F7C8A' }, cornersofa: { w: 280, d: 180, h: 85, color: '#D9C9B0' },
+    bed: { w: 180, d: 200, h: 50, color: '#D9D4CC' }, counter: { w: 120, d: 60, h: 90, color: '#DCDCD6' }, appliance: { w: 60, d: 65, h: 185, color: '#E8E8E4' },
+    stairs: { w: 85, d: 270, h: 225, color: '#B98A5A' }, bath: { w: 170, d: 75, h: 58, color: '#F5F5F2' }, shower: { w: 90, d: 90, h: 200, color: '#E6ECEF' },
+    vanity: { w: 80, d: 50, h: 85, color: '#EDEBE6' }, toilet: { w: 38, d: 65, h: 40, color: '#F5F5F2' } };
   LIBRARY.forEach(([, items]) => items.forEach(([t, , w, d, h, c]) => { if (!TYPE_DEFAULTS[t]) TYPE_DEFAULTS[t] = { w, d, h, color: c }; }));
   const SHARED = ['name', 'type', 'w', 'd', 'h', 'color', 'kelvin', 'power', 'doors', 'books', 'style', 'image', 'frame', 'mat'];
   const ART_FRAMES = { black: 'Black frame', white: 'White frame', oak: 'Oak frame', limewash: 'Limed oak frame', pine: 'Pine frame', walnut: 'Walnut frame', brass: 'Brass frame', none: 'No frame (canvas)', oakpanel: 'Oak 3D wall panel' };
@@ -233,6 +247,10 @@
     o.removedPieces = Array.isArray(s.removedPieces) ? s.removedPieces.slice() : [];
     o.placedSeeds = Array.isArray(s.placedSeeds) ? s.placedSeeds.slice() : [];
     o.removedRooms = Array.isArray(s.removedRooms) ? s.removedRooms.slice() : [];
+    // favourites, shown at the top of Furniture and lights: 'p:<piece id>' or 'l:<generic item name>'
+    o.favorites = (Array.isArray(s.favorites) ? s.favorites : []).filter((k) => typeof k === 'string');
+    // your paint palette: [{ id, name, hex }]
+    o.paints = (Array.isArray(s.paints) ? s.paints : []).map((p) => ({ id: p.id || 'c' + uid(), name: String(p.name || p.hex || ''), hex: hex(p.hex, '') })).filter((p) => p.hex);
     // Starter rooms from house-data.js. A room is matched by name (so your own "Büro" counts as the office);
     // a starter room you deleted is never recreated.
     const seedRooms = (window.HOUSE_ROOMS || []).filter(Boolean);
@@ -490,12 +508,15 @@
           ${WALLS.map(([k, n]) => `<option value="${k}" ${wallTarget === k ? 'selected' : ''}>${n} wall</option>`).join('')}</select>
       </div>
       <div class="swatches" data-kind="wall">${WALL_SWATCHES.map(([n, h]) => `<button class="sw" data-hex="${h}" style="--c:${h}"><i></i>${n}</button>`).join('')}</div>
-      <h3>Floor</h3>
-      <div class="wallrow"><input type="color" data-floor value="${r.floor}" aria-label="Floor color"><span>Floor</span><code>${r.floor.toUpperCase()}</code></div>
-      <div class="target"><span>Finish</span>
-        <select data-room="floorFinish">${Object.entries(FLOOR_FINISHES).map(([k, n]) => `<option value="${k}" ${r.floorFinish === k ? 'selected' : ''}>${n}</option>`).join('')}</select>
+      <h3>Your paint colors</h3>
+      <div class="swatches" data-kind="wall">${state.paints.map((p) => `<span class="paintchip"><button class="sw" data-hex="${p.hex}" style="--c:${p.hex}" title="${esc(p.name)} ${p.hex}"><i></i>${esc(p.name)}</button><button class="paintx" data-del-paint="${p.id}" aria-label="Remove ${esc(p.name)}">×</button></span>`).join('') || '<p class="note" style="margin:0">None saved yet. Add the paints you are considering below.</p>'}</div>
+      <div class="paintadd">
+        <input type="color" id="paintPick" value="${state.paints.length ? state.paints[state.paints.length - 1].hex : '#E8E0D5'}" aria-label="Pick a color">
+        <input id="paintCode" placeholder="#E8E0D5, rgb(232 224 213), hsl(…), cmyk(…) or a name" aria-label="Color code">
+        <input id="paintName" placeholder="Name, e.g. Farrow &amp; Ball Skimming Stone" aria-label="Paint name">
+        <button class="btn small" id="paintAdd">Add and paint</button>
       </div>
-      <div class="swatches" data-kind="floor" style="margin-top:8px">${FLOOR_SWATCHES.map(([n, h, f]) => `<button class="sw" data-hex="${h}" data-finish="${f}" style="--c:${h}"><i></i>${n}</button>`).join('')}</div>
+      <p class="note">Adds the color to your palette (saved with the plan, in versions and backups) and paints ${wallTarget === 'all' ? 'all walls' : 'the ' + wallName(wallTarget).toLowerCase() + ' wall'}. <button class="linkbtn" id="paintSaveWalls">Save this room's wall colors to the palette</button></p>
       <h3>Doors and windows</h3>
       ${r.seedId ? '<p class="note" style="margin-top:0">Built into the house, so they are locked. Tap one to see its details.</p>' : '<div class="btnrow"><button class="btn light" data-add-opening="door">Add door</button><button class="btn light" data-add-opening="window">Add window</button></div>'}
       <ul class="openings">${r.openings.map((o) => `<li><button data-select-opening="${o.id}" class="${selected && selected.id === o.id ? 'on' : ''}">
@@ -616,7 +637,7 @@
   const thumbs = new Map(), thumbQueue = [];
   let thumbBusy = false, thumbFail = false;
   const libFrame = (color) => color === '#F4F3EF' ? 'none' : color === '#C49A6C' ? 'oak' : color === '#C9A06A' ? 'oakpanel' : 'black';
-  const THUMB_VERSION = 6; // bump when models change so saved thumbnails are redrawn
+  const THUMB_VERSION = 7; // bump when models change so saved thumbnails are redrawn
   const thumbKey = (o) => JSON.stringify([THUMB_VERSION].concat(['type', 'w', 'd', 'h', 'color', 'style', 'doors', 'books', 'side', 'frame', 'mat', 'image', 'kelvin'].map((k) => o[k])));
   const showThumb = (key, url) => $$('img[data-thumb]').forEach((img) => { if (img.dataset.thumb === key) img.src = url; });
   function thumbImg(o, cls) {
@@ -647,9 +668,16 @@
       }, { timeout: 2000 }));
     });
   }
+  const isFav = (k) => state.favorites.includes(k);
+  const favBtn = (k, label) => `<button class="fav ${isFav(k) ? 'on' : ''}" data-fav="${esc(k)}" aria-pressed="${isFav(k)}" aria-label="${isFav(k) ? 'Remove from' : 'Add to'} favorites: ${esc(label)}" title="${isFav(k) ? 'Remove from favorites' : 'Add to favorites'}">${isFav(k) ? '★' : '☆'}</button>`;
+  function libCard(ci, ii) {
+    const [type, name, w, d, h, color, extra] = LIBRARY[ci][1][ii];
+    return `<div class="libcard"><button data-lib="${ci}:${ii}">${thumbImg(Object.assign({ type, w, d, h, color }, extra || {}, type === 'art' ? { frame: libFrame(color), mat: !['#F4F3EF', '#C9A06A'].includes(color) } : {}))}<span>${name}</span><small>${w} x ${d} x ${h} cm</small></button>${favBtn('l:' + name, name)}</div>`;
+  }
+  function libIndex(name) { for (let ci = 0; ci < LIBRARY.length; ci++) { const ii = LIBRARY[ci][1].findIndex((x) => x[1] === name); if (ii >= 0) return [ci, ii]; } return null; }
   function pieceCard(p) {
     const st = p.status === 'own' ? '' : `<span class="badge want">${p.status === 'ordered' ? 'Ordered' : 'Considering'}</span>`;
-    return `<li class="piece"><div class="pic" style="--c:${p.color}">${p.photos[0] ? `<img data-photo="${p.photos[0]}" alt="">` : thumbImg(p)}</div>
+    return `<li class="piece"><div class="picwrap"><div class="pic" style="--c:${p.color}">${p.photos[0] ? `<img data-photo="${p.photos[0]}" alt="">` : thumbImg(p)}</div>${favBtn('p:' + p.id, p.name)}</div>
       <div class="txt"><b>${esc(p.name)}</b><small>${dims(p)}${st}${placements(p.id) ? `<span class="badge">${placements(p.id)} placed</span>` : ''}</small></div>
       <div class="acts"><button class="btn small" data-place="${p.id}">Place</button><button class="btn light small" data-edit-piece="${p.id}">Edit</button></div></li>`;
   }
@@ -662,13 +690,18 @@
         ${lights.length ? `<h3>Lights</h3><ul class="pieces">${lights.map(pieceCard).join('')}</ul>` : ''}`
         : `<p class="empty">Add the furniture and lights you own or are considering, with photos and sizes. Each piece can then be placed in any room, and editing it updates every placement.</p>`;
     } else {
-      body = LIBRARY.map(([cat, items], ci) => `<h3>${cat}</h3><div class="lib-grid">${items.map(([type, name, w, d, h], ii) =>
-        `<button data-lib="${ci}:${ii}">${thumbImg(Object.assign({ type, w, d, h, color: LIBRARY[ci][1][ii][5] }, LIBRARY[ci][1][ii][6] || {}, type === 'art' ? { frame: libFrame(LIBRARY[ci][1][ii][5]), mat: !['#F4F3EF', '#C9A06A'].includes(LIBRARY[ci][1][ii][5]) } : {}))}<span>${name}</span><small>${w} x ${d} x ${h} cm</small></button>`).join('')}</div>`).join('');
+      body = LIBRARY.map(([cat, items], ci) => `<h3>${cat}</h3><div class="lib-grid">${items.map((x, ii) => libCard(ci, ii)).join('')}</div>`).join('');
     }
+    // Favourites from both tabs, always at the top (in the order you starred them)
+    const favPieces = [], favLib = [];
+    state.favorites.forEach((k) => { if (k.startsWith('p:')) { const p = piece(k.slice(2)); if (p) favPieces.push(p); } else if (k.startsWith('l:')) { const at = libIndex(k.slice(2)); if (at) favLib.push(at); } });
+    const favs = favPieces.length || favLib.length ? `<section class="favs"><h3>★ Favorites</h3>
+      ${favPieces.length ? `<ul class="pieces">${favPieces.map(pieceCard).join('')}</ul>` : ''}
+      ${favLib.length ? `<div class="lib-grid"${favPieces.length ? ' style="margin-top:6px"' : ''}>${favLib.map(([ci, ii]) => libCard(ci, ii)).join('')}</div>` : ''}</section>` : '';
     el.innerHTML = `<div class="sec-head"><h2>Furniture and lights</h2><button class="btn small" data-new-piece>New piece</button></div>
       <div class="tabs" role="tablist">
         <button role="tab" data-cat-tab="mine" aria-selected="${catTab === 'mine'}">My pieces (${state.catalog.length})</button>
-        <button role="tab" data-cat-tab="generic" aria-selected="${catTab === 'generic'}">Generic</button></div>${body}`;
+        <button role="tab" data-cat-tab="generic" aria-selected="${catTab === 'generic'}">Generic</button></div>${favs}${body}`;
     hydratePhotos(el);
   }
 
@@ -695,6 +728,9 @@
   // ================= Render: plan =================
   function itemShape(it, fs) {
     const w = it.w, d = it.d, x0 = -w / 2, y0 = -d / 2, c = it.color;
+    if (isLight(it.type) && w > 2.5 * d) { // track rails, arc lamps: a bar with a glow line
+      return `<rect class="light-body" x="${x0}" y="${-Math.max(d, 4) / 2}" width="${w}" height="${Math.max(d, 4)}" rx="2" fill="${c}"/><line class="light-x" x1="${x0 + 3}" x2="${x0 + w - 3}" y1="0" y2="0"/>`;
+    }
     if (isLight(it.type)) {
       const rr = Math.max(Math.max(w, d) / 2, fs * 0.45), k = rr * 0.7;
       return `<circle class="light-body" r="${rr}" fill="${c}"/><path class="light-x" d="M${-k} ${-k}L${k} ${k}M${k} ${-k}L${-k} ${k}"/>`;
@@ -1247,6 +1283,21 @@
     if (c.type === 'art') { const k = artWall(it); if (k === 'n' || k === 's') c.x = it.x + it.w + 15; else c.y = it.y + it.w + 15; snapArt(c, room(), k); }
     room().items.push(c); selected = { kind: 'item', id: c.id }; commit();
   }
+  // Any common way of writing a color → #RRGGBB (null if it can't be read): hex with or without #, rgb(), hsl(),
+  // hwb(), lab()/lch() where the browser knows them, CSS names, cmyk(c, m, y, k) in %, or three plain numbers as RGB.
+  let colorCtx = null;
+  function parseColor(str) {
+    let v = String(str).trim(); if (!v) return null;
+    if (/^#?[0-9a-f]{3}([0-9a-f]{3})?$/i.test(v)) { v = v.replace('#', ''); if (v.length === 3) v = v.split('').map((c) => c + c).join(''); return '#' + v.toUpperCase(); }
+    const cm = v.match(/^cmyk\(\s*([\d.]+)%?[\s,]+([\d.]+)%?[\s,]+([\d.]+)%?[\s,]+([\d.]+)%?\s*\)$/i);
+    if (cm) { const [c, m, y, k] = cm.slice(1).map((n) => Math.min(100, +n) / 100); return '#' + [c, m, y].map((x) => Math.round(255 * (1 - x) * (1 - k)).toString(16).padStart(2, '0')).join('').toUpperCase(); }
+    const nums = v.match(/^(\d{1,3})[\s,]+(\d{1,3})[\s,]+(\d{1,3})$/); if (nums) v = `rgb(${nums[1]}, ${nums[2]}, ${nums[3]})`;
+    colorCtx = colorCtx || document.createElement('canvas').getContext('2d');
+    colorCtx.fillStyle = '#010203'; colorCtx.fillStyle = v; const out = colorCtx.fillStyle;
+    if (out === '#010203' && !/^#?010203$/i.test(v)) { colorCtx.fillStyle = '#040506'; colorCtx.fillStyle = v; if (colorCtx.fillStyle === '#040506') return null; }
+    if (out.startsWith('#')) return out.toUpperCase();
+    const rgb = out.match(/[\d.]+/g); return rgb ? '#' + rgb.slice(0, 3).map((n) => Math.round(+n).toString(16).padStart(2, '0')).join('').toUpperCase() : null;
+  }
   function applyWallColor(h) { const r = room(); if (wallTarget === 'all') WALLS.forEach(([k]) => { r.walls[k] = h; }); else r.walls[wallTarget] = h; renderRoomPanel(); refreshDrawing(); }
 
   async function exportBackup() {
@@ -1304,13 +1355,12 @@
   rp.addEventListener('input', (e) => {
     const r = room(), t = e.target;
     if (t.dataset.room === 'name' || t.dataset.room === 'notes') { r[t.dataset.room] = t.value; if (t.dataset.room === 'name') { renderRooms(); rp.querySelector('h2').textContent = t.value; } save(); renderStatus(); }
+    else if (t.id === 'paintPick') { $('#paintCode').value = t.value.toUpperCase(); }
     else if (t.dataset.wall) { r.walls[t.dataset.wall] = t.value; t.parentElement.querySelector('code').textContent = t.value.toUpperCase(); refreshDrawing(); }
-    else if (t.hasAttribute('data-floor')) { r.floor = t.value; t.parentElement.querySelector('code').textContent = t.value.toUpperCase(); refreshDrawing(); }
   });
   rp.addEventListener('change', (e) => {
     const r = room(), t = e.target, f = t.dataset.room;
     if (f === 'level') { r.level = t.value.trim() || 'Ground floor'; commit(); }
-    else if (f === 'floorFinish') { r.floorFinish = FLOOR_FINISHES[t.value] ? t.value : 'parquet'; commit(); }
     else if (t.dataset.wallfinish) { r.wallFinish[t.dataset.wallfinish] = WALL_FINISHES[t.value] ? t.value : 'paint'; commit(); }
     else if (t.id === 'wallTarget') { wallTarget = t.value; renderRoomPanel(); renderPlan(); }
   });
@@ -1318,7 +1368,19 @@
     const t = e.target, r = room();
     const tab = t.closest('[data-room-tab]'); if (tab) { roomTab = tab.dataset.roomTab; renderRoomPanel(); return; }
     const sw = t.closest('.sw');
-    if (sw) { if (sw.parentElement.dataset.kind === 'wall') applyWallColor(sw.dataset.hex); else { r.floor = sw.dataset.hex; if (sw.dataset.finish) r.floorFinish = sw.dataset.finish; renderRoomPanel(); refreshDrawing(); } return; }
+    if (sw) { applyWallColor(sw.dataset.hex); return; }
+    const dp = t.closest('[data-del-paint]'); if (dp) { state.paints = state.paints.filter((p) => p.id !== dp.dataset.delPaint); commit(); return; }
+    if (t.id === 'paintAdd') {
+      const code = $('#paintCode').value.trim(), hx = code ? parseColor(code) : $('#paintPick').value.toUpperCase();
+      if (!hx) { toast('Could not read that color. Try #E8E0D5, rgb(232 224 213), hsl(40 25% 87%), cmyk(0 3 8 9) or a name like beige.'); return; }
+      const name = $('#paintName').value.trim() || hx;
+      const ex = state.paints.find((p) => p.hex === hx); if (ex) ex.name = name; else state.paints.push({ id: 'c' + uid(), name, hex: hx });
+      applyWallColor(hx); commit(); toast(`${name} added to your palette`); return;
+    }
+    if (t.id === 'paintSaveWalls') {
+      let n = 0; WALLS.forEach(([k, nm]) => { const hx = r.walls[k].toUpperCase(); if (!state.paints.some((p) => p.hex === hx)) { state.paints.push({ id: 'c' + uid(), name: `${r.name}, ${nm.toLowerCase()} wall`, hex: hx }); n++; } });
+      commit(); toast(n ? `${n} color${n > 1 ? 's' : ''} saved to your palette` : 'Those colors are already in your palette'); return;
+    }
     const add = t.closest('[data-add-opening]'); if (add) return addOpening(add.dataset.addOpening);
     const so = t.closest('[data-select-opening]'); if (so) { selected = { kind: 'opening', id: so.dataset.selectOpening }; renderRoomPanel(); renderInspector(); renderPlan(); return; }
     if (t.id === 'dupRoom') {
@@ -1402,6 +1464,8 @@
     const t = e.target;
     const tab = t.closest('[data-cat-tab]'); if (tab) { catTab = tab.dataset.catTab; renderCatalog(); return; }
     if (t.closest('[data-new-piece]')) return pieceDialog(null);
+    const fv = t.closest('[data-fav]');
+    if (fv) { const k = fv.dataset.fav; state.favorites = isFav(k) ? state.favorites.filter((x) => x !== k) : state.favorites.concat(k); save(); renderCatalog(); return; }
     const pl = t.closest('[data-place]'); if (pl) return placePiece(piece(pl.dataset.place));
     const ed = t.closest('[data-edit-piece]'); if (ed) return pieceDialog(piece(ed.dataset.editPiece));
     const lib = t.closest('[data-lib]'); if (lib) { const [ci, ii] = lib.dataset.lib.split(':').map(Number); addFromLibrary(ci, ii); }
