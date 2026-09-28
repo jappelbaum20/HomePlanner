@@ -85,24 +85,106 @@
       for (let x = 0; x < s; x += 2) { const v = 215 + rnd() * 30; g.fillStyle = `rgba(${v},${v},${v},.45)`; g.fillRect(x, 0, 1, s); }
       noise(g, s, 3000, 0.3, 180, 255);
     }, 25),
+    // corduroy: soft ribs about 4 mm apart
+    cord: () => canvasTex('cord', 256, (g, s) => {
+      seed = 53; g.fillStyle = '#fff'; g.fillRect(0, 0, s, s);
+      for (let x = 0; x < s; x += 4) { const gr = g.createLinearGradient(x, 0, x + 4, 0); gr.addColorStop(0, 'rgb(200,200,200)'); gr.addColorStop(0.5, 'rgb(255,255,255)'); gr.addColorStop(1, 'rgb(205,205,205)'); g.fillStyle = gr; g.fillRect(x, 0, 4, s); }
+      noise(g, s, 2500, 0.2, 190, 255);
+    }, 12),
     grain: () => canvasTex('grain', 512, (g, s) => {
       seed = 17; g.fillStyle = '#f4f4f4'; g.fillRect(0, 0, s, s);
       for (let k = 0; k < 90; k++) { const y = rnd() * s, v = 215 + rnd() * 30; g.strokeStyle = `rgba(${v},${v},${v},.5)`; g.lineWidth = 0.5 + rnd() * 2; g.beginPath(); g.moveTo(0, y); for (let x = 0; x <= s; x += 32) g.lineTo(x, y + Math.sin(x / 60 + k) * 3 + (rnd() - 0.5) * 2); g.stroke(); }
     }, 80),
+    // 140 cm square: narrow oak strips (7 cm) in staggered lengths, like Swiss strip parquet
+    parquet: () => canvasTex('parquet', 1024, (g, s) => {
+      seed = 23; g.fillStyle = '#fff'; g.fillRect(0, 0, s, s);
+      const rows = 20, rh = s / rows;
+      for (let r = 0; r < rows; r++) {
+        let x = -rnd() * s * 0.4;
+        while (x < s) {
+          const len = s * (0.2 + rnd() * 0.3), v = 205 + Math.floor(rnd() * 50);
+          g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(x, r * rh, len, rh);
+          for (let k = 0; k < 5; k++) { const yy = r * rh + rnd() * rh, gv = v - 10 - rnd() * 18; g.strokeStyle = `rgba(${gv},${gv},${gv},.4)`; g.lineWidth = 0.6 + rnd(); g.beginPath(); g.moveTo(x, yy); g.lineTo(x + len, yy + (rnd() - 0.5) * 3); g.stroke(); }
+          g.fillStyle = 'rgba(110,110,110,.45)'; g.fillRect(x, r * rh, 1.5, rh);
+          x += len;
+        }
+        g.fillStyle = 'rgba(110,110,110,.45)'; g.fillRect(0, r * rh, s, 1.5);
+      }
+    }, 140),
+    // 120 cm square: two 60 x 120 slabs with soft grey veins
+    marble: () => canvasTex('marble', 1024, (g, s) => {
+      seed = 29; g.fillStyle = '#fbfbfa'; g.fillRect(0, 0, s, s);
+      for (let k = 0; k < 16; k++) {
+        let x = rnd() * s, y = rnd() * s; const a = rnd() * Math.PI, v = 120 + rnd() * 80;
+        g.strokeStyle = `rgba(${v},${v - 5},${v - 12},${0.25 + rnd() * 0.35})`; g.lineWidth = 0.6 + rnd() * 2.2; g.beginPath(); g.moveTo(x, y);
+        for (let i = 0; i < 26; i++) { x += Math.cos(a) * 22 + (rnd() - 0.5) * 26; y += Math.sin(a) * 22 + (rnd() - 0.5) * 26; g.lineTo(x, y); }
+        g.stroke();
+      }
+      g.fillStyle = 'rgba(170,170,170,.8)'; g.fillRect(s / 2, 0, 2, s); g.fillRect(0, 0, s, 2);
+    }, 120),
+    // 120 cm square: 60 x 60 grey stone look with mottling
+    stone: () => canvasTex('stone', 512, (g, s) => {
+      seed = 31; g.fillStyle = '#e6e6e6'; g.fillRect(0, 0, s, s);
+      for (let i = 0; i < 40; i++) { const v = 215 + rnd() * 40, r = 40 + rnd() * 120; const x = rnd() * s, y = rnd() * s, gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, `rgba(${v},${v},${v},.18)`); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, s, s); }
+      noise(g, s, 16000, 0.18, 185, 255);
+      g.fillStyle = 'rgb(160,160,160)'; g.fillRect(s / 2, 0, 2, s); g.fillRect(0, s / 2, s, 2); g.fillRect(0, 0, 2, s); g.fillRect(0, 0, s, 2);
+    }, 120),
+    // wall tiles: 30 x 60 cm, landscape
+    walltile: () => canvasTex('walltile', 512, (g, s) => {
+      seed = 37; g.fillStyle = '#fff'; g.fillRect(0, 0, s, s);
+      for (let j = 0; j < 4; j++) for (let i = 0; i < 2; i++) { const v = 246 + Math.floor(rnd() * 9); g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(i * s / 2, j * s / 4, s / 2, s / 4); }
+      g.fillStyle = 'rgb(205,205,205)'; for (let i = 0; i <= 2; i++) g.fillRect(i * s / 2 - 1, 0, 2, s); for (let j = 0; j <= 4; j++) g.fillRect(0, j * s / 4 - 1, s, 2);
+    }, 120),
+    // vertical board panelling (Täfer): 10 cm boards with a shadow groove
+    panelling: () => canvasTex('panelling', 512, (g, s) => {
+      seed = 41; g.fillStyle = '#fff'; g.fillRect(0, 0, s, s); const n = 10, bw = s / n;
+      for (let i = 0; i < n; i++) { const v = 245 + Math.floor(rnd() * 10); g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(i * bw, 0, bw, s); g.fillStyle = 'rgba(150,150,150,.8)'; g.fillRect(i * bw, 0, 2.5, s); g.fillStyle = 'rgba(255,255,255,.9)'; g.fillRect(i * bw + 2.5, 0, 1.5, s); }
+    }, 100),
+    // oak 3D triangle panels: 20 cm triangles with alternating light and shade
+    oakpanels: () => canvasTex('oakpanels', 512, (g, s) => {
+      seed = 43; g.fillStyle = '#ddd'; g.fillRect(0, 0, s, s); const n = 6, t = s / n;
+      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+        const x = i * t, y = j * t, tri = (pts, v) => { g.fillStyle = `rgb(${v},${v},${v})`; g.beginPath(); g.moveTo(...pts[0]); g.lineTo(...pts[1]); g.lineTo(...pts[2]); g.closePath(); g.fill(); };
+        const up = (i + j) % 2 === 0;
+        tri(up ? [[x, y + t], [x + t, y + t], [x + t / 2, y]] : [[x, y], [x + t, y], [x + t / 2, y + t]], 200 + rnd() * 55);
+        tri(up ? [[x, y], [x + t / 2, y], [x, y + t]] : [[x, y + t], [x + t / 2, y + t], [x, y]], 170 + rnd() * 50);
+        tri(up ? [[x + t, y], [x + t / 2, y], [x + t, y + t]] : [[x + t, y + t], [x + t / 2, y + t], [x + t, y]], 185 + rnd() * 50);
+      }
+      g.globalAlpha = 0.25; for (let k = 0; k < 400; k++) { const v = 120 + rnd() * 80; g.strokeStyle = `rgb(${v},${v},${v})`; g.beginPath(); const x = rnd() * s, y = rnd() * s; g.moveTo(x, y); g.lineTo(x + 20, y + (rnd() - 0.5) * 3); g.stroke(); } g.globalAlpha = 1;
+    }, 120),
+    // dark granite worktop: near-black with warm and pale flecks
+    granite: () => canvasTex('granite', 512, (g, s) => {
+      seed = 47; g.fillStyle = '#fff'; g.fillRect(0, 0, s, s);
+      for (let i = 0; i < 9000; i++) { const t = rnd(), v = t < 0.6 ? 60 + rnd() * 50 : t < 0.9 ? 150 + rnd() * 60 : 235; g.fillStyle = `rgb(${v},${Math.max(0, v - 8)},${Math.max(0, v - 16)})`; const r = 1 + rnd() * 4; g.fillRect(rnd() * s, rnd() * s, r, r * (0.5 + rnd())); }
+    }, 60),
     plaster: () => canvasTex('plaster', 256, (g, s) => { seed = 21; g.fillStyle = '#fbfbfb'; g.fillRect(0, 0, s, s); noise(g, s, 5000, 0.18, 225, 255); }, 100)
   };
   // Clone a cached texture with a repeat that keeps its real-world scale on a w x h (cm) face
   function texFor(kind, w, h) { const b = TEX[kind](), t = b.clone(); t.needsUpdate = true; t.repeat.set(w / b.cmSize, h / b.cmSize); return t; }
 
   // ---------- Floors and walls ----------
-  HM.FINISHES = { wood: 'Wood planks', tile: 'Tiles', concrete: 'Concrete', terrazzo: 'Terrazzo', carpet: 'Carpet', plain: 'Plain' };
   HM.floorMaterial = (hex, finish, W, L) => {
-    const rough = { wood: 0.55, tile: 0.3, concrete: 0.75, terrazzo: 0.35, carpet: 1, plain: 0.7 }[finish] || 0.6;
+    const rough = { parquet: 0.45, wood: 0.55, marble: 0.08, stone: 0.4, tile: 0.3, concrete: 0.75, terrazzo: 0.35, carpet: 1, plain: 0.7 }[finish] || 0.6;
     const o = { rough };
-    if (TEX[finish]) { o.map = texFor(finish, W, L); o.bump = o.map; o.bumpScale = finish === 'carpet' ? 0.6 : 0.25; }
-    return mat(hex, o);
+    if (TEX[finish]) { o.map = texFor(finish, W, L); if (finish !== 'marble') { o.bump = o.map; o.bumpScale = finish === 'carpet' ? 0.6 : 0.25; } }
+    const m = mat(hex, o); if (finish === 'marble') m.envMapIntensity = 1; return m;
   };
-  HM.wallMaterial = (hex, len, h) => mat(hex, { rough: 0.92, map: texFor('plaster', len, h), transparent: true, opacity: 1 });
+  // Wall finishes: paint, panelling (Täfer), oak 3D panels, marble, tiles. The paint color tints all of them except oak.
+  HM.wallMaterial = (hex, finish, len, h) => {
+    const f = { paint: ['plaster', 0.92], panelling: ['panelling', 0.6], oakpanels: ['oakpanels', 0.55], marble: ['marble', 0.1], tiles: ['walltile', 0.12] }[finish] || ['plaster', 0.92];
+    const o = { rough: f[1], map: texFor(f[0], len, h), transparent: true, opacity: 1 };
+    if (finish === 'panelling' || finish === 'oakpanels') { o.bump = o.map; o.bumpScale = finish === 'oakpanels' ? 1.2 : 0.5; }
+    const m = mat(finish === 'oakpanels' ? '#C9A06A' : hex, o); if (finish === 'marble' || finish === 'tiles') m.envMapIntensity = 1; return m;
+  };
+  // Panel radiator (white, horizontal ribs), local: centered, on the floor, depth along z
+  HM.radiator = (w, h, y0) => {
+    const g = new T3.Group(), m = mat('#F4F4F1', { rough: 0.35 });
+    const n = Math.max(3, Math.round(h / 7));
+    for (let i = 0; i < n; i++) part(g, m, w, h / n - 1.2, 7, 0, y0 + (i + 0.5) * h / n, 0, 0.8);
+    part(g, m, 3, h + 4, 3, w / 2 - 6, y0 + h / 2, 3, 1); // valve
+    for (const x of [-w / 2 + 10, w / 2 - 10]) part(g, m, 2, y0 + 4, 2, x, (y0 + 4) / 2, -1);
+    return g;
+  };
 
   // ---------- Geometry helpers ----------
   const GEO = {
@@ -131,6 +213,7 @@
     }
   }
   const fabric = (hex, w, h) => mat(hex, { rough: 0.95, map: texFor('fabric', w, h), bump: texFor('fabric', w, h), bumpScale: 0.35 });
+  const cord = (hex, w, h) => { const m = mat(hex, { rough: 0.85, map: texFor('cord', w, h), bump: texFor('cord', w, h), bumpScale: 0.6 }); m.envMapIntensity = 0.35; return m; };
   const wood = (hex, w, h) => mat(hex, { rough: 0.55, map: texFor('grain', w, h) });
   const METAL_DARK = () => mat('#2A2C2E', { rough: 0.35, metal: 0.8 });
   const METAL_BRASS = () => mat('#B89559', { rough: 0.3, metal: 0.9 });
@@ -156,6 +239,33 @@
     }
   };
   B.armchair = (g, w, d, h, c) => B.sofa(g, w, d, h, c);
+  // L-shaped sofa, low on small feet: main seat along the back, chaise forward on one side (+x = right seen from the front)
+  B.cornersofa = (g, w, d, h, c, it) => {
+    const f = cord(c, w, d), fd = cord(shade(c, 0.9), w, d), legM = mat('#1E1E1E', { rough: 0.6 });
+    const right = !it || it.side !== 'left', sx = right ? 1 : -1;
+    const legH = 3, backT = Math.min(22, d * 0.14), md = Math.min(d, Math.max(backT + 60, d * 0.55)), cw = Math.min(w * 0.4, 105), arm = Math.min(22, w * 0.08);
+    const seatH = Math.max(40, h * 0.47), baseH = seatH - legH - 14;
+    const z0 = -d / 2, chaiseX = sx * (w / 2 - cw / 2), mainW = w - cw; // main section excludes the chaise column
+    const mainX = -sx * (cw / 2); // centre of the non-chaise part
+    for (const [x, z] of [[-w / 2 + 6, z0 + 6], [w / 2 - 6, z0 + 6], [-sx * (w / 2 - 6), z0 + md - 6], [sx * (w / 2 - 6), d / 2 - 6], [sx * (w / 2 - cw + 6), d / 2 - 6]]) part(g, legM, 4, legH, 4, x, legH / 2, z, 1);
+    // bases
+    part(g, fd, mainW, baseH, md, mainX, legH + baseH / 2, z0 + md / 2, 3);
+    part(g, fd, cw, baseH, d, chaiseX, legH + baseH / 2, 0, 3);
+    // back along the full width, arm on the non-chaise end, low arm on the chaise end
+    part(g, fd, w, h - legH, backT, 0, legH + (h - legH) / 2, z0 + backT / 2, 6);
+    part(g, fd, arm, seatH + 16 - legH, md, -sx * (w / 2 - arm / 2), legH + (seatH + 16 - legH) / 2, z0 + md / 2, 6);
+    // seat cushions: main (split in two or three) and the chaise
+    const inner = mainW - arm, n = inner > 150 ? 3 : 2, cwid = inner / n;
+    for (let i = 0; i < n; i++) {
+      const x = -sx * (w / 2 - arm) + sx * cwid * (i + 0.5);
+      part(g, f, cwid - 1.5, 14, md - backT - 2, x, seatH - 7, z0 + backT + (md - backT) / 2, 6);
+      const bh = Math.min(h - seatH + 6, 48); const m = part(g, f, cwid - 3, bh, 18, x, seatH + bh / 2 - 2, z0 + backT + 8, 8); m.rotation.x = -0.14;
+    }
+    part(g, f, cw - 2, 14, d - backT - 2, chaiseX, seatH - 7, z0 + backT + (d - backT) / 2, 6);
+    const bh = Math.min(h - seatH + 6, 48); const cb = part(g, f, cw - 4, bh, 18, chaiseX, seatH + bh / 2 - 2, z0 + backT + 8, 8); cb.rotation.x = -0.14;
+    // two scatter cushions
+    for (const k of [0, 1]) { const m = part(g, fabric(shade(c, 1.08), 45, 45), 42, 42, 12, sx * (w / 2 - cw - 30 - k * 46), seatH + 20, z0 + backT + 20, 9); m.rotation.x = -0.3; m.rotation.z = (k ? -1 : 1) * 0.08; }
+  };
   B.chair = (g, w, d, h, c) => {
     const seatH = Math.min(46, h * 0.5), t = 3, woodM = wood(c, w, d);
     const m = h > 100 ? METAL_DARK() : woodM;
@@ -185,22 +295,27 @@
     for (const sx of [-1, 1]) { part(g, lm, 4, h - top, d - 10, sx * (w / 2 - 5), (h - top) / 2, 0); }
     part(g, lm, w - 10, 4, 2, 0, h - top - 12, -d / 2 + 6);
   };
-  B.roundtable = (g, w, d, h, c) => {
-    const m = wood(c, w, d), top = 4;
-    const t = cyl(g, m, w / 2, w / 2, top, 0, h - top / 2, 0, 48);
-    cyl(g, m, 5, 6, h - top, 0, (h - top) / 2, 0, 16);
-    const foot = cyl(g, m, w * 0.22, w * 0.25, 3, 0, 1.5, 0, 32);
-    [t, foot].forEach((o) => { o.scale.z = d / w; });
+  B.roundtable = (g, w, d, h, c) => { // round or oval top on four tapered legs with an apron
+    const m = wood(c, w, d), top = 2.5;
+    const t = cyl(g, m, w / 2, w / 2, top, 0, h - top / 2, 0, 64); t.scale.z = d / w;
+    const ap = cyl(g, m, w * 0.36, w * 0.36, 7, 0, h - top - 3.5, 0, 48); ap.scale.z = d / w;
+    const r = w * 0.3, rz = d * 0.3;
+    for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) cyl(g, m, 2.8, 2, h - top, sx * r * 0.72, (h - top) / 2, sz * rz * 0.72, 12);
   };
+  // Upholstered bed. h up to 80 = mattress top (headboard 45 cm above); over 80 = overall height to the top of the headboard.
   B.bed = (g, w, d, h, c) => {
-    const frame = wood(shade(c, 0.55), w, d), frameH = Math.min(25, h * 0.5), mattH = Math.max(h - frameH, 12);
-    part(g, frame, w, frameH - 6, d, 0, 6 + (frameH - 6) / 2, 0, 1);
-    legs(g, frame, w, d, 6, 5, 5, false);
-    part(g, frame, w + 2, Math.max(h + 45, 90), 6, 0, Math.max(h + 45, 90) / 2, -d / 2 - 3, 2); // headboard
-    part(g, mat('#F4F2EE', { rough: 0.9 }), w - 4, mattH, d - 4, 0, frameH + mattH / 2, 2, 5); // mattress
-    part(g, fabric(c, w, d), w + 1, 8, d * 0.62, 0, frameH + mattH + 2, d * 0.19, 4); // duvet
+    const top = h > 80 ? Math.min(55, h * 0.48) : h, headH = h > 80 ? h : h + 45;
+    const frame = fabric(shade(c, 0.92), w, d), feetM = wood('#6B4A2E', 5, 15), feetH = Math.min(15, top * 0.3);
+    const frameH = Math.min(top - 18, feetH + 28), mattH = top - frameH + 8;
+    legs(g, feetM, w, d, feetH, 8, 5, true);
+    part(g, frame, w, frameH - feetH, d - 8, 0, feetH + (frameH - feetH) / 2, 4, 3);
+    part(g, frame, w, headH - feetH, 9, 0, feetH + (headH - feetH) / 2, -d / 2 + 4.5, 5); // padded headboard
+    const mw = w - 10, md2 = d - 16, mz = 4;
+    part(g, mat('#F4F2EE', { rough: 0.9 }), mw, mattH, md2, 0, frameH - 8 + mattH / 2, mz, 5); // mattress
+    part(g, fabric('#F1EEE8', w, d), mw + 2, 7, md2 * 0.62, 0, frameH - 8 + mattH + 2, mz + md2 * 0.19, 4); // duvet
+    part(g, fabric(shade(c, 0.85), w, 40), mw + 4, 3, 40, 0, frameH - 8 + mattH + 5.5, mz + md2 / 2 - 28, 1.5); // throw
     const n = w >= 140 ? 2 : 1, pw = (w - 12 - (n - 1) * 6) / n;
-    for (let k = 0; k < n; k++) { const x = -w / 2 + 6 + pw / 2 + k * (pw + 6); const p = part(g, fabric('#FBFAF7', pw, 40), pw, 12, 36, x, frameH + mattH + 6, -d / 2 + 26, 6); p.rotation.x = -0.25; }
+    for (let k = 0; k < n; k++) { const x = -w / 2 + 6 + pw / 2 + k * (pw + 6); const p = part(g, fabric('#FBFAF7', pw, 40), pw - 6, 12, 36, x, frameH - 8 + mattH + 6, -d / 2 + 30, 6); p.rotation.x = -0.25; }
   };
   B.cabinet = (g, w, d, h, c) => {
     const m = wood(c, w, h), legH = h > 60 ? 10 : 6, bodyH = h - legH;
@@ -235,7 +350,10 @@
     }
   };
   B.counter = (g, w, d, h, c) => {
-    const top = 4, m = mat(c, { rough: 0.6 }), topM = mat(shade(c, 0.35), { rough: 0.25, map: texFor('terrazzo', w, d) });
+    // light fronts get a gloss finish and a dark granite top; dark fronts get a pale stone top
+    const light = new T3.Color(c).getHSL({}).l > 0.6, top = 4, m = mat(c, { rough: light ? 0.18 : 0.5 });
+    const topM = light ? mat('#9A8F86', { rough: 0.15, map: texFor('granite', w, d) }) : mat('#E9E6E0', { rough: 0.2, map: texFor('terrazzo', w, d) });
+    topM.envMapIntensity = 1;
     part(g, mat('#2A2A2A'), w - 4, 10, d - 8, 0, 5, -3);
     part(g, m, w, h - top - 10, d - 3, 0, 10 + (h - top - 10) / 2, -1.5, 0.4);
     part(g, topM, w, top, d, 0, h - top / 2, 0, 0.5);
@@ -268,9 +386,10 @@
       sphere(g, k % 2 ? leaf : leaf2, s, Math.cos(a) * rr, y, Math.sin(a) * rr * d / w, 0.8);
     }
   };
-  B.bath = (g, w, d, h, c) => {
+  B.bath = (g, w, d, h, c) => { // built-in tub with a tiled front
     const m = CERAMIC(); m.color = lin(c);
-    part(g, m, w, h, d, 0, h / 2, 0, 4);
+    part(g, mat('#FAFAF8', { rough: 0.12, map: texFor('walltile', w, h) }), w, h - 3, d, 0, (h - 3) / 2, 0, 0.3);
+    part(g, m, w, 3, d, 0, h - 1.5, 0, 1.5);
     part(g, mat('#DDE7EA', { rough: 0.05, transparent: true, opacity: 0.85 }), w - 14, 1, d - 14, 0, h - 8, 0, 0.3);
     part(g, mat(shade(c, 0.9), { rough: 0.2 }), w - 12, 2, d - 12, 0, h - 0.5, 0, 6);
     cyl(g, mat('#C0C4C6', { rough: 0.2, metal: 1 }), 1.5, 1.5, 12, -w / 2 + 6, h + 6, 0, 12);
@@ -285,20 +404,21 @@
     part(g, chrome, 1.2, 1.2, 14, -w / 2 + 16, h * 0.96, -d / 2 + 7);
   };
   B.vanity = (g, w, d, h, c) => {
-    const m = wood(c, w, h);
-    part(g, m, w, h - 22, d, 0, 22 + (h - 22) / 2, 0, 1);
+    const m = wood(c, w, h), bh = Math.min(50, h * 0.55); // wall-hung cabinet under the basin
+    part(g, m, w, bh, d, 0, h - bh / 2, 0, 1);
+    part(g, mat(shade(c, 0.7)), w - 4, 0.6, 0.6, 0, h - bh / 2, d / 2 + 0.2);
     const top = part(g, CERAMIC(), w, 3, d, 0, h + 1.5, 0, 1);
     top.castShadow = true;
     part(g, mat('#E9ECEC', { rough: 0.1 }), w * 0.55, 1, d * 0.55, 0, h + 3.1, 2, 4);
     part(g, mat('#C0C4C6', { rough: 0.15, metal: 1 }), 2, 14, 2, 0, h + 10, -d / 2 + 6, 0.8);
     part(g, mat('#DDE6EA', { rough: 0.02, metal: 0.9 }), Math.min(w, 80), 70, 1, 0, h + 70, -d / 2 - 1, 1); // mirror
   };
-  B.toilet = (g, w, d, h, c) => {
+  B.toilet = (g, w, d, h, c) => { // wall-hung bowl with a concealed cistern and flush plate
     const m = CERAMIC(); m.color = lin(c);
-    const tankD = Math.min(18, d * 0.28);
-    part(g, m, w, h + 38, tankD, 0, (h + 38) / 2, -d / 2 + tankD / 2, 3);
-    const bowl = cyl(g, m, w / 2, w * 0.36, h - 3, 0, (h - 3) / 2, tankD / 2 + 2, 32); bowl.scale.z = (d - tankD) / w;
-    const seat = cyl(g, m, w / 2 + 0.5, w / 2 + 0.5, 3, 0, h - 1.5, tankD / 2 + 2, 32); seat.scale.z = (d - tankD) / w;
+    part(g, mat('#C8CCCE', { rough: 0.2, metal: 0.8 }), 22, 15, 1, 0, h + 45, -d / 2 + 0.5, 1);
+    const bd = d - 4, bowl = cyl(g, m, w / 2, w * 0.4, 28, 0, h - 14, -d / 2 + 4 + bd / 2, 32); bowl.scale.z = bd / w;
+    part(g, m, w * 0.7, 28, 8, 0, h - 14, -d / 2 + 4, 3);
+    const seat = cyl(g, mat('#FFFFFF', { rough: 0.15 }), w / 2 + 0.5, w / 2 + 0.5, 2.5, 0, h - 0.5, -d / 2 + 4 + bd / 2, 32); seat.scale.z = bd / w;
   };
   B.box = (g, w, d, h, c) => { part(g, mat(c, { rough: 0.7 }), w, h, d, 0, h / 2, 0, 1.5); };
 
@@ -342,7 +462,7 @@
     const g = new T3.Group(), w = it.w, d = it.d, h = Math.max(it.h, 1);
     let bulbY = null;
     if (L[it.type]) bulbY = L[it.type](g, w, d, h, it.color, opts.evening, opts.kelvinHex, opts.roomTop);
-    else (B[it.type] || B.box)(g, w, d, h, it.color);
+    else (B[it.type] || B.box)(g, w, d, h, it.color, it);
     g.userData.bulbY = bulbY;
     return g;
   };

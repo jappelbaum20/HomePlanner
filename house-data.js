@@ -36,3 +36,26 @@ window.HOUSE_SEED = {
     }
   ]
 };
+
+// Pieces Claude found and you confirmed. Each appears in My pieces once (matched by id);
+// if you delete one in the app it stays deleted. Sizes are W x D x H in cm.
+window.HOUSE_PIECES = [
+  {
+    id: 'dellia-sofa', type: 'cornersofa', side: 'right', name: 'DELLIA corner sofa',
+    w: 289, d: 182, h: 86, color: '#D9C9B0', status: 'own',
+    link: 'https://www.amazon.de/dp/B0CVQKDT11',
+    notes: 'home24 (Best Mobilier), Aug 2024, €999. Beige corduroy. Chaise 100 cm wide, can go left or right. Seat height 40, seat depth 65. Sleep function (342 x 140) and storage box. Black 2.5 cm feet.'
+  },
+  {
+    id: 'mattis-bed', type: 'bed', name: 'Mattis upholstered bed 180 x 200',
+    w: 205, d: 216, h: 112, color: '#CDBFA8', status: 'own',
+    link: 'https://www.home24.de/produkt/polsterbett-mattis-i-beige-180-x-200cm-2-bettkaesten',
+    notes: 'home24, Oct 2022. Beige woven fabric, plain rounded padded headboard, tapered oak feet, 2 storage boxes. Outer size from the home24 listing (about 205 x 216 x 112): measure to confirm.'
+  },
+  {
+    id: 'amburwood-table', type: 'roundtable', name: 'AmburWOOD dining table',
+    w: 100, d: 100, h: 75, color: '#B8875A', status: 'own',
+    link: 'https://www.home24.de/produkt/esstisch-amburwood-mit-ausziehfunktion-eiche-massiv-eiche',
+    notes: 'home24 (Ars Natura), Sep 2024. Solid oiled oak, round 100 cm, extends to 130 x 100 with a built-in butterfly leaf. Seats 2 to 4 (6 extended). Set depth to 130 to plan it extended.'
+  }
+];

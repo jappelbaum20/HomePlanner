@@ -6,17 +6,18 @@
   const T = 12, SNAP = 5;
   const WALLS = [['n', 'North', 'top'], ['e', 'East', 'right'], ['s', 'South', 'bottom'], ['w', 'West', 'left']];
   const WALL_SWATCHES = [
-    ['Chalk', '#F4F3EF'], ['Linen', '#E9E2D6'], ['Warm grey', '#D6D1C8'], ['Greige', '#C4B9AA'],
+    ['Pure white', '#F7F7F4'], ['Chalk', '#F4F3EF'], ['Linen', '#E9E2D6'], ['Warm grey', '#D6D1C8'], ['Greige', '#C4B9AA'],
     ['Blush', '#E3C6BC'], ['Terracotta', '#BF7458'], ['Ochre', '#C99D4A'], ['Sage', '#B4BFA6'],
     ['Eucalyptus', '#8C9F90'], ['Forest', '#3E5544'], ['Dusty blue', '#A7B6C2'], ['Navy', '#2D394D'], ['Charcoal', '#46494D']
   ];
   const FLOOR_SWATCHES = [
-    ['White oak', '#E4D3B5', 'wood'], ['Light oak', '#D6BA8E', 'wood'], ['Walnut', '#77543A', 'wood'], ['Grey tile', '#BCBCB6', 'tile'],
+    ['Oak parquet', '#D9B98A', 'parquet'], ['White marble', '#ECE9E3', 'marble'], ['Grey stone', '#9A9C9E', 'stone'], ['White oak', '#E4D3B5', 'wood'], ['Light oak', '#D6BA8E', 'wood'], ['Walnut', '#77543A', 'wood'], ['Grey tile', '#BCBCB6', 'tile'],
     ['Concrete', '#A3A39E', 'concrete'], ['Terrazzo', '#D9D6CF', 'terrazzo'], ['Dark slate', '#55595C', 'tile']
   ];
-  const FLOOR_FINISHES = { wood: 'Wood planks', tile: 'Tiles', concrete: 'Concrete', terrazzo: 'Terrazzo', carpet: 'Carpet', plain: 'Plain' };
+  const FLOOR_FINISHES = { parquet: 'Oak strip parquet', wood: 'Wood planks', marble: 'Marble tiles', stone: 'Stone tiles', tile: 'Tiles', concrete: 'Concrete', terrazzo: 'Terrazzo', carpet: 'Carpet', plain: 'Plain' };
+  const WALL_FINISHES = { paint: 'Paint', panelling: 'Wood panelling', oakpanels: 'Oak 3D panels', marble: 'Marble', tiles: 'Tiles' };
   const FURNITURE_TYPES = {
-    sofa: 'Sofa', armchair: 'Armchair', chair: 'Chair', table: 'Table, rectangular', roundtable: 'Table, round',
+    sofa: 'Sofa', cornersofa: 'Corner sofa', armchair: 'Armchair', chair: 'Chair', table: 'Table, rectangular', roundtable: 'Table, round',
     desk: 'Desk', bed: 'Bed', cabinet: 'Cabinet or sideboard', shelf: 'Shelf', wardrobe: 'Wardrobe',
     counter: 'Counter or island', appliance: 'Appliance', rug: 'Rug', plant: 'Plant', bath: 'Bathtub',
     shower: 'Shower', vanity: 'Vanity', toilet: 'Toilet', box: 'Other'
@@ -31,7 +32,7 @@
   const ROUND = new Set(['roundtable', 'plant', 'floorlamp', 'tablelamp', 'pendant', 'ceiling', 'spot']);
   const LIBRARY = [
     ['Living', [
-      ['sofa', 'Sofa, 3-seat', 220, 95, 85, '#6F7C8A'], ['sofa', 'Sofa, 2-seat', 170, 90, 85, '#6F7C8A'],
+      ['sofa', 'Sofa, 3-seat', 220, 95, 85, '#6F7C8A'], ['cornersofa', 'Corner sofa', 280, 180, 85, '#D9C9B0'], ['sofa', 'Sofa, 2-seat', 170, 90, 85, '#6F7C8A'],
       ['armchair', 'Armchair', 85, 85, 80, '#A0826D'], ['table', 'Coffee table', 110, 60, 40, '#8B6A4E'],
       ['cabinet', 'TV unit', 180, 40, 50, '#5B5048'], ['cabinet', 'Sideboard', 180, 45, 80, '#5B5048'],
       ['shelf', 'Bookshelf', 80, 30, 200, '#8B6A4E'], ['rug', 'Rug', 200, 300, 1, '#C9BBA8'], ['plant', 'Plant', 40, 40, 120, '#5E7A55']
@@ -159,6 +160,7 @@
       color: hex(it.color, '#9A9A94')
     };
     if (it.catalogId) o.catalogId = it.catalogId;
+    if (type === 'cornersofa') o.side = it.side === 'left' ? 'left' : 'right';
     if (isLight(type)) { o.kelvin = KELVIN[it.kelvin] ? Number(it.kelvin) : 2700; o.power = POWER[it.power] ? it.power : 'medium'; }
     return o;
   }
@@ -166,16 +168,19 @@
     const o = {
       id: r.id || 'r' + uid(), name: r.name || 'Room', level: r.level || 'Ground floor',
       width: num(r.width, 50, 3000, 400), length: num(r.length, 50, 3000, 350), height: num(r.height, 150, 800, 250),
-      floor: hex(r.floor, '#D6BA8E'), floorFinish: FLOOR_FINISHES[r.floorFinish] ? r.floorFinish : 'wood', walls: {}, notes: r.notes || '', photos: Array.isArray(r.photos) ? r.photos.slice() : [],
+      floor: hex(r.floor, '#D9B98A'), floorFinish: FLOOR_FINISHES[r.floorFinish] ? r.floorFinish : 'parquet', walls: {}, wallFinish: {}, notes: r.notes || '', photos: Array.isArray(r.photos) ? r.photos.slice() : [],
       openings: [], items: []
     };
     const wc = r.walls || {};
-    WALLS.forEach(([k]) => { o.walls[k] = hex(wc[k], typeof r.walls === 'string' ? hex(r.walls, '#F4F3EF') : '#F4F3EF'); });
+    WALLS.forEach(([k]) => { o.walls[k] = hex(wc[k], typeof r.walls === 'string' ? hex(r.walls, '#F7F7F4') : '#F7F7F4'); });
+    const wf = r.wallFinish || {};
+    WALLS.forEach(([k]) => { const f = typeof wf === 'string' ? wf : wf[k]; o.wallFinish[k] = WALL_FINISHES[f] ? f : 'paint'; });
     o.openings = (r.openings || []).map((p) => {
       const type = p.type === 'window' ? 'window' : 'door';
       return { id: p.id || 'o' + uid(), type, wall: ['n', 'e', 's', 'w'].includes(p.wall) ? p.wall : 's',
         offset: num(p.offset, 0, 3000, 20), width: num(p.width, 20, 1000, type === 'door' ? 90 : 120),
-        height: num(p.height, 20, 800, type === 'door' ? 205 : 130), sill: type === 'door' ? 0 : num(p.sill, 0, 800, 90) };
+        height: num(p.height, 20, 800, type === 'door' ? 205 : 130), sill: type === 'door' ? 0 : num(p.sill, 0, 800, 90),
+        color: hex(p.color, '#F7F6F2'), radiator: type === 'window' && (p.radiator != null ? !!p.radiator : num(p.sill, 0, 800, 90) >= 50) };
     });
     o.items = (r.items || []).map((it) => normItem(it, o));
     return o;
@@ -186,6 +191,7 @@
       w: num(p.w, 1, 3000, 60), d: num(p.d, 1, 3000, 60), h: num(p.h, 1, 800, 75), color: hex(p.color, '#9A9A94'),
       status: ['own', 'considering', 'ordered'].includes(p.status) ? p.status : 'own',
       link: p.link || '', notes: p.notes || '', photos: Array.isArray(p.photos) ? p.photos.slice() : [] };
+    if (type === 'cornersofa') o.side = p.side === 'left' ? 'left' : 'right';
     if (isLight(type)) { o.kelvin = KELVIN[p.kelvin] ? Number(p.kelvin) : 2700; o.power = POWER[p.power] ? p.power : 'medium'; }
     return o;
   }
@@ -193,6 +199,9 @@
     const o = { version: 2, name: s.name || 'New house', catalog: (s.catalog || []).map(normPiece), rooms: (s.rooms || []).map(normRoom) };
     if (!o.rooms.length) o.rooms.push(normRoom({ name: 'Room 1' }));
     o.activeRoomId = o.rooms.some((r) => r.id === s.activeRoomId) ? s.activeRoomId : o.rooms[0].id;
+    // Pieces Claude adds to house-data.js appear in My pieces once; deleting one keeps it out
+    o.removedPieces = Array.isArray(s.removedPieces) ? s.removedPieces.slice() : [];
+    (window.HOUSE_PIECES || []).forEach((p) => { if (p.id && !o.catalog.some((c) => c.id === p.id) && !o.removedPieces.includes(p.id)) o.catalog.push(normPiece(p)); });
     return o;
   }
 
@@ -308,7 +317,8 @@
       ${WALLS.map(([k, name, side]) => `
         <div class="wallrow ${wallTarget === k ? 'on' : ''}" data-target="${k}">
           <input type="color" data-wall="${k}" value="${r.walls[k]}" aria-label="${name} wall color">
-          <span>${name} <small>${side}</small></span><code>${r.walls[k].toUpperCase()}</code>
+          <span>${name} <small>${side}</small><code>${r.walls[k].toUpperCase()}</code></span>
+          <select data-wallfinish="${k}" aria-label="${name} wall finish">${Object.entries(WALL_FINISHES).map(([f, n]) => `<option value="${f}" ${r.wallFinish[k] === f ? 'selected' : ''}>${n}</option>`).join('')}</select>
         </div>`).join('')}
       <div class="target"><span>Swatch applies to</span>
         <select id="wallTarget"><option value="all" ${wallTarget === 'all' ? 'selected' : ''}>All walls</option>
@@ -348,6 +358,7 @@
           <label class="field"><span>From top, cm</span><input type="number" data-item="y" value="${Math.round(it.y)}"></label>
           <label class="field"><span>Rotation, °</span><input type="number" step="15" data-item="rot" value="${it.rot}"></label>
         </div>
+        ${it.type === 'cornersofa' ? `<label class="field"><span>Chaise side (seen from the front)</span><select data-item="side"><option value="right" ${it.side !== 'left' ? 'selected' : ''}>Right</option><option value="left" ${it.side === 'left' ? 'selected' : ''}>Left</option></select></label>` : ''}
         <div class="row2">
           <label class="field"><span>Above floor, cm</span><input type="number" data-item="elev" value="${it.elev}"></label>
           <div class="field"><span>Color</span><div class="wallrow" style="padding:0"><input type="color" data-item="color" value="${it.color}" aria-label="Color"><code>${it.color.toUpperCase()}</code><span></span></div></div>
@@ -379,6 +390,8 @@
           <label class="field"><span>Height, cm</span><input type="number" data-op="height" value="${op.height}"></label>
           ${isWin ? `<label class="field"><span>Sill height, cm</span><input type="number" data-op="sill" value="${op.sill}"></label>` : '<span></span>'}
         </div>
+        ${isWin ? `<label class="check"><input type="checkbox" data-op="radiator" ${op.radiator ? 'checked' : ''}> Radiator below</label>`
+          : `<div class="wallrow"><input type="color" data-op="color" value="${op.color}" aria-label="Door color"><span>Door color</span><code>${op.color.toUpperCase()}</code></div>`}
         <p class="note">Offset is from the top corner on side walls, or the left corner on top and bottom walls.</p>
         <div class="btnrow" style="margin-top:12px"><button class="btn danger" data-act="delete">Remove</button></div>`;
     } else {
@@ -452,6 +465,14 @@
       case 'sofa': case 'armchair': {
         const back = Math.min(22, d * 0.25), arm = Math.min(18, w * 0.15);
         return base + `<rect class="detail" x="${x0}" y="${y0}" width="${w}" height="${back}"/><rect class="detail" x="${x0}" y="${y0}" width="${arm}" height="${d}"/><rect class="detail" x="${x0 + w - arm}" y="${y0}" width="${arm}" height="${d}"/>`;
+      }
+      case 'cornersofa': {
+        // main seat along the back (-y), chaise running forward on one side (+x = right when seen from the front, which is +y)
+        const back = Math.min(22, d * 0.14), md = Math.min(d, Math.max(back + 60, d * 0.55)), cw = Math.min(w * 0.4, 105), right = it.side !== 'left';
+        const cx = right ? x0 + w - cw : x0;
+        const outline = right ? `M${x0} ${y0}H${x0 + w}V${y0 + d}H${x0 + w - cw}V${y0 + md}H${x0}Z` : `M${x0} ${y0}H${x0 + w}V${y0 + md}H${x0 + cw}V${y0 + d}H${x0}Z`;
+        return `<path class="body" fill="${c}" d="${outline}"/>` +
+          `<rect class="detail" x="${x0}" y="${y0}" width="${w}" height="${back}"/><line class="detail" x1="${cx}" x2="${cx + cw}" y1="${y0 + md}" y2="${y0 + md}"/>`;
       }
       case 'bath': return base + `<rect class="detail" x="${x0 + 8}" y="${y0 + 8}" width="${w - 16}" height="${d - 16}" rx="${Math.min(w, d) / 3}"/>`;
       case 'toilet': return `<rect class="body" x="${x0}" y="${y0}" width="${w}" height="${d * 0.28}" rx="3" fill="${c}"/><ellipse class="body" cx="0" cy="${y0 + d * 0.62}" rx="${w / 2}" ry="${d * 0.36}" fill="${c}"/>`;
@@ -582,10 +603,10 @@
 
     // Walls with openings, skirting, window frames and doors
     const spec = { n: { axis: 'x', fixed: -T / 2, start: -T, end: W + T, inward: 1 }, s: { axis: 'x', fixed: L + T / 2, start: -T, end: W + T, inward: -1 }, w: { axis: 'z', fixed: -T / 2, start: 0, end: L, inward: 1 }, e: { axis: 'z', fixed: W + T / 2, start: 0, end: L, inward: -1 } };
-    const frameM = HM.mat('#F3F2EE', { rough: 0.5 }), skirtM = HM.mat('#F6F5F1', { rough: 0.55 });
     three.walls = {};
     for (const k of Object.keys(spec)) {
-      const s = spec[k], mats = three.walls[k] = [], wm = HM.wallMaterial(r.walls[k], s.end - s.start, H); mats.push(wm);
+      const frameM = HM.mat('#F3F2EE', { rough: 0.5 }), skirtM = HM.mat('#F6F5F1', { rough: 0.55 }); // per wall, so they fade with it
+      const s = spec[k], mats = three.walls[k] = [], wm = HM.wallMaterial(r.walls[k], r.wallFinish[k], s.end - s.start, H); mats.push(wm);
       // place a box along this wall: a..b along the wall, y0..y1 high, depth dz, offset from the wall centre line (+ = into the room)
       const along = (a, b, y0, y1, dz, off, m) => {
         if (b - a < 0.3 || y1 - y0 < 0.3) return null;
@@ -594,7 +615,7 @@
         if (s.axis === 'x') add(mesh, mid, y0 + hh / 2, o); else add(mesh, o, y0 + hh / 2, mid);
         if (!mats.includes(m)) mats.push(m); return mesh;
       };
-      const ops = r.openings.filter((o) => o.wall === k).map((o) => ({ a: o.offset, b: o.offset + o.width, sill: o.sill, top: Math.min(o.sill + o.height, H), type: o.type })).sort((p, q) => p.a - q.a);
+      const ops = r.openings.filter((o) => o.wall === k).map((o) => ({ a: o.offset, b: o.offset + o.width, sill: o.sill, top: Math.min(o.sill + o.height, H), type: o.type, radiator: o.radiator, color: o.color })).sort((p, q) => p.a - q.a);
       let cur = s.start;
       const skirt = (a, b) => along(Math.max(a, 0), Math.min(b, s.axis === 'x' ? W : L), 0, 8, 1.5, T / 2 + 0.75, skirtM);
       for (const o of ops) {
@@ -610,9 +631,23 @@
             const glass = HM.mat(evening ? '#101820' : '#CFE3EE', { rough: 0.02, metal: 0.1, transparent: true, opacity: evening ? 0.85 : 0.18 });
             glass.userData.opacity = glass.opacity;
             along(a, o.b, o.sill, o.top, 1, 0, glass);
-            if (o.b - a > 90) along((a + o.b) / 2 - 2, (a + o.b) / 2 + 2, o.sill, o.top, 5, 0, frameM); // mullion
+            // casement sashes: two above 80 cm wide, each with its own frame and a handle
+            const nS = o.b - a > 80 ? 2 : 1, sw = (o.b - a) / nS, sashM = HM.mat('#FAFAF8', { rough: 0.4 }), hM = HM.mat('#DADCDD', { rough: 0.3, metal: 0.8 });
+            for (let i = 0; i < nS; i++) {
+              const x0 = a + i * sw, x1 = x0 + sw, fz = T / 2 - 3;
+              along(x0, x0 + 4, o.sill, o.top, 5, fz, sashM); along(x1 - 4, x1, o.sill, o.top, 5, fz, sashM);
+              along(x0, x1, o.sill, o.sill + 5, 5, fz, sashM); along(x0, x1, o.top - 4, o.top, 5, fz, sashM);
+              const hx = i === 0 && nS === 2 ? x1 - 3 : x0 + 3; along(hx - 1, hx + 1, (o.sill + o.top) / 2 - 6, (o.sill + o.top) / 2 + 6, 3, fz + 3, hM);
+            }
+            if (o.radiator && o.sill >= 40) {
+              const rw = Math.max(40, (o.b - a) * 0.9), rh = Math.min(60, o.sill - 22), rad = HM.radiator(rw, rh, 12);
+              const c = (a + o.b) / 2, inset = T / 2 + 6;
+              if (s.axis === 'x') rad.position.set(c, 0, s.fixed + s.inward * inset); else { rad.position.set(s.fixed + s.inward * inset, 0, c); rad.rotation.y = Math.PI / 2; }
+              if (s.inward < 0) rad.rotation.y += Math.PI;
+              g.add(rad); rad.traverse((m) => { if (m.material && !mats.includes(m.material)) mats.push(m.material); });
+            }
           } else {
-            const leaf = along(a + 1, o.b - 1, 0, o.top - 0.5, 4, T / 2 - 2, HM.mat('#F7F6F2', { rough: 0.45 }));
+            const leaf = along(a + 1, o.b - 1, 0, o.top - 0.5, 4, T / 2 - 2, HM.mat(o.color, { rough: 0.45 }));
             if (leaf) { const hm = HM.mat('#9A9C9E', { rough: 0.25, metal: 1 }); const hx = s.inward > 0 ? o.b - 8 : o.b - 8; along(hx - 7, hx, 100, 102.5, 2, T / 2 + 1, hm); }
           }
         }
@@ -727,6 +762,7 @@
         const n = placements(existing.id);
         if (!confirm(`Delete "${existing.name}"${n ? ` and remove its ${plural(n, 'placement')}` : ''}?`)) return;
         state.catalog = state.catalog.filter((p) => p.id !== existing.id);
+        if (!state.removedPieces.includes(existing.id)) state.removedPieces.push(existing.id);
         state.rooms.forEach((r) => { r.items = r.items.filter((i) => i.catalogId !== existing.id); });
         existing.photos.forEach((id) => Store.delPhoto(id)); discardDraft(); selected = null; closeModal(); commit(); toast('Piece deleted'); return;
       }
@@ -839,7 +875,8 @@
   function addOpening(type) {
     const r = room(), wall = wallTarget === 'all' ? 's' : wallTarget, len = wallLength(r, wall);
     const o = type === 'door' ? { id: 'o' + uid(), type, wall, offset: Math.min(20, Math.max(0, len - 90)), width: 90, height: 205, sill: 0 }
-      : { id: 'o' + uid(), type, wall, offset: Math.max(0, Math.round((len - 120) / 2)), width: 120, height: 130, sill: 90 };
+      : { id: 'o' + uid(), type, wall, offset: Math.max(0, Math.round((len - 120) / 2)), width: 120, height: 130, sill: 90, radiator: true };
+    if (type === 'door') o.color = '#F7F6F2';
     r.openings.push(o); selected = { kind: 'opening', id: o.id }; commit();
   }
   function deleteSelected() {
@@ -915,7 +952,8 @@
     if (f === 'width' || f === 'length') { r[f] = num(t.value, 50, 3000, r[f]); commit(); }
     else if (f === 'height') { r.height = num(t.value, 150, 800, r.height); commit(); }
     else if (f === 'level') { r.level = t.value.trim() || 'Ground floor'; commit(); }
-    else if (f === 'floorFinish') { r.floorFinish = FLOOR_FINISHES[t.value] ? t.value : 'wood'; commit(); }
+    else if (f === 'floorFinish') { r.floorFinish = FLOOR_FINISHES[t.value] ? t.value : 'parquet'; commit(); }
+    else if (t.dataset.wallfinish) { r.wallFinish[t.dataset.wallfinish] = WALL_FINISHES[t.value] ? t.value : 'paint'; commit(); }
     else if (t.id === 'wallTarget') { wallTarget = t.value; renderRoomPanel(); renderPlan(); }
   });
   rp.addEventListener('click', (e) => {
@@ -953,13 +991,17 @@
       else if (f === 'elev') it.elev = num(t.value, 0, 800, it.elev);
       else if (f === 'kelvin') it.kelvin = Number(t.value);
       else if (f === 'power') it.power = t.value;
+      else if (f === 'side') it.side = t.value === 'left' ? 'left' : 'right';
       else it[f] = num(t.value, 1, 3000, it[f]);
       syncToPiece(it); commit();
     }
     if (op && t.dataset.op) {
       const f = t.dataset.op;
-      if (f === 'type') { op.type = t.value; if (op.type === 'door') { op.sill = 0; op.height = 205; } else { op.sill = 90; op.height = 130; } }
-      else if (f === 'wall') op.wall = t.value; else op[f] = num(t.value, 0, 3000, op[f]);
+      if (f === 'type') { op.type = t.value; if (op.type === 'door') { op.sill = 0; op.height = 205; op.radiator = false; op.color = op.color || '#F7F6F2'; } else { op.sill = 90; op.height = 130; op.radiator = true; } }
+      else if (f === 'wall') op.wall = t.value;
+      else if (f === 'radiator') op.radiator = t.checked;
+      else if (f === 'color') op.color = hex(t.value, op.color);
+      else op[f] = num(t.value, 0, 3000, op[f]);
       commit();
     }
   });

@@ -54,10 +54,14 @@ To send the current state back to Claude, use Claude handoff, then Copy this roo
 - Opening `offset`: from the top corner on side walls, the left corner on top and bottom walls.
 - Item `x`, `y`: center point from the top-left interior corner. `rot`: degrees clockwise. `elev`: underside height above the floor.
 - Items with `catalogId` take size, color and name from the catalog piece.
-- Furniture types: sofa, armchair, chair, table, roundtable, desk, bed, cabinet, shelf, wardrobe, counter, appliance, rug, plant, bath, shower, vanity, toilet, box.
+- Furniture types: sofa, cornersofa, armchair, chair, table, roundtable, desk, bed, cabinet, shelf, wardrobe, counter, appliance, rug, plant, bath, shower, vanity, toilet, box.
 - Light types: ceiling, pendant, spot, sconce, floorlamp, tablelamp. `kelvin`: 2200, 2700, 3000, 4000. `power`: soft, medium, bright.
 - Piece `status`: own, considering, ordered.
-- Room `floorFinish`: wood, tile, concrete, terrazzo, carpet, plain (default wood). Sets the floor texture in 3D.
+- Room `floorFinish`: parquet, wood, marble, stone, tile, concrete, terrazzo, carpet, plain (default parquet). Sets the floor texture in 3D.
+- Room `wallFinish`: per wall (`n`, `e`, `s`, `w`), one of paint, panelling, oakpanels, marble, tiles (default paint).
+- Window `radiator`: true draws a panel radiator under it (default true when the sill is 50 cm or higher). Door `color`: door leaf color.
+- `cornersofa` items and pieces take `side`: right or left (chaise side seen from the front). Beds: `h` up to 80 is the mattress top; above 80 it is the headboard height.
+- Pieces listed in `window.HOUSE_PIECES` in `house-data.js` are added to My pieces once. Deleting one in the app keeps it out.
 - Photos are never part of the handoff; they stay in the browser and in backup files.
 
 ## Storage notes
