@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>House planner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+        <rect x="2" y="2" width="22" height="22" fill="none" stroke="#F2C230" stroke-width="2.5"/>
+        <path d="M2 14h9v10M15 2v7h9" fill="none" stroke="#F7F8F5" stroke-width="2"/>
+      </svg>
+      <input id="projectName" aria-label="Project name" spellcheck="false">
+    </div>
+    <select id="roomSwitch" class="room-switch" aria-label="Switch room"></select>
+    <div class="seg" role="group" aria-label="View">
+      <button data-view="plan" aria-pressed="false">Plan</button>
+      <button data-view="3d" aria-pressed="false">3D</button>
+      <button data-view="both" aria-pressed="false">Both</button>
+    </div>
+    <button id="handoffBtn" class="btn mark">Claude handoff</button>
+  </header>
+
+  <main class="layout">
+    <aside class="panel left">
+      <section>
+        <div class="sec-head"><h2>Rooms</h2><button id="addRoom" class="btn small">New room</button></div>
+        <div id="roomList"></div>
+      </section>
+      <section id="roomPanel"></section>
+      <section id="savePanel"></section>
+    </aside>
+
+    <div class="stage" id="stage">
+      <div class="pane plan">
+        <svg id="plan" role="img" aria-label="Floor plan"></svg>
+        <p class="pane-hint">Drag to move. Tap a wall to color it. R rotates, Delete removes.</p>
+      </div>
+      <div class="pane three">
+        <div id="three"></div>
+        <div class="pane-tools">
+          <button id="eveningBtn" class="btn light small" aria-pressed="false">Evening light</button>
+          <button id="resetCam" class="btn light small">Reset view</button>
+        </div>
+        <p class="pane-hint">Drag to orbit, pinch or scroll to zoom.</p>
+      </div>
+    </div>
+
+    <aside class="panel right">
+      <section id="inspector"></section>
+      <section id="catalogPanel"></section>
+    </aside>
+  </main>
+
+  <footer class="status" id="status" aria-live="polite"></footer>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <dialog id="modal"><div class="modal-inner" id="modalBody"></div></dialog>
+  <dialog id="lightbox" class="lightbox">
+    <div class="modal-inner">
+      <img id="lbImg" alt="">
+      <div class="btnrow end">
+        <button class="btn danger" data-lb="delete">Delete photo</button>
+        <button class="btn" data-lb="close">Close</button>
+      </div>
+    </div>
+  </dialog>
+  <input id="photoPicker" type="file" accept="image/*" multiple hidden>
+  <input id="importInput" type="file" accept="application/json,.json" hidden>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="house-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
