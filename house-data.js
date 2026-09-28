@@ -16,6 +16,11 @@ window.HOUSE_SEED = {
 // to the copy already in the browser. Sizes are W x D x H in cm.
 window.HOUSE_PIECES = [
   {
+    id: 'grey-sofabed', type: 'sofa', style: 'sofabed', name: 'Grey sofa bed',
+    w: 190, d: 86, h: 82, color: '#8C8883', status: 'own',
+    notes: 'Mid-century style click-clack sofa bed in light grey tweed: rolled arms, two buttoned back cushions, two seat cushions with piping, splayed light wood legs, two small arm pillows. Folds flat into a bed (about 140 cm by your estimate). Bought from a Swiss web shop; the order was not found in Gmail. Sizes estimated from the photo: measure to confirm.'
+  },
+  {
     id: 'rowing-oar', type: 'art', style: 'oar', frame: 'none', mat: false, name: 'Presentation oar (wall)',
     w: 138, d: 6, h: 21, color: '#C9955A', status: 'own',
     notes: 'Varnished wooden oar hung flat on the wall. Blade painted in two colours (navy and green) with gold lettering, two leather straps on the shaft. Size estimated from the photo (about 138 cm long, blade about 55 x 21): measure to confirm.'

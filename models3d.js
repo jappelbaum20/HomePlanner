@@ -286,7 +286,39 @@
 
   // ---------- Furniture ----------
   const B = {};
-  B.sofa = (g, w, d, h, c) => {
+  // Mid-century click-clack sofa bed: splayed tapered wood legs, rolled arms, two buttoned back cushions,
+  // two seat cushions with piping and a small buttoned pillow resting on each arm
+  B.sofabed = (g, w, d, h, c) => {
+    const f = fabric(c, w, d), fd = fabric(shade(c, 0.93), w, d), pipe = fabric(shade(c, 0.8), w, d), legM = wood('#D2A874', 10, 20), btn = fabric(shade(c, 0.7), 4, 4);
+    const legH = Math.min(18, h * 0.22), arm = Math.min(16, w * 0.09), baseH = 16, seatT = 12, seatY = legH + baseH;
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { // splayed, tapered legs
+      const l = cyl(g, legM, 1.6, 2.4, legH + 2, sx * (w / 2 - 12), legH / 2, sz * (d / 2 - 10), 16);
+      l.rotation.z = -sx * 0.14; l.rotation.x = sz * 0.1;
+    }
+    part(g, fd, w - 2 * arm + 2, baseH, d - 6, 0, legH + baseH / 2, 1, 3); // base frame
+    const armH = Math.min(h * 0.72, seatY + seatT + 22);
+    for (const sx of [-1, 1]) { // rolled arms
+      part(g, fd, arm, armH - legH + 2, d - 2, sx * (w / 2 - arm / 2), legH - 2 + (armH - legH + 2) / 2, 0, arm * 0.48);
+      part(g, pipe, 0.8, armH - legH - 4, d - 6, sx * (w / 2 - 0.2), legH + (armH - legH) / 2, 0, 0.3);
+    }
+    const inner = w - 2 * arm, cw = inner / 2, backT = 12, sd = d - backT - 6;
+    part(g, fd, inner, h * 0.55, backT, 0, seatY + h * 0.27, -d / 2 + backT / 2 + 2, 3); // back frame
+    for (const i of [0, 1]) {
+      const x = -inner / 2 + cw * (i + 0.5);
+      pillow(g, f, cw - 1.2, seatT, sd, x, seatY + seatT / 2, -d / 2 + backT + 2 + sd / 2, 1.5); // seat cushion
+      part(g, pipe, cw - 3, 0.8, 0.8, x, seatY + seatT - 0.3, d / 2 - 5.2, 0.3); // front piping
+      const bh = h - seatY - seatT + 2, bz = -d / 2 + backT + 6;
+      const bc = pillow(g, f, cw - 2, 14, bh, x, seatY + seatT + bh / 2 - 1, bz, 2.5); bc.rotation.x = Math.PI / 2 - 0.2; // back cushion, leaning back
+      const b = sphere(g, btn, 1.3, x + (i ? -cw * 0.1 : cw * 0.1), seatY + seatT + bh * 0.5, bz + 8.5, 0.6); b.rotation.x = -0.2;
+    }
+    for (const sx of [-1, 1]) { // arm pillows leaning in the corners
+      const px = sx * (w / 2 - arm - 14), py = seatY + seatT + 17, pz = -d / 2 + backT + 22;
+      const pl = pillow(g, f, 38, 12, 34, px, py, pz, 2); pl.rotation.set(Math.PI / 2 - 0.35, 0, sx * 0.35);
+      sphere(g, btn, 1, px - sx * 1.8, py + 2, pz + 7, 0.6);
+    }
+  };
+  B.sofa = (g, w, d, h, c, it) => {
+    if (it && it.style === 'sofabed') return B.sofabed(g, w, d, h, c);
     const f = fabric(c, w, d), fd = fabric(shade(c, 0.88), w, d), legM = wood('#3B2F26', 10, 10);
     const legH = Math.min(12, h * 0.14), arm = Math.min(22, w * 0.14), backT = Math.min(22, d * 0.24);
     const seatH = Math.max(h * 0.5, legH + 20), baseH = seatH - legH - 12, armH = Math.min(h * 0.75, seatH + 20);
