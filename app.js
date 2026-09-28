@@ -50,7 +50,8 @@
     ['Dining and kitchen', [
       ['table', 'Dining table', 180, 90, 75, '#8B6A4E'], ['roundtable', 'Round table', 110, 110, 75, '#8B6A4E'],
       ['chair', 'Dining chair', 45, 50, 90, '#4A4F55'], ['counter', 'Kitchen counter', 120, 60, 90, '#DCDCD6'],
-      ['counter', 'Kitchen island', 180, 90, 90, '#DCDCD6'], ['appliance', 'Fridge', 60, 65, 185, '#E8E8E4']
+      ['counter', 'Kitchen island', 180, 90, 90, '#DCDCD6'], ['appliance', 'Fridge', 60, 65, 185, '#E8E8E4'],
+      ['counter', 'Fitted kitchen run', 220, 60, 90, '#F4F4F2', { style: 'fitted' }], ['appliance', 'Tall units with ovens', 100, 60, 225, '#4A4440', { style: 'tallovens' }]
     ]],
     ['Bedroom', [
       ['bed', 'Bed 160 x 200', 160, 200, 50, '#D9D4CC'], ['bed', 'Bed 180 x 200', 180, 200, 50, '#D9D4CC'],
@@ -539,7 +540,7 @@
   const thumbs = new Map(), thumbQueue = [];
   let thumbBusy = false, thumbFail = false;
   const libFrame = (color) => color === '#F4F3EF' ? 'none' : color === '#C49A6C' ? 'oak' : color === '#C9A06A' ? 'oakpanel' : 'black';
-  const THUMB_VERSION = 1; // bump when models change so saved thumbnails are redrawn
+  const THUMB_VERSION = 2; // bump when models change so saved thumbnails are redrawn
   const thumbKey = (o) => JSON.stringify([THUMB_VERSION].concat(['type', 'w', 'd', 'h', 'color', 'style', 'doors', 'books', 'side', 'frame', 'mat', 'image', 'kelvin'].map((k) => o[k])));
   const showThumb = (key, url) => $$('img[data-thumb]').forEach((img) => { if (img.dataset.thumb === key) img.src = url; });
   function thumbImg(o, cls) {
@@ -585,7 +586,7 @@
         : `<p class="empty">Add the furniture and lights you own or are considering, with photos and sizes. Each piece can then be placed in any room, and editing it updates every placement.</p>`;
     } else {
       body = LIBRARY.map(([cat, items], ci) => `<h3>${cat}</h3><div class="lib-grid">${items.map(([type, name, w, d, h], ii) =>
-        `<button data-lib="${ci}:${ii}">${thumbImg(Object.assign({ type, w, d, h, color: LIBRARY[ci][1][ii][5] }, type === 'art' ? { frame: libFrame(LIBRARY[ci][1][ii][5]), mat: !['#F4F3EF', '#C9A06A'].includes(LIBRARY[ci][1][ii][5]) } : {}))}<span>${name}</span><small>${w} x ${d} x ${h} cm</small></button>`).join('')}</div>`).join('');
+        `<button data-lib="${ci}:${ii}">${thumbImg(Object.assign({ type, w, d, h, color: LIBRARY[ci][1][ii][5] }, LIBRARY[ci][1][ii][6] || {}, type === 'art' ? { frame: libFrame(LIBRARY[ci][1][ii][5]), mat: !['#F4F3EF', '#C9A06A'].includes(LIBRARY[ci][1][ii][5]) } : {}))}<span>${name}</span><small>${w} x ${d} x ${h} cm</small></button>`).join('')}</div>`).join('');
     }
     el.innerHTML = `<div class="sec-head"><h2>Furniture and lights</h2><button class="btn small" data-new-piece>New piece</button></div>
       <div class="tabs" role="tablist">
@@ -874,6 +875,7 @@
       obj.position.set(it.x, base, it.y); obj.rotation.y = -it.rot * Math.PI / 180;
       g.add(obj);
       if (it.type === 'art') (three.wallArt[artWall(it)] = three.wallArt[artWall(it)] || []).push(obj);
+      if (obj.userData.wallMounted) (three.wallArt[artWall(it)] = three.wallArt[artWall(it)] || []).push(obj.userData.wallMounted); // e.g. wall units of a kitchen run
       if (light && evening) lights.push({ it, base, bulbY: obj.userData.bulbY || 0, obj });
     }
     // Evening: each lamp gets a real light source; the brightest few cast shadows
@@ -1080,8 +1082,8 @@
     r.items.push(it); selected = { kind: 'item', id: it.id }; commit(); toast(`Placed ${p.name} in ${r.name}`);
   }
   function addFromLibrary(ci, ii) {
-    const [type, name, w, d, h, color] = LIBRARY[ci][1][ii], r = room();
-    const it = normItem({ type, name, w, d, h, color, x: snap(r.width / 2), y: snap(r.length / 2) }, r);
+    const [type, name, w, d, h, color, extra] = LIBRARY[ci][1][ii], r = room();
+    const it = normItem(Object.assign({ type, name, w, d, h, color, x: snap(r.width / 2), y: snap(r.length / 2) }, extra || {}), r);
     if (type === 'art') {
       it.frame = libFrame(color); it.mat = !['none', 'oakpanel'].includes(it.frame);
       if (it.frame === 'oakpanel') it.elev = 8; // sits on the skirting

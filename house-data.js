@@ -182,7 +182,7 @@ window.HOUSE_ROOMS = [
   },
   {
     "id": "kitchen",
-    "rev": 3,
+    "rev": 4,
     "resize": true,
     "ensure": true,
     "name": "Kitchen",
@@ -197,9 +197,7 @@ window.HOUSE_ROOMS = [
     "height": 225,
     "floor": "#ECE9E3",
     "floorFinish": "marble",
-    "wallFinish": {
-      "s": "marble"
-    },
+    "wallFinish": {},
     "notes": "Measured from the Giraffe360 tour floor plan (about ±4 %). 9.8 m². Marble floor and splashback, white gloss units with a dark granite top, dark oak tall units with ovens.",
     "openings": [
       {
@@ -536,10 +534,11 @@ window.HOUSE_PLACEMENTS = [
   { id: 'living-oakpanel', rev: 3, from: { x: 305, y: 479 }, room: 'living', x: 178, y: 0, extra: { w: 208, h: 205, elev: 10 },
     item: { type: 'art', name: 'Oak 3D wall panel', w: 208, d: 2, h: 205, frame: 'oakpanel', mat: false, elev: 10 } },
   { id: 'bedroom-bed', rev: 3, from: { x: 210, y: 108 }, room: 'bedroom', catalogId: 'mattis-bed', x: 153, y: 277, rot: 180 },
-  { id: 'kitchen-counter', rev: 3, from: { x: 170, y: 30 }, room: 'kitchen', x: 110, y: 287, rot: 180, extra: { w: 219 },
-    item: { type: 'counter', name: 'Kitchen counter', w: 219, d: 60, h: 90, color: '#F4F4F2' } },
-  { id: 'kitchen-tall', rev: 3, from: { x: 20, y: 170 }, room: 'kitchen', x: 30, y: 52, rot: 270, extra: { w: 100, d: 60, h: 225, color: '#4A4440' },
-    item: { type: 'appliance', name: 'Tall units with ovens', w: 100, d: 60, h: 225, color: '#4A4440' } },
+  // rev 4: the kitchen as in the tour (fitted run with sink, hob and wall units; dark oak tall units with two ovens)
+  { id: 'kitchen-counter', rev: 4, from: { x: 110, y: 287 }, room: 'kitchen', x: 110, y: 287, rot: 180, extra: { w: 219, style: 'fitted', name: 'Kitchen run' },
+    item: { type: 'counter', style: 'fitted', name: 'Kitchen run', w: 219, d: 60, h: 90, color: '#F4F4F2' } },
+  { id: 'kitchen-tall', rev: 4, from: { x: 30, y: 52 }, room: 'kitchen', x: 30, y: 52, rot: 270, extra: { w: 100, d: 60, h: 225, color: '#4A4440', style: 'tallovens', name: 'Tall units with ovens' },
+    item: { type: 'appliance', style: 'tallovens', name: 'Tall units with ovens', w: 100, d: 60, h: 225, color: '#4A4440' } },
   { id: 'bath-toilet', room: 'bathroom', x: 30, y: 27, item: { type: 'toilet', name: 'Wall-hung WC', w: 37, d: 54, h: 42, color: '#FAFAF8' } },
   { id: 'bath-vanity', room: 'bathroom', x: 103, y: 20, item: { type: 'vanity', name: 'Basin on vanity', w: 59, d: 40, h: 85, color: '#C49A6C' } },
   { id: 'bath-tub', room: 'bathroom', x: 223, y: 40, item: { type: 'bath', name: 'Bathtub', w: 167, d: 80, h: 58, color: '#FAFAF8' } },
