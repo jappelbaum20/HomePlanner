@@ -91,6 +91,12 @@
       for (let i = 0; i < n; i++) { const x = i * rw, gr = g.createLinearGradient(x, 0, x + rw, 0); gr.addColorStop(0, 'rgb(205,205,205)'); gr.addColorStop(0.2, 'rgb(238,238,238)'); gr.addColorStop(0.5, 'rgb(255,255,255)'); gr.addColorStop(0.8, 'rgb(238,238,238)'); gr.addColorStop(1, 'rgb(205,205,205)'); g.fillStyle = gr; g.fillRect(x, 0, rw, s); }
       noise(g, s, 9000, 0.12, 170, 255);
     }, 24),
+    // deep-pile corduroy for upholstered beds: stronger valleys between the wales so the ribs read from across the room
+    cordDeep: () => canvasTex('cordDeep', 512, (g, s) => {
+      seed = 57; g.fillStyle = '#fff'; g.fillRect(0, 0, s, s); const n = 48, rw = s / n;
+      for (let i = 0; i < n; i++) { const x = i * rw, gr = g.createLinearGradient(x, 0, x + rw, 0); gr.addColorStop(0, 'rgb(150,150,150)'); gr.addColorStop(0.18, 'rgb(215,215,215)'); gr.addColorStop(0.5, 'rgb(255,255,255)'); gr.addColorStop(0.82, 'rgb(215,215,215)'); gr.addColorStop(1, 'rgb(150,150,150)'); g.fillStyle = gr; g.fillRect(x, 0, rw, s); }
+      noise(g, s, 12000, 0.1, 160, 255);
+    }, 24),
     grain: () => canvasTex('grain', 1024, (g, s) => {
       seed = 17; g.fillStyle = '#f6f6f6'; g.fillRect(0, 0, s, s);
       // broad tone bands along the board, then fine growth lines, cathedral arcs and pores
@@ -489,26 +495,121 @@
     for (let i = 0; i < rows; i++) pillow(g, f, w - 2, 14, rh, 0, frameH + 2 + rh * (i + 0.5), -d / 2 + 14, 3).rotation.x = Math.PI / 2 - 0.08;
     bedding(g, w - 16, -d / 2 + headD + 1, d / 2 - 6, frameH - 11, 22, c);
   };
-  // Ti'me storage bed: chunky beige cord, a wide flat rim standing straight on the floor (no visible feet) round a
-  // lift-up slatted base with storage box, and a deep headboard block topped by two big square cushions
-  // o: frameH (rim height), headD (headboard depth), cushion (radius of the headboard cushions' edges)
+  // ---------- Upholstery done properly: real-scale corduroy, piped seams, draped bedding ----------
+  // UVs in cm from world position, so the ribs keep their real width on every face. Sides and fronts get vertical ribs;
+  // on top faces the ribs run across the part (the fabric wraps over from the side), i.e. u along the longer axis.
+  function worldUV(geo, w, d) {
+    const p = geo.attributes.position, n = geo.attributes.normal, uv = geo.attributes.uv, alongX = w >= d;
+    for (let i = 0; i < p.count; i++) {
+      const ax = Math.abs(n.getX(i)), ay = Math.abs(n.getY(i)), az = Math.abs(n.getZ(i)), x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      if (ay >= ax && ay >= az) uv.setXY(i, alongX ? x : z, alongX ? z : x);
+      else if (ax >= az) uv.setXY(i, z, y); else uv.setXY(i, x, y);
+    }
+    uv.needsUpdate = true; return geo;
+  }
+  // Corduroy with sheen; rib = width of one wale in cm (Ti'me fine cord ~0.35, Cloe wide rib ~0.8)
+  function cordFabric(hex, rib) {
+    const base = TEX.cordDeep(), t = base.clone(); t.needsUpdate = true; const k = 1 / (48 * rib); t.repeat.set(k, k);
+    const m = new T3.MeshPhysicalMaterial({ color: lin(hex), roughness: 0.82, map: t, bumpMap: t, bumpScale: 0.25 + rib * 0.9 });
+    if ('sheen' in m) { m.sheen = new T3.Color(hex).lerp(new T3.Color('#FFFFFF'), 0.6).convertSRGBToLinear(); if ('sheenRoughness' in m) m.sheenRoughness = 0.5; }
+    m.envMapIntensity = 0.35; return m;
+  }
+  // Upholstered block: soft rounded edges, fabric at true scale; `puff` bulges the front/top slightly like a padded slab
+  function slab(g, m, w, h, d, x, y, z, r, puff) {
+    const geo = GEO.box(w, h, d, r);
+    if (puff) { const p = geo.attributes.position; for (let i = 0; i < p.count; i++) { const px = p.getX(i) / (w / 2), py = p.getY(i) / (h / 2), pz = p.getZ(i); if (pz > 0) p.setZ(i, pz + puff * Math.max(0, (1 - px * px) * (1 - py * py))); } geo.computeVertexNormals(); }
+    worldUV(geo, w, d);
+    const mesh = new T3.Mesh(geo, m); mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true; g.add(mesh); return mesh;
+  }
+  // Piping (welt) along an edge: axis 'x' | 'y' | 'z'
+  function welt(g, m, len, x, y, z, axis, r) {
+    const c = new T3.Mesh(new T3.CylinderGeometry(r || 0.55, r || 0.55, len, 8), m); c.position.set(x, y, z);
+    if (axis === 'x') c.rotation.z = Math.PI / 2; else if (axis === 'z') c.rotation.x = Math.PI / 2;
+    c.castShadow = true; g.add(c); return c;
+  }
+  // A plump pillow: a sphere pushed out to a rounded rectangle, full in the middle and thin at the seams and corners
+  function plump(g, m, w, h, d, x, y, z) {
+    const geo = new T3.SphereGeometry(1, 40, 24), p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const ux = p.getX(i), uy = p.getY(i), uz = p.getZ(i), sx = Math.sign(ux) * Math.pow(Math.abs(ux), 0.28), sz = Math.sign(uz) * Math.pow(Math.abs(uz), 0.28);
+      const edge = Math.max(Math.abs(sx), Math.abs(sz));
+      p.setXYZ(i, sx * w / 2, uy * h / 2 * (1 - 0.75 * Math.pow(edge, 6)) * (1 - 0.25 * sx * sx * sz * sz), sz * d / 2);
+    }
+    geo.computeVertexNormals();
+    const mesh = new T3.Mesh(geo, m); mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true; g.add(mesh); return mesh;
+  }
+  // Bedding that looks slept-in: quilted mattress, a duvet draped over the edges with soft folds, full pillows.
+  // pal: { sheet, duvet, pillow, deco } colours; drop: how far the duvet may hang over the mattress sides.
+  function softBedding(g, mw, z0, z1, base, mattH, pal, drop) {
+    const L = z1 - z0, top = base + mattH;
+    const sheet = mat(pal.sheet, { rough: 0.95, map: texFor('fabric', mw, L), bump: texFor('fabric', mw, L), bumpScale: 0.2 });
+    part(g, sheet, mw, mattH, L, 0, base + mattH / 2, (z0 + z1) / 2, 6); // mattress in a fitted sheet
+    // duvet: a subdivided sheet, pushed up in folds and bent down over the sides and the foot
+    const oh = drop + 2, W = mw + 2 * oh, dz0 = z0 + 42, D = z1 - dz0 + oh, sx = 64, sz = 64;
+    const geo = new T3.PlaneGeometry(W, D, sx, sz); geo.rotateX(-Math.PI / 2);
+    const p = geo.attributes.position; let sd = 7; const r = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+    // a few long soft creases in random directions, plus a gentle overall billow: nothing periodic
+    const creases = []; for (let k = 0; k < 9; k++) { const a = r() * Math.PI; creases.push({ cx: (r() - 0.5) * mw, cz: z0 + 60 + r() * (L - 70), dx: Math.cos(a), dz: Math.sin(a), amp: (r() < 0.5 ? -1 : 1) * (0.8 + r() * 1.6), wd: 4 + r() * 7, len: 25 + r() * 60 }); }
+    const ph = [r() * 6, r() * 6, r() * 6];
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), z = p.getZ(i) + dz0 + D / 2, zr = (z - dz0) / (z1 - dz0);
+      let y = top + 5 + 1.4 * Math.sin(x * 0.028 + ph[0]) * Math.sin(z * 0.022 + ph[1]) - 1.5 * Math.pow(Math.min(1, Math.abs(x) / (mw / 2)), 6);
+      for (const c of creases) { const px = x - c.cx, pz = z - c.cz, al = px * c.dx + pz * c.dz, ac = -px * c.dz + pz * c.dx; y += c.amp * Math.exp(-(ac * ac) / (c.wd * c.wd)) * Math.exp(-(al * al) / (c.len * c.len)); }
+      y += 3.5 * Math.exp(-Math.pow((zr - 0.05) / 0.06, 2)) * (0.85 + 0.15 * Math.sin(x * 0.07 + ph[2])); // turned-back top edge
+      let nx = x, nz = z; const ex = Math.abs(x) - mw / 2, ez = z - z1;
+      if (ex > 0) { nx = Math.sign(x) * (mw / 2 + 1.2 + Math.min(ex, 3) * 0.35); y -= ex * (1 - 0.04 * Math.sin(z * 0.2 + ph[0])); }
+      if (ez > 0) { nz = z1 + 1.2 + Math.min(ez, 3) * 0.35; y -= ez; }
+      y = Math.max(y, top - drop);
+      p.setXYZ(i, nx, y, nz);
+    }
+    geo.computeVertexNormals();
+    const duvet = new T3.Mesh(geo, mat(pal.duvet, { rough: 0.95, map: texFor('fabric', W, D), bump: texFor('fabric', W, D), bumpScale: 0.3, side: T3.DoubleSide }));
+    duvet.castShadow = true; duvet.receiveShadow = true; g.add(duvet);
+    // pillows: two full sleeping pillows leaning on the headboard, two smaller cushions in front
+    const pw = Math.min(80, mw / 2 - 6), pm = mat(pal.pillow, { rough: 0.95 }), dm = mat(pal.deco, { rough: 0.95 });
+    for (const sx2 of [-1, 1]) {
+      const p1 = plump(g, pm, pw, 15, 50, sx2 * (mw / 4 + 1), top + 20, z0 + 10); p1.rotation.set(-1.15, 0, sx2 * 0.03);
+      const p2 = plump(g, dm, 48, 13, 40, sx2 * (mw / 4 - 6), top + 16, z0 + 24); p2.rotation.set(-1.0, sx2 * 0.18, sx2 * 0.05);
+    }
+  }
+  // Storage bed with a thick upholstered rim standing on the floor (Ti'me and Livetastic Cloe):
+  // side rails the full length with the foot rail between them, a lift-up slatted base over a storage box,
+  // a headboard block faced with two big cushions, piped seams on every top edge.
+  // o: frameH, headD, headBlock (height of the block behind the cushions), rib (cm), pal (bedding colours)
   B.boxbed = (g, w, d, h, c, o) => {
     o = o || {};
-    const f = cord(c, w, d), fd = cord(shade(c, 0.94), w, d), frameH = o.frameH || 32, headD = o.headD || 22, rim = Math.max(18, (w - 190) / 2), z0 = -d / 2;
-    // headboard: a base block the full width, two cushions side by side above it
-    const blockH = frameH + 4;
-    part(g, fd, w, blockH, headD, 0, blockH / 2, z0 + headD / 2, 2.5);
-    const cw = (w - 4) / 2, ch = h - blockH + 10;
+    const frameH = o.frameH || 32, headD = o.headD || 22, rib = o.rib || 0.35, z0 = -d / 2, rim = Math.max(18, (w - 184) / 2);
+    const f = cordFabric(c, rib), fd = cordFabric(shade(c, 0.95), rib), pipe = mat(shade(c, 0.82), { rough: 0.8 });
+    const pal = o.pal || { sheet: '#F3F1EC', duvet: '#E9E6E0', pillow: '#F6F4EF', deco: shade(c, 1.05) };
+    // headboard block and its two cushions
+    const blockH = o.headBlock || frameH + 4;
+    slab(g, fd, w, blockH, headD, 0, blockH / 2, z0 + headD / 2, 2.5);
+    const cw = (w - 1) / 2, ch = h - blockH + 12, cy = blockH - 12 + ch / 2, cd = headD - 3, cz = z0 + headD / 2 + 1.2;
     for (const sx of [-1, 1]) {
-      part(g, f, cw - 1, ch, headD - 4, sx * (cw / 2 + 0.5), blockH - 10 + ch / 2, z0 + headD / 2 + 1, o.cushion || 5); // square cushion
+      const x = sx * (cw / 2 + 0.25);
+      slab(g, f, cw - 0.6, ch, cd, x, cy, cz, o.cushion || 4, 1.2);
+      welt(g, pipe, cw - 6, x, cy + ch / 2 - 0.4, cz + cd / 2 - 0.4, 'x'); // piping round the cushion face
+      welt(g, pipe, ch - 6, x - sx * (cw / 2 - 0.7) , cy, cz + cd / 2 - 0.4, 'y');
+      welt(g, pipe, ch - 6, x + sx * (cw / 2 - 0.7), cy, cz + cd / 2 - 0.4, 'y');
     }
-    // frame: side rails and foot rail as thick upholstered slabs, flush to the floor
+    // rim: two side rails (full length) and the foot rail between them, a hairline gap at each joint
     const fl = d - headD, fz = z0 + headD + fl / 2;
-    for (const sx of [-1, 1]) part(g, fd, rim, frameH, fl, sx * (w / 2 - rim / 2), frameH / 2, fz, 2.5);
-    part(g, fd, w - 2 * rim, frameH, rim, 0, frameH / 2, d / 2 - rim / 2, 2.5);
-    part(g, mat('#2A2826', { rough: 0.8 }), w - 2 * rim, frameH - 8, fl - rim, 0, (frameH - 8) / 2, z0 + headD + (fl - rim) / 2); // storage box
-    part(g, wood('#D9BC8C', w, d), w - 2 * rim - 2, 2, fl - rim - 2, 0, frameH - 7, z0 + headD + (fl - rim) / 2, 0.3); // slats
-    bedding(g, w - 2 * rim - 4, z0 + headD + 1, d / 2 - rim - 1, frameH - 12, 20, c);
+    for (const sx of [-1, 1]) {
+      const x = sx * (w / 2 - rim / 2);
+      slab(g, fd, rim, frameH, fl - 0.4, x, frameH / 2, fz + 0.2, 3);
+      welt(g, pipe, fl - 4, x + sx * (rim / 2 - 0.6), frameH - 0.6, fz, 'z'); welt(g, pipe, fl - rim - 4, x - sx * (rim / 2 - 0.6), frameH - 0.6, fz - rim / 2, 'z');
+      welt(g, pipe, fl - 4, x + sx * (rim / 2 - 0.6), 0.6, fz, 'z');
+    }
+    slab(g, fd, w - 2 * rim - 0.6, frameH, rim, 0, frameH / 2, d / 2 - rim / 2, 3);
+    welt(g, pipe, w - 2 * rim - 3, 0, frameH - 0.6, d / 2 - 0.6, 'x'); welt(g, pipe, w - 2 * rim - 3, 0, 0.6, d / 2 - 0.6, 'x');
+    welt(g, pipe, w - 2 * rim - 3, 0, frameH - 0.6, d / 2 - rim + 0.6, 'x');
+    // inside: dark storage box under the slatted base
+    const iw = w - 2 * rim, il = fl - rim, iz = z0 + headD + il / 2;
+    part(g, mat('#2B2926', { rough: 0.85 }), iw, frameH - 10, il, 0, (frameH - 10) / 2, iz);
+    for (let k = 0; k < 28; k++) part(g, wood('#D9BC8C', iw / 2, 6), iw / 2 - 4, 1.4, 5, (k % 2 ? 1 : -1) * iw / 4, frameH - 9.3, z0 + headD + 4 + Math.floor(k / 2) * (il - 8) / 13, 0.4);
+    part(g, mat('#1E1E1E', { rough: 0.6 }), 5, 2, il - 4, 0, frameH - 10, iz); // centre rail
+    const mw = iw - 3;
+    softBedding(g, mw, z0 + headD + 1, d / 2 - rim - 1, frameH - 8, 22, pal, 10);
   };
   // ZEN: low ash platform on short legs, wide headboard with bouclé panels framed in wood, two flat side tables
   B.zen = (g, w, d, h, c) => {
@@ -531,8 +632,8 @@
   B.bed = (g, w, d, h, c, it) => {
     const st = it && it.style;
     if (st === 'vinay') return B.vinay(g, w, d, h, c);
-    if (st === 'boxbed') return B.boxbed(g, w, d, h, c);
-    if (st === 'cloe') return B.boxbed(g, w, d, h, c, { frameH: 39, headD: 16, cushion: 2.5 }); // Livetastic Cloe: same build, lower and squarer
+    if (st === 'boxbed') return B.boxbed(g, w, d, h, c, { rib: 0.35, cushion: 5, pal: { sheet: '#F5F4F0', duvet: '#ECEAE5', pillow: '#F8F7F3', deco: '#DCD8D0' } });
+    if (st === 'cloe') return B.boxbed(g, w, d, h, c, { frameH: 39, headD: 16, cushion: 2.5, rib: 0.8, pal: { sheet: '#F4F2EE', duvet: '#9E8B78', pillow: '#A89684', deco: '#EDE9E2' } }); // Livetastic Cloe: lower, squarer, wide-rib cord
     if (st === 'zen') return B.zen(g, w, d, h, c);
     const top = h > 80 ? Math.min(55, h * 0.48) : h, headH = h > 80 ? h : h + 45;
     const frame = fabric(shade(c, 0.92), w, d), feetM = wood('#6B4A2E', 5, 15), feetH = Math.min(15, top * 0.3);

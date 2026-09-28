@@ -614,7 +614,7 @@
   const thumbs = new Map(), thumbQueue = [];
   let thumbBusy = false, thumbFail = false;
   const libFrame = (color) => color === '#F4F3EF' ? 'none' : color === '#C49A6C' ? 'oak' : color === '#C9A06A' ? 'oakpanel' : 'black';
-  const THUMB_VERSION = 5; // bump when models change so saved thumbnails are redrawn
+  const THUMB_VERSION = 6; // bump when models change so saved thumbnails are redrawn
   const thumbKey = (o) => JSON.stringify([THUMB_VERSION].concat(['type', 'w', 'd', 'h', 'color', 'style', 'doors', 'books', 'side', 'frame', 'mat', 'image', 'kelvin'].map((k) => o[k])));
   const showThumb = (key, url) => $$('img[data-thumb]').forEach((img) => { if (img.dataset.thumb === key) img.src = url; });
   function thumbImg(o, cls) {
