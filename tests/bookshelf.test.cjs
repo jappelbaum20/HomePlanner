@@ -46,3 +46,36 @@ test('fit rejects windows, radiator zones, ceilings and wall overruns; allows cl
   const low = B.preset('framed', 120, 60);
   assert.match(B.fit(low, r, { ...t, wall: 's' }).join(), /radiator/);
 });
+
+test('shrinking and expanding every preset preserves supported stepped edges', () => {
+  for (const kind of ['framed', 'staggered', 'stepped']) {
+    for (const width of [80, 120, 180, 240, 300, 480]) {
+      for (const thickness of [1.8, 2.4, 3.6]) {
+        const s = B.resize(B.preset(kind, 240, 200, 30, thickness), width, 190);
+        assert.deepEqual(B.validate(s).errors, [], `${kind}, ${width} cm, ${thickness} cm boards`);
+        assert.equal(s.levels.at(-1).y + thickness, 190);
+        assert.equal(B.normalize(JSON.parse(JSON.stringify(s))).levels.length, 6);
+      }
+    }
+  }
+});
+test('repeated divider additions fill free spaces without collisions or exceeding the saved limit', () => {
+  for (const kind of ['framed', 'staggered', 'stepped']) {
+    const s = B.preset(kind, 120);
+    let added = 0, x;
+    while ((x = B.dividerPosition(s, 0)) !== null) {
+      s.levels[0].dividers.push(x); added++;
+      assert.deepEqual(B.validate(s).errors, [], kind);
+      assert.ok(added <= 30);
+    }
+    assert.ok(added > 1);
+    assert.ok(s.levels[0].dividers.length <= 30);
+    assert.equal(B.normalize(s).levels[0].dividers.length, s.levels[0].dividers.length);
+  }
+});
+test('malformed imported levels are recoverable as an invalid design instead of crashing', () => {
+  const s = B.normalize({ levels: [null, false, 'bad', {}] });
+  assert.equal(s.levels.length, 1);
+  assert.ok(B.validate(s).errors.length);
+  assert.doesNotThrow(() => B.boards(s));
+});
