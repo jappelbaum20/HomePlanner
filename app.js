@@ -79,7 +79,7 @@
     stairs: { w: 85, d: 270, h: 225, color: '#B98A5A' }, bath: { w: 170, d: 75, h: 58, color: '#F5F5F2' }, shower: { w: 90, d: 90, h: 200, color: '#E6ECEF' },
     vanity: { w: 80, d: 50, h: 85, color: '#EDEBE6' }, toilet: { w: 38, d: 65, h: 40, color: '#F5F5F2' } };
   LIBRARY.forEach(([, items]) => items.forEach(([t, , w, d, h, c]) => { if (!TYPE_DEFAULTS[t]) TYPE_DEFAULTS[t] = { w, d, h, color: c }; }));
-  const SHARED = ['name', 'type', 'w', 'd', 'h', 'color', 'kelvin', 'power', 'doors', 'books', 'style', 'image', 'frame', 'mat'];
+  const SHARED = ['name', 'type', 'w', 'd', 'h', 'color', 'kelvin', 'power', 'doors', 'books', 'style', 'image', 'frame', 'mat', 'shelfDesign'];
   const ART_FRAMES = { black: 'Black frame', white: 'White frame', oak: 'Oak frame', limewash: 'Limed oak frame', pine: 'Pine frame', walnut: 'Walnut frame', brass: 'Brass frame', none: 'No frame (canvas)', oakpanel: 'Oak 3D wall panel' };
   const ART_WALL_ROT = { n: 0, e: 90, s: 180, w: 270 };
   const SHELF_DOORS = { none: 'No doors', lower: 'Doors on the lower half', full: 'Full-height doors' };
@@ -195,6 +195,10 @@
     if (type === 'cornersofa') o.side = it.side === 'left' ? 'left' : 'right';
     if (type === 'shelf') { o.doors = SHELF_DOORS[it.doors] ? it.doors : 'none'; o.books = it.books !== false; }
     if (it.style) o.style = String(it.style);
+    if (type === 'shelf' && it.shelfDesign) {
+      o.shelfDesign = Bookshelf.normalize(it.shelfDesign); o.style = 'custom'; o.books = false;
+      Object.assign(o, { w: o.shelfDesign.width, d: o.shelfDesign.depth, h: o.shelfDesign.height });
+    }
     if (it.fixed) o.fixed = true;
     if (it.seedPl) o.seedPl = String(it.seedPl); // which house-data placement made it // built into the house: cannot be moved, resized, rotated or removed
     if (type === 'art') { o.frame = ART_FRAMES[it.frame] ? it.frame : 'black'; o.mat = ['none', 'oakpanel'].includes(o.frame) || it.mat === false ? false : it.mat === 'cream' ? 'cream' : true; if (it.image) o.image = String(it.image); }
@@ -238,6 +242,10 @@
     if (type === 'cornersofa') o.side = p.side === 'left' ? 'left' : 'right';
     if (type === 'shelf') { o.doors = SHELF_DOORS[p.doors] ? p.doors : 'none'; o.books = p.books !== false; }
     if (p.style) o.style = String(p.style);
+    if (type === 'shelf' && p.shelfDesign) {
+      o.shelfDesign = Bookshelf.normalize(p.shelfDesign); o.style = 'custom'; o.books = false;
+      Object.assign(o, { w: o.shelfDesign.width, d: o.shelfDesign.depth, h: o.shelfDesign.height });
+    }
     if (type === 'art') { o.frame = ART_FRAMES[p.frame] ? p.frame : 'black'; o.mat = ['none', 'oakpanel'].includes(o.frame) || p.mat === false ? false : p.mat === 'cream' ? 'cream' : true; if (p.image) o.image = String(p.image); }
     if (isLight(type)) { o.kelvin = KELVIN[p.kelvin] ? Number(p.kelvin) : 2700; o.power = POWER[p.power] ? p.power : 'medium'; }
     if (p.seedRev) o.seedRev = p.seedRev;
@@ -250,6 +258,14 @@
     o.removedRooms = Array.isArray(s.removedRooms) ? s.removedRooms.slice() : [];
     // favourites, shown at the top of Furniture and lights: 'p:<piece id>' or 'l:<generic item name>'
     o.favorites = (Array.isArray(s.favorites) ? s.favorites : []).filter((k) => typeof k === 'string');
+    if (s.bookshelfDraft && s.bookshelfDraft.design && s.bookshelfDraft.target) {
+      const d = s.bookshelfDraft, t = d.target;
+      o.bookshelfDraft = { name: String(d.name || 'Custom bookshelf').slice(0, 100), color: hex(d.color, '#A46B42'),
+        design: Bookshelf.normalize(d.design), pieceId: d.pieceId ? String(d.pieceId) : null,
+        itemId: d.itemId ? String(d.itemId) : null, itemRoomId: d.itemRoomId ? String(d.itemRoomId) : null,
+        target: { roomId: String(t.roomId || ''), wall: ['n', 'e', 's', 'w'].includes(t.wall) ? t.wall : 'n',
+          offset: num(t.offset, 0, 3000, 20), gap: num(t.gap, 0, 3000, 2), elev: num(t.elev, 0, 800, 0) } };
+    }
     // your paint palette: [{ id, name, hex }]
     o.paints = (Array.isArray(s.paints) ? s.paints : []).map((p) => ({ id: p.id || 'c' + uid(), name: String(p.name || p.hex || ''), hex: hex(p.hex, '') })).filter((p) => p.hex);
     // Starter rooms from house-data.js. A room is matched by name (so your own "Büro" counts as the office);
@@ -358,6 +374,7 @@
   let evening = false;
   let saveNote = 'All changes saved in this browser';
   let draft = null;             // piece or room being edited in a dialog
+  let bookshelfActive = false;
 
   function load() { try { const s = localStorage.getItem(STORAGE_KEY); const p = s ? JSON.parse(s) : null; return p && Array.isArray(p.rooms) && p.rooms.length ? p : null; } catch (e) { return null; } }
   let saveTimer = null;
@@ -528,6 +545,16 @@
   // ================= Render: inspector =================
   function renderInspector() {
     const el = $('#inspector'), it = selItem(), op = selOpening();
+    if (it && it.shelfDesign && !it.fixed) {
+      el.innerHTML = `<h2>${esc(it.name)}</h2><div class="ins-thumb">${thumbImg(it, 'thumb3d big')}</div>
+        <p class="note">Custom bookshelf · ${it.w} × ${it.d} × ${it.h} cm. Edit the exact boards, wall placement and cut list in the builder.</p>
+        <div class="row3"><label class="field"><span>From left, cm</span><input type="number" data-item="x" value="${it.x}"></label>
+        <label class="field"><span>From top, cm</span><input type="number" data-item="y" value="${it.y}"></label>
+        <label class="field"><span>Rotation, °</span><input type="number" data-item="rot" value="${it.rot}"></label></div>
+        <div class="btnrow" style="margin-top:12px"><button class="btn" data-act="editBookshelf">Edit bookshelf</button>
+        <button class="btn light" data-act="rotate">Rotate 90°</button><button class="btn light" data-act="duplicate">Duplicate</button><button class="btn danger" data-act="delete">Remove</button></div>`;
+      return;
+    }
     if (it && it.type === 'art') return renderArtInspector(el, it);
     if (it && it.fixed) {
       el.innerHTML = `<h2>${esc(it.name)}</h2><div class="ins-thumb">${thumbImg(it, 'thumb3d big')}</div>
@@ -641,7 +668,7 @@
   let thumbBusy = false, thumbFail = false;
   const libFrame = (color) => color === '#F4F3EF' ? 'none' : color === '#C49A6C' ? 'oak' : color === '#C9A06A' ? 'oakpanel' : 'black';
   const THUMB_VERSION = 7; // bump when models change so saved thumbnails are redrawn
-  const thumbKey = (o) => JSON.stringify([THUMB_VERSION].concat(['type', 'w', 'd', 'h', 'color', 'style', 'doors', 'books', 'side', 'frame', 'mat', 'image', 'kelvin'].map((k) => o[k])));
+  const thumbKey = (o) => JSON.stringify([THUMB_VERSION].concat(['type', 'w', 'd', 'h', 'color', 'style', 'doors', 'books', 'side', 'frame', 'mat', 'image', 'kelvin', 'shelfDesign'].map((k) => o[k])));
   const showThumb = (key, url) => $$('img[data-thumb]').forEach((img) => { if (img.dataset.thumb === key) img.src = url; });
   function thumbImg(o, cls) {
     const key = thumbKey(o), url = thumbs.get(key);
@@ -893,7 +920,7 @@
     const group = new THREE.Group(); scene.add(group);
     Object.assign(three, { ok: true, renderer, scene, camera, controls, hemi, sun, group, envMap, walls: {} });
     new ResizeObserver(resize3D).observe(host);
-    (function loop() { requestAnimationFrame(loop); if (view === 'plan') return; controls.update(); fadeWalls(); renderer.render(scene, camera); })();
+    (function loop() { requestAnimationFrame(loop); if (view === 'plan' || bookshelfActive) return; controls.update(); fadeWalls(); renderer.render(scene, camera); })();
   }
   function resize3D() { if (!three.ok) return; const host = $('#three'), w = host.clientWidth, h = host.clientHeight; if (!w || !h) return; three.renderer.setSize(w, h); three.camera.aspect = w / h; three.camera.updateProjectionMatrix(); if (!three.userMoved && three.lastRoom) fitCamera(); }
   // Walls between the camera and the room turn see-through, with everything mounted on them
@@ -1090,6 +1117,7 @@
   }
 
   function pieceDialog(existing, opts = {}) {
+    if (existing && existing.shelfDesign) return bookshelfUI.open(existing);
     const obj = existing ? clone(existing) : normPiece(opts.from ? Object.assign({}, opts.from, { id: undefined, photos: [] }) : Object.assign({ type: 'sofa', name: '' }, TYPE_DEFAULTS.sofa));
     draft = { kind: 'piece', obj, newPhotos: [], removed: [] };
     const typeOptions = (lightKind) => Object.entries(lightKind ? LIGHT_TYPES : FURNITURE_TYPES).map(([k, n]) => `<option value="${k}" ${obj.type === k ? 'selected' : ''}>${n}</option>`).join('');
@@ -1245,6 +1273,7 @@
 
   // ================= Actions =================
   function placePiece(p) {
+    if (p.shelfDesign) return bookshelfUI.open(p);
     const r = room();
     const it = normItem(Object.assign({}, p, { id: undefined, catalogId: p.id, x: snap(r.width / 2), y: snap(r.length / 2), rot: 0 }), r);
     if (it.type === 'art') snapArt(it, r, wallTarget !== 'all' ? wallTarget : 'n');
@@ -1321,6 +1350,7 @@
       if (!confirm('Replace the current plan with this backup? A version of the current plan is saved first.')) return;
       await saveVersion(`Before import, ${new Date().toLocaleString()}`);
       for (const [id, url] of Object.entries(data.photos || {})) { photoCache.set(id, url); try { await Store.putPhoto(id, url); } catch (e) { /* session only */ } }
+      if (bookshelfActive) bookshelfUI.close();
       state = normState(s); selected = null; three.lastRoom = null; commit(); toast('Backup imported'); if ($('#saveDlg').open) $('#saveDlg').close();
     } catch (err) { alert(`Import failed: ${err.message}`); }
   }
@@ -1453,6 +1483,7 @@
     const it = selItem();
     ({ rotate: () => rotateSelected(90), duplicate: duplicateSelected, delete: deleteSelected,
       editPiece: () => it && pieceDialog(piece(it.catalogId)),
+      editBookshelf: () => it && bookshelfUI.open(piece(it.catalogId) || Object.assign({}, it, { id: null }), { item: it, room: room() }),
       savePiece: () => it && pieceDialog(null, { from: it, linkItem: it }),
       artPicture: () => $('#artPicker').click(),
       artClear: () => { if (it) { delete it.image; syncToPiece(it); if (it.catalogId && piece(it.catalogId)) delete piece(it.catalogId).image; state.rooms.forEach((r) => r.items.forEach((x) => { if (it.catalogId && x.catalogId === it.catalogId) delete x.image; })); commit(); } } })[a.dataset.act]();
@@ -1486,6 +1517,7 @@
       const v = (await Store.listVersions()).find((x) => x.id === rs.dataset.restore); if (!v) return;
       if (!confirm(`Restore "${v.name}"? The current plan is saved as a version first.`)) return;
       await saveVersion(`Before restore, ${new Date().toLocaleString()}`);
+      if (bookshelfActive) bookshelfUI.close();
       state = normState(v.data); selected = null; three.lastRoom = null; commit(); toast(`Restored "${v.name}"`); $('#saveDlg').close(); return;
     }
     const dv = t.closest('[data-del-version]');
@@ -1532,7 +1564,7 @@
   svg.addEventListener('pointerup', endDrag); svg.addEventListener('pointercancel', endDrag);
 
   document.addEventListener('keydown', (e) => {
-    if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) || modal.open || lb.open || !selected) return;
+    if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) || modal.open || lb.open || bookshelfActive || !selected) return;
     const it = selItem();
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); }
     else if (e.key === 'Escape') { selected = null; renderAll(); }
@@ -1547,5 +1579,50 @@
   });
 
   // ================= Start =================
+  const bookshelfUI = BookshelfBuilder.init($('#bookshelfBuilder'), {
+    rooms: () => state.rooms.filter(r => ['office', 'living'].includes(r.seedId) || /^(Office|Living room)$/i.test(r.name)),
+    pieces: () => state.catalog, activeRoom: () => state.activeRoomId, toast,
+    draft: function (d) { if (arguments.length) { state.bookshelfDraft = d; save(); } return state.bookshelfDraft; },
+    show: active => {
+      bookshelfActive = active; $('.layout').hidden = active;
+      $('#bookshelfBtn').setAttribute('aria-expanded', String(active)); $('#roomSwitch').disabled = active;
+      $('#handoffBtn').disabled = active;
+      $$('.seg button').forEach(b => { b.disabled = active; });
+      if (!active) {
+        const d = state.bookshelfDraft, r = d && state.rooms.find(x => x.id === d.itemRoomId);
+        if (r && r.items.some(i => i.id === d.itemId)) { state.activeRoomId = r.id; selected = { kind: 'item', id: d.itemId }; }
+        renderAll(); renderView(); $('#bookshelfBtn').focus();
+      }
+    },
+    collisions: (d, r) => {
+      const s = d.design, candidate = { id: '__bookshelf_preview', w: s.width, d: s.depth, h: s.height,
+        ...Bookshelf.placement(s, r, d.target), type: 'shelf' }, box = aabb(candidate), messages = [];
+      const ov = (a, b, c, e) => Math.min(b, e) - Math.max(a, c) > 1;
+      r.items.filter(i => i.id !== d.itemId && i.type !== 'rug').forEach(i => {
+        const other = aabb(i);
+        if (ov(box.x0, box.x1, other.x0, other.x1) && ov(box.y0, box.y1, other.y0, other.y1) && ov(box.z0, box.z1, other.z0, other.z1)) messages.push(`Overlaps ${i.name}. Move it in the room plan or choose another position.`);
+      });
+      if (inSwing(candidate, doorZones(r), r)) messages.push('The bookshelf blocks an inward-opening door swing.');
+      return messages;
+    },
+    saveDesign: (d, place, r) => {
+      const s = Bookshelf.normalize(d.design), ex = d.pieceId && piece(d.pieceId);
+      const p = normPiece(Object.assign({}, ex || {}, { id: ex ? ex.id : 'c' + uid(), type: 'shelf', style: 'custom',
+        name: d.name || 'Custom bookshelf', w: s.width, d: s.depth, h: s.height, color: d.color, books: false,
+        shelfDesign: s, status: ex ? ex.status : 'considering' }));
+      if (ex) Object.assign(ex, p); else state.catalog.push(p);
+      syncFromPiece(ex || p);
+      if (place) {
+        const source = state.rooms.find(x => x.id === d.itemRoomId), old = source && source.items.find(i => i.id === d.itemId);
+        if (old && source !== r) source.items = source.items.filter(i => i.id !== old.id);
+        const it = normItem(Object.assign({}, p, { id: old ? old.id : undefined, catalogId: p.id }, Bookshelf.placement(s, r, d.target)), r);
+        if (old && source === r) Object.assign(old, it); else r.items.push(it);
+        d.itemId = it.id; d.itemRoomId = r.id; state.activeRoomId = r.id; selected = { kind: 'item', id: it.id };
+      }
+      catTab = 'mine'; commit(); toast(place ? `Saved and placed ${p.name} in ${r.name}` : `Saved ${p.name} to My pieces`);
+      return p.id;
+    }
+  });
+  $('#bookshelfBtn').addEventListener('click', () => bookshelfActive ? bookshelfUI.close() : bookshelfUI.open());
   renderAll(); renderSavePanel(); renderView();
 })();

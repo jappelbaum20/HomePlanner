@@ -1495,7 +1495,13 @@
     let bulbY = null;
     if (L[it.type]) bulbY = L[it.type](g, w, d, h, it.color, opts.evening, opts.kelvinHex, opts.roomTop, it);
     else {
-      (B[it.type] || B.box)(g, w, d, h, it.color, it, opts);
+      if (it.type === 'shelf' && it.shelfDesign && window.Bookshelf) {
+        const s = Bookshelf.normalize(it.shelfDesign);
+        Bookshelf.boards(s).filter(b => b.w > 0 && b.h > 0).forEach(b => {
+          part(g, wood(it.color, b.w, b.h), b.w, b.h, s.depth,
+            b.x + b.w / 2 - s.width / 2, b.y + b.h / 2, 0, 0);
+        });
+      } else (B[it.type] || B.box)(g, w, d, h, it.color, it, opts);
       if (!['rug', 'vanity', 'toilet', 'cornersofa', 'art', 'potrack'].includes(it.type) && !(it.elev > 0)) g.add(HM.contactShadow(w, d));
     }
     g.userData.bulbY = bulbY;
