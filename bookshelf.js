@@ -8,7 +8,7 @@
     const s = raw && typeof raw === 'object' ? raw : {};
     return { version: 1, width: number(s.width, 240), height: number(s.height, 200),
       depth: number(s.depth, 30), thickness: number(s.thickness, 2.4),
-      levels: (Array.isArray(s.levels) ? s.levels : []).slice(0, 25).map(l => ({
+      levels: (Array.isArray(s.levels) ? s.levels : []).filter(l => l && typeof l === 'object').slice(0, 25).map(l => ({
         y: number(l.y, 0), left: number(l.left, 0), right: number(l.right, 240),
         dividers: (Array.isArray(l.dividers) ? l.dividers : []).slice(0, 30).map(x => number(x, 0))
       })) };
@@ -72,13 +72,27 @@
   }
   function resize(s, width, height) {
     const xScale = width / s.width, yScale = (height - s.thickness) / (s.height - s.thickness);
-    return normalize({ ...s, width, height, levels: s.levels.map(l => ({ ...l,
-      y: round(l.y * yScale), left: round(l.left * xScale), right: round(l.right * xScale), dividers: l.dividers.map(x => {
-        // Keep flush edge supports flush even though thickness is not scaled.
-        if (Math.abs(x - s.thickness / 2) < .001) return s.thickness / 2;
-        if (Math.abs(x - (s.width - s.thickness / 2)) < .001) return width - s.thickness / 2;
-        return round(x * xScale);
-      }) })) });
+    const levels = s.levels.map(l => ({ ...l, y: round(l.y * yScale), left: round(l.left * xScale), right: round(l.right * xScale), dividers: [] }));
+    // Scale each bay's usable support span, keeping full board thickness at stepped edges.
+    s.levels.slice(0, -1).forEach((l, i) => {
+      const a = Math.max(l.left, s.levels[i + 1].left) + s.thickness / 2;
+      const b = Math.min(l.right, s.levels[i + 1].right) - s.thickness / 2;
+      const A = Math.max(levels[i].left, levels[i + 1].left) + s.thickness / 2;
+      const Z = Math.min(levels[i].right, levels[i + 1].right) - s.thickness / 2;
+      levels[i].dividers = l.dividers.map(x => round(b > a ? A + (x - a) / (b - a) * (Z - A) : x * xScale));
+    });
+    return normalize({ ...s, width, height, levels });
+  }
+  function dividerPosition(s, row) {
+    const l = s.levels[row], next = s.levels[row + 1], t = s.thickness;
+    if (!l || !next || l.dividers.length >= 30) return null;
+    const a = Math.max(l.left, next.left), b = Math.min(l.right, next.right);
+    const occupied = [...l.dividers].sort((x, y) => x - y);
+    const gaps = []; let start = a;
+    occupied.forEach(x => { gaps.push([start, x - t / 2]); start = x + t / 2; });
+    gaps.push([start, b]); gaps.sort((x, y) => (y[1] - y[0]) - (x[1] - x[0]));
+    const gap = gaps.find(([left, right]) => right - left >= t + .002);
+    return gap ? round((gap[0] + gap[1]) / 2) : null;
   }
   function placement(s, r, target) {
     const offset = target.offset, gap = target.gap, elev = target.elev;
@@ -100,7 +114,7 @@
     });
     return [...new Set(errors)];
   }
-  const api = { normalize, preset, boards, validate, resize, placement, fit, round };
+  const api = { normalize, preset, boards, validate, resize, dividerPosition, placement, fit, round };
   root.Bookshelf = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

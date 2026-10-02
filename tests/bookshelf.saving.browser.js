@@ -1,0 +1,30 @@
+async page => {
+  const results=[], check=(ok,label)=>results.push({label,pass:!!ok});
+  const button=name=>page.getByRole('button',{name,exact:true});
+  await page.goto('http://127.0.0.1:8765/');await button('Bookshelf builder').click();await page.waitForTimeout(400);
+  const before=await page.evaluate(()=>JSON.parse(localStorage.getItem('houseplanner.project.v1')).bookshelfDraft.design);
+  const width=page.getByRole('spinbutton',{name:'Width, cm',exact:true});
+  await width.fill('24');await width.fill('260');await width.fill(String(before.width));await page.waitForTimeout(400);
+  check(await page.evaluate(before=>JSON.stringify(JSON.parse(localStorage.getItem('houseplanner.project.v1')).bookshelfDraft.design)===JSON.stringify(before),before),'incremental width typing does not accumulate rounding drift');
+  await page.evaluate(()=>{window.__originalSetItem=Storage.prototype.setItem;Storage.prototype.setItem=function(key,value){if(key==='houseplanner.project.v1')throw new DOMException('Test full storage','QuotaExceededError');return window.__originalSetItem.call(this,key,value);};});
+  await page.getByRole('textbox',{name:'Design name',exact:true}).fill('Storage recovery check');await page.waitForTimeout(400);
+  check(await page.locator('#saveState').innerText()==='Not saved','autosave failure is shown in the top bar');
+  check((await page.locator('#bsSaveNote').innerText()).includes('unavailable'),'autosave failure is also explained next to save buttons');
+  await button('Save design').click();
+  check(!(await page.locator('#toast').innerText()).startsWith('Saved '),'failed explicit save does not claim success');
+  const event=page.waitForEvent('download');await button('Export design JSON').click();const download=await event;
+  await download.saveAs('output/playwright/storage-recovery.json');check(!!download.suggestedFilename(),'export remains available when browser storage is full');
+  await page.evaluate(()=>{Storage.prototype.setItem=window.__originalSetItem;delete window.__originalSetItem;});
+  await button('Save design').click();
+  check(await page.locator('#saveState').innerText()==='Saved','saving recovers when storage is available again');
+  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('houseplanner.project.v1')).catalog.some(p=>p.name==='Storage recovery check'));
+  check(saved,'recovered save actually writes the design');
+  await button('Save and versions').click();
+  await page.getByRole('textbox',{name:'Version name',exact:true}).fill('Storage recovery snapshot');await button('Save version').click();
+  const versionCount=await page.locator('#versionList [data-restore]').count();check(versionCount>0,'named versions are available to restore');await button('Close').click();
+  await page.getByRole('textbox',{name:'Design name',exact:true}).fill('Unsaved-after-snapshot');
+  await button('Save and versions').click();
+  const failures=results.filter(r=>!r.pass);
+  if(failures.length)throw new Error(JSON.stringify(failures));
+  return {checks:results.length,failures};
+}

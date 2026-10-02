@@ -245,6 +245,9 @@
     if (type === 'shelf' && p.shelfDesign) {
       o.shelfDesign = Bookshelf.normalize(p.shelfDesign); o.style = 'custom'; o.books = false;
       Object.assign(o, { w: o.shelfDesign.width, d: o.shelfDesign.depth, h: o.shelfDesign.height });
+      if (p.shelfTarget) o.shelfTarget = {
+        roomId: String(p.shelfTarget.roomId || ''), wall: ['n', 'e', 's', 'w'].includes(p.shelfTarget.wall) ? p.shelfTarget.wall : 'n',
+        offset: num(p.shelfTarget.offset, 0, 3000, 20), gap: num(p.shelfTarget.gap, 0, 3000, 2), elev: num(p.shelfTarget.elev, 0, 800, 0) };
     }
     if (type === 'art') { o.frame = ART_FRAMES[p.frame] ? p.frame : 'black'; o.mat = ['none', 'oakpanel'].includes(o.frame) || p.mat === false ? false : p.mat === 'cream' ? 'cream' : true; if (p.image) o.image = String(p.image); }
     if (isLight(type)) { o.kelvin = KELVIN[p.kelvin] ? Number(p.kelvin) : 2700; o.power = POWER[p.power] ? p.power : 'medium'; }
@@ -375,14 +378,19 @@
   let saveNote = 'All changes saved in this browser';
   let draft = null;             // piece or room being edited in a dialog
   let bookshelfActive = false;
+  let bookshelfUI = null, storageAvailable = true;
 
   function load() { try { const s = localStorage.getItem(STORAGE_KEY); const p = s ? JSON.parse(s) : null; return p && Array.isArray(p.rooms) && p.rooms.length ? p : null; } catch (e) { return null; } }
   let saveTimer = null;
   function flushSave() {
     clearTimeout(saveTimer); saveTimer = null;
+    let saved = true;
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); saveNote = 'All changes saved in this browser'; }
-    catch (e) { saveNote = 'Browser storage is unavailable, so changes are not kept. Export a backup.'; }
+    catch (e) { saved = false; saveNote = 'Browser storage is unavailable, so changes are not kept. Export a backup.'; }
+    storageAvailable = saved;
     renderStatus();
+    if (bookshelfUI) bookshelfUI.updateStorage();
+    return saved;
   }
   function save() {
     saveNote = 'Saving…'; renderStatus();
@@ -1117,7 +1125,7 @@
   }
 
   function pieceDialog(existing, opts = {}) {
-    if (existing && existing.shelfDesign) return bookshelfUI.open(existing);
+    if (existing && existing.shelfDesign) return bookshelfUI.open(existing, findBookshelfPlacement(existing.id));
     const obj = existing ? clone(existing) : normPiece(opts.from ? Object.assign({}, opts.from, { id: undefined, photos: [] }) : Object.assign({ type: 'sofa', name: '' }, TYPE_DEFAULTS.sofa));
     draft = { kind: 'piece', obj, newPhotos: [], removed: [] };
     const typeOptions = (lightKind) => Object.entries(lightKind ? LIGHT_TYPES : FURNITURE_TYPES).map(([k, n]) => `<option value="${k}" ${obj.type === k ? 'selected' : ''}>${n}</option>`).join('');
@@ -1579,10 +1587,16 @@
   });
 
   // ================= Start =================
-  const bookshelfUI = BookshelfBuilder.init($('#bookshelfBuilder'), {
+  function findBookshelfPlacement(pid) {
+    const matches = state.rooms.flatMap(r => r.items.filter(i => i.catalogId === pid && i.shelfDesign).map(item => ({ room: r, item })));
+    return matches.find(p => p.room.id === state.activeRoomId) || (matches.length === 1 ? matches[0] : null);
+  }
+  bookshelfUI = BookshelfBuilder.init($('#bookshelfBuilder'), {
     rooms: () => state.rooms.filter(r => ['office', 'living'].includes(r.seedId) || /^(Office|Living room)$/i.test(r.name)),
     pieces: () => state.catalog, activeRoom: () => state.activeRoomId, toast,
-    draft: function (d) { if (arguments.length) { state.bookshelfDraft = d; save(); } return state.bookshelfDraft; },
+    draft: function (d, immediate = false) { if (arguments.length) { state.bookshelfDraft = d; if (immediate) return flushSave(); save(); } return state.bookshelfDraft; },
+    storageAvailable: () => storageAvailable, findPlacement: findBookshelfPlacement,
+    hasPlacement: (id, rid) => state.rooms.some(r => r.id === rid && r.items.some(i => i.id === id && i.shelfDesign)),
     show: active => {
       bookshelfActive = active; $('.layout').hidden = active;
       $('#bookshelfBtn').setAttribute('aria-expanded', String(active)); $('#roomSwitch').disabled = active;
@@ -1609,17 +1623,21 @@
       const s = Bookshelf.normalize(d.design), ex = d.pieceId && piece(d.pieceId);
       const p = normPiece(Object.assign({}, ex || {}, { id: ex ? ex.id : 'c' + uid(), type: 'shelf', style: 'custom',
         name: d.name || 'Custom bookshelf', w: s.width, d: s.depth, h: s.height, color: d.color, books: false,
-        shelfDesign: s, status: ex ? ex.status : 'considering' }));
+        shelfDesign: s, shelfTarget: clone(d.target), status: ex ? ex.status : 'considering' }));
       if (ex) Object.assign(ex, p); else state.catalog.push(p);
+      const source = state.rooms.find(x => x.id === d.itemRoomId), old = source && source.items.find(i => i.id === d.itemId);
+      if (old) old.catalogId = p.id;
       syncFromPiece(ex || p);
       if (place) {
-        const source = state.rooms.find(x => x.id === d.itemRoomId), old = source && source.items.find(i => i.id === d.itemId);
         if (old && source !== r) source.items = source.items.filter(i => i.id !== old.id);
         const it = normItem(Object.assign({}, p, { id: old ? old.id : undefined, catalogId: p.id }, Bookshelf.placement(s, r, d.target)), r);
         if (old && source === r) Object.assign(old, it); else r.items.push(it);
         d.itemId = it.id; d.itemRoomId = r.id; state.activeRoomId = r.id; selected = { kind: 'item', id: it.id };
       }
-      catTab = 'mine'; commit(); toast(place ? `Saved and placed ${p.name} in ${r.name}` : `Saved ${p.name} to My pieces`);
+      d.pieceId = p.id; state.bookshelfDraft = clone(d);
+      catTab = 'mine'; commit();
+      const saved = flushSave();
+      toast(saved ? (place ? `Saved and placed ${p.name} in ${r.name}` : `Saved ${p.name} to My pieces`) : 'Browser storage is unavailable. Download the design or export a backup to keep it.');
       return p.id;
     }
   });

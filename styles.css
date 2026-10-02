@@ -152,6 +152,7 @@ input[type="color"]::-moz-color-swatch { border: 0; border-radius: 3px; }
 .bs-warning { color: #68521D; background: #FFF3CF; }
 .bs-error ul, .bs-warning ul { padding-left: 18px; margin: 6px 0 0; }
 .bs-ok { font-size: 12px; color: #365D42; margin: 12px 0; }
+.bs-edit-feedback { color: var(--danger); }
 @media (max-width: 1200px) { .bs-layout { grid-template-columns: 280px minmax(300px, 1fr); } .bs-output { grid-column: 1 / -1; } .bs-save-actions .btn { flex: 1 1 180px; } .bs-preview { position: static; } }
 @media (max-width: 700px) { .bookshelf-builder { padding: 14px; overflow: visible; } .bs-layout { grid-template-columns: minmax(0, 1fr); } .bs-preview { grid-row: 1; } .bs-output { grid-column: auto; } #bs3d { height: 300px; } .bs-heading h1 { font-size: 23px; } }
 
