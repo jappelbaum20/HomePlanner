@@ -11,6 +11,8 @@
   color: var(--ink);
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
+button:disabled { opacity: .45; cursor: not-allowed; }
 html, body { margin: 0; height: 100%; }
 body { background: var(--paper); font-size: 14px; line-height: 1.4; display: flex; flex-direction: column; height: 100vh; }
 button, input, select { font: inherit; }
@@ -114,6 +116,44 @@ input[type="color"]::-moz-color-swatch { border: 0; border-radius: 3px; }
 
 .status { flex: none; display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 6px 16px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); background: var(--panel); }
 .status .warn { color: var(--danger); font-weight: 500; }
+
+/* Bookshelf builder */
+.bookshelf-builder { flex: 1; overflow-y: auto; min-height: 0; padding: 22px; }
+.bs-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 20px; }
+.bs-heading h1 { font-size: 28px; margin: 3px 0; letter-spacing: -.04em; }
+.bs-eyebrow { margin: 0; font-size: 10px; letter-spacing: .14em; color: var(--muted); font-weight: 600; }
+.bs-layout { display: grid; grid-template-columns: 300px minmax(320px, 1fr) 270px; gap: 18px; align-items: start; }
+.bs-controls, .bs-output { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+.bs-controls h2:not(:first-child), .bs-output h3 { margin-top: 24px; }
+.bs-controls > .field + .field { margin-top: 10px; }
+.bs-presets, .bs-save-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.bs-save-actions .btn { flex: 1 1 100%; }
+.bs-preview { min-width: 0; position: sticky; top: 0; }
+.bs-preview-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.bs-preview-head h2 { margin: 0; }
+#bs3d { height: 350px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #E8E9E4; }
+#bs3d canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+.bs-drawing { margin-top: 15px; padding: 10px; background: #FAF8F3; border: 1px solid var(--line); border-radius: 10px; }
+.bs-drawing svg { display: block; width: 100%; max-height: 320px; touch-action: none; }
+.bs-drawing [data-bs-board] { cursor: pointer; }
+.bs-drawing [data-bs-board^="D"] { cursor: ew-resize; }
+.bs-level { display: flex; width: 100%; gap: 8px; justify-content: space-between; padding: 8px; border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer; font-size: 12px; }
+.bs-level + .bs-level { border-top: 0; }
+.bs-level.active { background: #FFF3C8; box-shadow: inset 3px 0 var(--mark); }
+.bs-divider { display: flex; align-items: end; gap: 8px; margin: 8px 0; }
+.bs-divider .field { flex: 1; }
+#bsRowEditor > .btn { margin-top: 10px; }
+.bs-table-wrap { overflow-x: auto; max-height: 360px; overflow-y: auto; margin: 12px 0; }
+.bs-cut { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+.bs-cut td, .bs-cut th { padding: 7px 4px; border-bottom: 1px solid var(--line); text-align: left; }
+.bs-cut th { position: sticky; top: 0; background: var(--panel); }
+.bs-error, .bs-warning { border-radius: 6px; padding: 12px; margin-top: 12px; font-size: 12px; }
+.bs-error { color: #8D2C20; background: #FCEBE5; }
+.bs-warning { color: #68521D; background: #FFF3CF; }
+.bs-error ul, .bs-warning ul { padding-left: 18px; margin: 6px 0 0; }
+.bs-ok { font-size: 12px; color: #365D42; margin: 12px 0; }
+@media (max-width: 1200px) { .bs-layout { grid-template-columns: 280px minmax(300px, 1fr); } .bs-output { grid-column: 1 / -1; } .bs-save-actions .btn { flex: 1 1 180px; } .bs-preview { position: static; } }
+@media (max-width: 700px) { .bookshelf-builder { padding: 14px; overflow: visible; } .bs-layout { grid-template-columns: minmax(0, 1fr); } .bs-preview { grid-row: 1; } .bs-output { grid-column: auto; } #bs3d { height: 300px; } .bs-heading h1 { font-size: 23px; } }
 
 @media (max-width: 900px) {
   body { height: auto; min-height: 100vh; }

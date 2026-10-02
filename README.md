@@ -16,6 +16,20 @@ Live site: https://jappelbaum20.github.io/HomePlanner/ (redeploys on every push 
 
 ## The workflow
 
+### Custom bookshelf builder
+
+Open **Bookshelf builder** in the top bar. Choose **Office** or **Living room**, then a wall. Wall lengths, ceiling height, windows and doors come from your current plan. The offset is from the left corner on north/south walls and the top corner on east/west walls, as in the floor plan.
+
+Start with **Framed**, **Staggered**, or **Stepped edges**. Change overall dimensions and board thickness, select a shelf in the front drawing or 3D preview, then edit its underside height and independent left/right endpoints. Add/remove shelves and dividers; divider centres can be entered precisely or dragged in the drawing. Undo keeps the last 50 edits during the current builder session. Drafts autosave locally.
+
+**Save design** creates or updates a custom shelf in **My pieces**. **Save & place on wall** places it at the specified wall offset, gap and floor elevation; editing a placed shelf can move that same placement between rooms. Existing placements share the saved board design. Use **Make a copy** for an independent variant. Back in the room, drag/rotate it like other furniture, or select **Edit bookshelf** to return to the builder. The builder blocks placement past the room bounds, through openings/radiator zones, into door swings or overlapping furniture. Designs may still be saved while choosing a different placement.
+
+The orbitable 3D preview and room model use the same explicit board geometry as the front elevation and cut list. Export **CSV** (individual square-cut boards and assembly X/Y positions in mm), **build-plan HTML** (labelled front elevation and dimension table; print/save as PDF), or **design JSON** (editable design and target in cm). Saved designs and the draft survive reload, named versions and full-plan backup import/export. Saves are per browser; use **Export backup** to move between devices. Design JSON is an archival export; restore the full-plan backup to bring designs into another browser.
+
+Construction assumptions: full-depth square-cut boards, vertical dividers butt-jointed between horizontal shelves, no back panel. Lengths exclude saw kerf, joinery and machining allowances. Verify the real wall, timber thickness, fasteners, sag, stability and wall anchoring before construction; the app does not calculate load capacity. Geometry validation rejects detached/overlapping dividers and invalid board sizes; span/overhang notices are prompts for review.
+
+`shelfDesign` is stored on shelf pieces and placements: `{ version: 1, width, height, depth, thickness, levels: [{ y, left, right, dividers: [centreX, ...] }] }`, all in cm, front-view coordinates. `y` is a shelf underside; bottom starts at 0 and the top underside is `height - thickness`. Dividers belong to the bay above each shelf. `bookshelf.js` defines normalization, geometry, fit and validation; `bookshelf-builder.js` owns the editor. Run the geometry checks with `node --test tests/bookshelf.test.cjs`.
+
 1. **New room**: name, floor or level, sizes (optional), photos, notes.
 2. **Model it with Claude**: send the photos and sizes in chat. Claude replies with a data block.
 3. **Claude handoff, then Add to plan**: paste the block. Rooms and pieces with an existing id are updated, new ones are added. A version is saved automatically first.
