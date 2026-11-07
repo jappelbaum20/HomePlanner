@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
+  <base href="/">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>House planner</title>
@@ -26,14 +27,15 @@
     </div>
     <span id="saveState" class="save-state" aria-live="polite">Saved</span>
     <button id="bookshelfBtn" class="btn top" aria-expanded="false">Bookshelf builder</button>
+    <button id="cloudBtn" class="btn top">Private designs</button>
     <button id="saveBtn" class="btn top">Save and versions</button>
-    <button id="handoffBtn" class="btn mark">Claude handoff</button>
+    <button id="handoffBtn" class="btn mark">Plan data import</button>
   </header>
 
   <main class="layout">
     <aside class="panel left">
       <section>
-        <div class="sec-head"><h2>Rooms</h2></div>
+        <div class="sec-head"><h2>Rooms</h2><button class="btn small" id="newRoomBtn">Add room</button></div>
         <div id="roomList"></div>
       </section>
       <section id="roomPanel"></section>
@@ -64,6 +66,13 @@
   <footer class="status" id="status" aria-live="polite"></footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <dialog id="cloudDlg" class="save-dlg"><section>
+    <div class="sec-head"><h2>Private designs</h2><button class="btn light small" id="cloudClose">Close</button></div>
+    <p id="cloudStatus" role="status" aria-live="polite"></p>
+    <div class="btnrow"><button id="cloudSignIn" class="btn">Sign in with Google</button><button id="cloudSignOut" class="btn light" hidden>Sign out</button><a href="admin.html">Admin settings</a></div>
+    <p class="note">Cloud designs are private to your account. Signing in never uploads your local plan. Export a backup before switching accounts.</p>
+    <div id="cloudPanel"></div>
+  </section></dialog>
   <dialog id="saveDlg" class="save-dlg"><section id="savePanel"></section></dialog>
   <dialog id="modal"><div class="modal-inner" id="modalBody"></div></dialog>
   <dialog id="lightbox" class="lightbox">
@@ -88,6 +97,11 @@
   <script src="bookshelf-builder.js?v=3"></script>
   <script src="models3d.js?v=3"></script>
   <script src="house-data.js"></script>
+  <script src="shared/canonical.js"></script>
+  <script src="client/config.js"></script>
+  <script src="client/contracts-loader.js"></script>
+  <script src="client/cloud.js"></script>
+  <script src="client/ui.js"></script>
   <script src="app.js?v=3"></script>
 </body>
 </html>

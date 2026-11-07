@@ -62,10 +62,11 @@
       if (bytes(value.payload) > LIMITS.payloadBytes) errors.push('Design payload exceeds 1 MiB.');
       errors.push(...(value.kind === 'shelf' ? shelfErrors(value.payload) : homeShelfErrors(value.payload)));
       const ids = (name === 'local' ? value.photoManifest.map(p => p.photoId) : value.photoIds).map(id => id.toLowerCase());
-      const allowed = new Set(ids);
+      const allowed = new Set(ids), referenced = new Set();
       if (allowed.size !== ids.length) errors.push('Duplicate photo IDs are not allowed.');
       if (value.kind === 'home') {
         for (const holder of [...value.payload.rooms, ...value.payload.catalog]) {
+          holder.photos.forEach(id => referenced.add(id.toLowerCase()));
           if (holder.photos.some(id => !allowed.has(id.toLowerCase()))) errors.push('A photo reference is missing from the manifest.');
         }
         for (const room of value.payload.rooms) {
@@ -73,8 +74,10 @@
           if (Object.keys(room.photoLabels).some(id => !photos.has(id.toLowerCase()))) errors.push('A photo label has no room photo.');
         }
         const objects = [...value.payload.catalog, ...value.payload.rooms.flatMap(room => room.items)];
+        objects.forEach(item => { if (item.image) referenced.add(item.image.toLowerCase()); });
         if (objects.some(item => item.image && !allowed.has(item.image.toLowerCase()))) errors.push('An image reference is missing from the manifest.');
       }
+      if (ids.some(id => !referenced.has(id))) errors.push('Unreferenced photo IDs are not allowed.');
     }
     if (['proposalRequest', 'proposal'].includes(name)) errors.push(...shelfErrors(value.shelf));
     return { valid: errors.length === 0, errors: [...new Set(errors)] };

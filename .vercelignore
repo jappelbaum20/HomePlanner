@@ -7,6 +7,8 @@
 !/bookshelf.js
 !/bookshelf-builder.js
 !/starter-data.js
+!/admin.html
+!/admin.js
 !/package.json
 !/package-lock.json
 !/vercel.json
@@ -15,9 +17,18 @@
 /scripts/*
 !/scripts/build-public.mjs
 !/scripts/audit-public.mjs
+!/scripts/prepare-hosting.mjs
+!/scripts/hosting-manifest.mjs
+!/client/
+/client/*
+!/client/config.js
+!/client/contracts-loader.js
+!/client/cloud.js
+!/client/ui.js
 !/shared/
 /shared/*
 !/shared/contracts.js
+!/shared/canonical.js
 !/shared/schema/
 /shared/schema/*
 !/shared/schema/shelf-v1.json
@@ -39,6 +50,7 @@
 /server/providers/*
 !/server/providers/index.js
 !/server/providers/fake.js
+!/server/providers/openai.js
 !/api/
 /api/*
 !/api/me.js
@@ -47,6 +59,9 @@
 !/api/admin/
 /api/admin/*
 !/api/admin/model-config.js
+!/api/admin/challenge.js
+!/api/admin/bootstrap.js
+!/api/admin/budget.js
 !/api/designs/
 /api/designs/*
 !/api/designs/\[id\].js

@@ -67,7 +67,7 @@ test('build emits only audited assets, empty starter and equivalent browser cont
   assert.equal(run.status,0,run.stderr || run.stdout);
   const {auditPublic}=await import('../scripts/audit-public.mjs');
   const files=await auditPublic(dist);
-  assert.equal(files.length,9);
+  assert.equal(files.length,21);
   const context=vm.createContext({TextEncoder, console}); context.window=context;
   for (const file of ['bookshelf.js','shared/validators.js','shared/contracts.js','starter-data.js']) vm.runInContext(fs.readFileSync(path.join(dist,file),'utf8'),context,{filename:file,timeout:5000});
   assert.equal(context.HOUSE_SEED.rooms.length,0);
@@ -77,9 +77,11 @@ test('build emits only audited assets, empty starter and equivalent browser cont
   const html=fs.readFileSync(path.join(dist,'index.html'),'utf8');
   assert.match(html,/<script src="starter-data\.js"><\/script>/);
   assert.doesNotMatch(html,/<script src="house-data\.js"/);
+  assert.doesNotMatch(html,/https?:\/\//);
+  assert.ok(html.indexOf('vendor/supabase.js') < html.indexOf('client/cloud.js'));
 });
 
-test('upload rules admit only explicit sources, including reserved backend paths', () => {
+test('upload rules admit only explicit reviewed sources', async () => {
   const matcher=ignore().add(fs.readFileSync(path.join(root,'.vercelignore'),'utf8'));
   const included=['index.html','app.js','package.json','package-lock.json','shared/contracts.js','shared/schema/shelf-v1.json','scripts/build-public.mjs',
     'api/me.js','api/designs.js','api/designs/[id].js','api/designs/[id]/photos.js','api/designs/[id]/photos/[photoId].js',
@@ -89,14 +91,11 @@ test('upload rules admit only explicit sources, including reserved backend paths
     'dist/index.html','node_modules/ajv/package.json','shared/schema/.env'];
   for(const file of included) assert.equal(matcher.ignores(file),false,`must include ${file}`);
   for(const file of excluded) assert.equal(matcher.ignores(file),true,`must exclude ${file}`);
-  assert.deepEqual(uploadFiles(),[
-    '.vercelignore','app.js','bookshelf-builder.js','bookshelf.js','index.html','models3d.js',
-    'package-lock.json','package.json','scripts/audit-public.mjs','scripts/build-public.mjs',
-    'shared/contracts.js','shared/schema/api-v3.json','shared/schema/home-v2.json','shared/schema/shelf-v1.json',
-    'starter-data.js','styles.css','vercel.json'
-  ].sort());
+  const { HOSTING_INPUTS } = await import('../scripts/hosting-manifest.mjs');
+  assert.deepEqual(uploadFiles(),[...HOSTING_INPUTS].sort());
   const config=JSON.parse(fs.readFileSync(path.join(root,'vercel.json'),'utf8'));
   assert.equal(config.git.deploymentEnabled,false); assert.equal(config.outputDirectory,'dist');
+  assert.deepEqual(config.rewrites,[{source:'/auth/callback',destination:'/index.html'}]);
 });
 
 test('actual public bytes exclude personal source fingerprints and photos', async t => {

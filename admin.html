@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en"><head>
+  <base href="/"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Home Planner admin</title><link rel="stylesheet" href="styles.css"></head>
+<body><main class="admin-shell"><h1>Model settings</h1><p><a href="index.html">Back to planner</a></p>
+<p id="adminStatus" role="status" aria-live="polite">Checking access…</p>
+<button class="btn" id="adminSignIn" hidden>Sign in with Google</button><button class="btn light" id="adminSignOut" hidden>Sign out</button>
+<p class="note">After signing in, return to Admin settings from the planner.</p>
+<section id="verification" hidden aria-labelledby="verifyHeading"><h2 id="verifyHeading">Verify administrator access</h2>
+  <p>Use the same Google account as your planner session. Google must have authenticated that account in this browser within the last 10 minutes. If verification fails, sign in to Google again in this browser and retry. Your app must have Google's session-age claim enabled.</p>
+  <button class="btn" id="prepareVerification" type="button">Prepare Google verification</button><div id="googleButton"></div>
+</section>
+<form id="modelForm" hidden>
+  <p class="note">Choose a model and a connection already registered on the server. Keys are configured separately and are never entered here.</p>
+  <label><input type="checkbox" name="enabled"> Enable AI edits</label>
+  <label class="field"><span>Provider</span><select name="adapterId" required></select></label>
+  <label class="field"><span>Model</span><select name="modelId" required></select></label>
+  <p class="note">Prices are standard text rates; the budget reserves a higher worst-case amount. A selected model must be validated on the server before it can be enabled.</p>
+  <label class="field"><span>Server connection</span><select name="connectionId" required></select></label>
+  <label class="field"><span>Requests per minute</span><input type="number" name="requestsPerMinute" min="1" max="5" required></label>
+  <label class="field"><span>Requests per day</span><input type="number" name="requestsPerDay" min="1" max="20" required></label>
+  <label class="field"><span>Maximum output tokens</span><input type="number" name="maxOutputTokens" min="1" max="4000" required></label>
+  <button class="btn" type="submit">Save settings</button>
+</form><form id="budgetForm" hidden><h2>Lifetime spending cap</h2><p class="note">Total cap in US dollars, including reservations and prior usage. A cap is required before enabling AI.</p>
+  <label class="field"><span>Lifetime cap (USD)</span><input name="budget" type="text" inputmode="decimal" placeholder="0.00" required></label>
+  <button class="btn" type="submit">Save cap</button></form></main>
+<script src="bookshelf.js"></script><script src="client/config.js"></script><script src="vendor/supabase.js"></script><script src="client/contracts-loader.js"></script><script src="client/cloud.js"></script><script src="admin.js"></script></body></html>

@@ -4,7 +4,9 @@ import { fileURLToPath } from 'node:url';
 
 export const PUBLIC_FILES = Object.freeze([
   'index.html', 'styles.css', 'app.js', 'models3d.js', 'bookshelf.js', 'bookshelf-builder.js',
-  'starter-data.js', 'shared/contracts.js', 'shared/validators.js'
+  'starter-data.js', 'shared/contracts.js', 'shared/validators.js', 'shared/canonical.js',
+  'admin.html', 'admin.js', 'client/config.js', 'client/contracts-loader.js', 'client/cloud.js', 'client/ui.js',
+  'vendor/supabase.js', 'vendor/three.min.js', 'vendor/OrbitControls.js', 'vendor/RoomEnvironment.js', 'vendor/RoundedBoxGeometry.js'
 ]);
 export async function enumerate(root, prefix = '') {
   const result = [];
@@ -28,6 +30,12 @@ export async function auditPublic(root) {
   }
   const starter = await readFile(path.join(root, 'starter-data.js'), 'utf8');
   if (!starter.includes('window.HOUSE_ROOMS = []') || !starter.includes('window.HOUSE_PIECES = []') || !starter.includes('window.HOUSE_PLACEMENTS = []')) throw new Error('Starter arrays are missing.');
+  if (/https?:\/\//i.test(index)) throw new Error('External resources in public index.');
+  const scripts = [...index.matchAll(/<script\s+src=["']([^"']+)["']/gi)].map(m => m[1].split('?')[0]);
+  for (const required of ['vendor/three.min.js', 'vendor/OrbitControls.js', 'vendor/RoomEnvironment.js', 'vendor/RoundedBoxGeometry.js', 'vendor/supabase.js', 'shared/canonical.js', 'client/config.js', 'client/contracts-loader.js', 'client/cloud.js', 'client/ui.js']) {
+    if (scripts.filter(s => s === required).length !== 1) throw new Error(`Missing or duplicate public script: ${required}`);
+  }
+  if (scripts.indexOf('vendor/supabase.js') > scripts.indexOf('client/cloud.js')) throw new Error('SDK must load before cloud client.');
   return files;
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

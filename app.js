@@ -3,6 +3,10 @@
 
   // ================= Constants =================
   const STORAGE_KEY = 'houseplanner.project.v1';
+  const hostedMode = !!(window.HOMEPLANNER_CONFIG && window.HOMEPLANNER_CONFIG.url && window.HOMEPLANNER_CONFIG.publishableKey);
+  let usePersonalSeeds = !hostedMode, cloudWorkspace = false, workspaceGeneration = 0, editGeneration = 0, savedGeneration = 0;
+  let readyPhotoIds = new Set(), readyPhotoMetadata = new Map(), readyPhotoDesign = null, privateObjectUrls = new Set(), virtualShelfRoom = null, persistedCloud = null;
+  const emptyHome = () => ({ version: 2, name: 'New house', catalog: [], rooms: [] });
   const T = 12, SNAP = 5;
   const WALLS = [['n', 'North', 'top'], ['e', 'East', 'right'], ['s', 'South', 'bottom'], ['w', 'West', 'left']];
   const WALL_SWATCHES = [
@@ -124,7 +128,9 @@
       getThumb: (key) => run('photos', 'readonly', (s) => s.get('thumb:' + key)),
       putThumb: (key, url) => run('photos', 'readwrite', (s) => s.put(url, 'thumb:' + key)),
       getPhoto: (id) => run('photos', 'readonly', (s) => s.get(id)),
-      delPhoto: (id) => run('photos', 'readwrite', (s) => s.delete(id)).catch(() => {}),
+      // Photos can be shared by snapshots and local copies; removing one reference
+      // must not destroy bytes used by another design.
+      delPhoto: () => Promise.resolve(),
       putVersion: (v) => run('versions', 'readwrite', (s) => s.put(v)),
       listVersions: () => run('versions', 'readonly', (s) => s.getAll()),
       delVersion: (id) => run('versions', 'readwrite', (s) => s.delete(id))
@@ -135,36 +141,75 @@
   async function getPhoto(id) {
     if (id.startsWith('url:')) return id.slice(4);
     if (photoCache.has(id)) return photoCache.get(id);
-    try { const u = await Store.getPhoto(id); if (u) photoCache.set(id, u); return u; } catch (e) { return null; }
+    if (cloudWorkspace) return null;
+    const generation = workspaceGeneration;
+    try { const u = await Store.getPhoto(id); if (generation !== workspaceGeneration) return null; if (u) photoCache.set(id, u); return u; } catch (e) { return null; }
+  }
+  function referencedPhotos(payload) {
+    const ids = new Set();
+    (payload.rooms || []).forEach(r => { (r.photos || []).forEach(id => ids.add(id)); (r.items || []).forEach(i => { if (i.image) ids.add(i.image); }); });
+    (payload.catalog || []).forEach(p => { (p.photos || []).forEach(id => ids.add(id)); if (p.image) ids.add(p.image); });
+    return [...ids];
+  }
+  function replacePhotoReferences(payload, mapping) {
+    const replace = h => { if (Array.isArray(h.photos)) h.photos = h.photos.map(id => mapping.get(id)).filter(Boolean); if (h.image) { const value = mapping.get(h.image); if (value) h.image = value; else delete h.image; } };
+    (payload.rooms || []).forEach(r => { const labels = {}; Object.entries(r.photoLabels || {}).forEach(([id, label]) => { if (mapping.get(id)) labels[mapping.get(id)] = label; }); r.photoLabels = labels; replace(r); (r.items || []).forEach(replace); });
+    (payload.catalog || []).forEach(replace);
+    if (payload.removedPhotos) payload.removedPhotos = [];
+  }
+  async function photoBlob(id, generation, allowLocalStore = false) {
+    const value = (allowLocalStore && !id.startsWith('url:') ? await Store.getPhoto(id) : null) || await getPhoto(id);
+    if (generation !== workspaceGeneration) throw Error('Workspace changed; photo operation cancelled.');
+    if (!value || !(value.startsWith('data:image/') || (value.startsWith('blob:') && privateObjectUrls.has(value)) || (id.startsWith('url:') && /^photos\/[a-zA-Z0-9_./-]+$/.test(value) && !value.includes('..')))) throw Error('A referenced photo is missing or cannot be copied.');
+    const response = await fetch(value); if (!response.ok) throw Error('A referenced photo could not be read.');
+    const blob = await response.blob();
+    if (generation !== workspaceGeneration) throw Error('Workspace changed; photo operation cancelled.');
+    if (!['image/jpeg','image/png','image/webp'].includes(blob.type) || !blob.size || blob.size > 10485760) throw Error('A referenced photo has an unsupported format or size.');
+    return blob;
+  }
+  async function photoMetadata(id, blob) {
+    const hash = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+    return { photoId: id, mime: blob.type, bytes: blob.size, checksum: [...new Uint8Array(hash)].map(x => x.toString(16).padStart(2, '0')).join('') };
   }
   function resizeImage(file, max = 1600) {
     return new Promise((res, rej) => {
       const img = new Image(), u = URL.createObjectURL(file);
+      privateObjectUrls.add(u);
+      const release = () => { URL.revokeObjectURL(u); privateObjectUrls.delete(u); };
       img.onload = () => {
         const s = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas');
         c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
-        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u); res(c.toDataURL('image/jpeg', 0.82));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); release(); res(c.toDataURL('image/jpeg', 0.82));
       };
-      img.onerror = () => { URL.revokeObjectURL(u); rej(new Error(`${file.name} could not be read. Use JPG or PNG.`)); };
+      img.onerror = () => { release(); rej(new Error(`${file.name} could not be read. Use JPG or PNG.`)); };
       img.src = u;
     });
   }
   async function storePhotos(files) {
-    const ids = [];
+    const ids = [], generation = workspaceGeneration, inCloud = cloudWorkspace;
     for (const f of files) {
       try {
-        const url = await resizeImage(f), id = 'p' + uid();
+        const url = await resizeImage(f), id = (hostedMode || localDesignId) ? crypto.randomUUID() : 'p' + uid();
+        if (generation !== workspaceGeneration) return [];
+        if (localDesignId && !inCloud) { const blob = await (await fetch(url)).blob(); localPhotoMetadata.set(id, await photoMetadata(id, blob)); }
+        if (generation !== workspaceGeneration) return [];
         photoCache.set(id, url);
-        try { await Store.putPhoto(id, url); } catch (e) { toast('Photos are kept for this session only: browser storage is unavailable.'); }
+        if (!inCloud) try { await Store.putPhoto(id, url); } catch (e) {
+          if (localDesignId) { photoCache.delete(id); localPhotoMetadata.delete(id); throw Error('Photo was not added because browser storage is unavailable.'); }
+          toast('Photos are kept for this session only: browser storage is unavailable.');
+        }
+        if (generation !== workspaceGeneration) return [];
         ids.push(id);
       } catch (e) { toast(e.message); }
     }
     return ids;
   }
   async function hydratePhotos(root = document) {
+    const generation = workspaceGeneration;
     for (const img of $$('img[data-photo]', root)) {
       if (img.getAttribute('src')) continue;
       const u = await getPhoto(img.dataset.photo);
+      if (generation !== workspaceGeneration || !img.isConnected) return;
       if (u) img.src = u; else { const t = img.closest('.thumb'); if (t) t.classList.add('missing'); }
     }
   }
@@ -280,7 +325,7 @@
     o.paints = (Array.isArray(s.paints) ? s.paints : []).map((p) => ({ id: p.id || 'c' + uid(), name: String(p.name || p.hex || ''), hex: hex(p.hex, '') })).filter((p) => p.hex);
     // Starter rooms from house-data.js. A room is matched by name (so your own "Büro" counts as the office);
     // a starter room you deleted is never recreated.
-    const seedRooms = (window.HOUSE_ROOMS || []).filter(Boolean);
+    const seedRooms = (usePersonalSeeds ? window.HOUSE_ROOMS || [] : []).filter(Boolean);
     const findRoom = (rid) => {
       const tpl = seedRooms.find((x) => x.id === rid), names = [rid].concat(tpl ? [tpl.name].concat(tpl.match || []) : []).map((n) => n.toLowerCase());
       let r = o.rooms.find((x) => x.seedId === rid) || o.rooms.find((x) => names.includes(x.name.trim().toLowerCase()));
@@ -293,7 +338,7 @@
       o.rooms = o.rooms.filter((r) => !(r.name === 'Example living room' && /^Example room/.test(r.notes) && !r.items.some((i) => i.catalogId)));
       o.exampleRetired = true;
     } else o.exampleRetired = true;
-    (window.HOUSE_RETIRED_ROOMS || []).forEach((rid) => {
+    (usePersonalSeeds ? window.HOUSE_RETIRED_ROOMS || [] : []).forEach((rid) => {
       o.rooms = o.rooms.filter((r) => r.seedId !== rid);
       if (!o.removedRooms.includes(rid)) o.removedRooms.push(rid);
     });
@@ -318,11 +363,10 @@
         r.photos.push(id); r.photoLabels[id] = ph.label;
       });
     });
-    if (!o.rooms.length) o.rooms.push(normRoom({ name: 'Room 1' }));
-    o.activeRoomId = o.rooms.some((r) => r.id === s.activeRoomId) ? s.activeRoomId : o.rooms[0].id;
-    // Pieces Claude adds to house-data.js appear in My pieces once; deleting one keeps it out.
+    if (o.rooms.length) o.activeRoomId = o.rooms.some((r) => r.id === s.activeRoomId) ? s.activeRoomId : o.rooms[0].id;
+    // Pieces added to house-data.js appear in My pieces once; deleting one keeps it out.
     // A higher `rev` on a seeded piece updates its size, look, name and notes (status and photos stay yours).
-    (window.HOUSE_PIECES || []).forEach((p) => {
+    (usePersonalSeeds ? window.HOUSE_PIECES || [] : []).forEach((p) => {
       if (!p.id || o.removedPieces.includes(p.id)) return;
       const ex = o.catalog.find((c) => c.id === p.id), rev = p.rev || 1;
       if (!ex) { o.catalog.push(normPiece(Object.assign({}, p, { seedRev: rev }))); return; }
@@ -333,11 +377,11 @@
         o.rooms.forEach((r) => r.items.forEach((it) => { if (it.catalogId === ex.id) SHARED.forEach((k) => { if (ex[k] !== undefined) it[k] = ex[k]; }); }));
       }
     });
-    // Placements Claude adds to house-data.js are made once. A placement with a `rev` and `from` moves the piece
+    // Placements added to house-data.js are made once. A placement with a `rev` and `from` moves the piece
     // it made earlier, but only if it is still where it was put (anything you moved stays put).
     // Built-in fittings (builtin: true) always match house-data.js: same model, size, position and lock,
     // whatever the saved copy says. Matched by the placement that made them, else by type in that room.
-    (window.HOUSE_PLACEMENTS || []).filter((pl) => pl.builtin).forEach((pl) => {
+    (usePersonalSeeds ? window.HOUSE_PLACEMENTS || [] : []).filter((pl) => pl.builtin).forEach((pl) => {
       const r = findRoom(pl.room); if (!r) return;
       const spec = Object.assign({}, pl.item || {}, pl.extra || {}, { x: pl.x, y: pl.y, rot: pl.rot || 0, fixed: true, seedPl: pl.id });
       let it = r.items.find((i) => i.seedPl === pl.id);
@@ -347,7 +391,7 @@
       if (it) r.items[r.items.indexOf(it)] = n; else r.items.push(n);
       if (!o.placedSeeds.includes(pl.id)) o.placedSeeds.push(pl.id);
     });
-    (window.HOUSE_PLACEMENTS || []).forEach((pl) => {
+    (usePersonalSeeds ? window.HOUSE_PLACEMENTS || [] : []).forEach((pl) => {
       if (!pl.id || pl.builtin) return;
       const mark = pl.rev ? pl.id + '@' + pl.rev : null;
       if (o.placedSeeds.includes(pl.id)) {
@@ -375,7 +419,8 @@
   }
 
   // ================= State =================
-  let state = normState(load() || clone(window.HOUSE_SEED));
+  function loadAnonymous() { try { const p = JSON.parse(localStorage.getItem('houseplanner.anonymous.v3')); return p && Array.isArray(p.rooms) ? p : null; } catch (_) { return null; } }
+  let state = normState(hostedMode ? (loadAnonymous() || emptyHome()) : (load() || clone(window.HOUSE_SEED)));
   let selected = null;          // { kind: 'item' | 'opening', id }
   let wallTarget = 'all';
   let view = window.innerWidth < 900 ? 'plan' : 'both';
@@ -386,13 +431,32 @@
   let draft = null;             // piece or room being edited in a dialog
   let bookshelfActive = false;
   let bookshelfUI = null, storageAvailable = true;
+  let localDesignId = hostedMode && !loadAnonymous() ? crypto.randomUUID() : null, localKind = 'home', localTitle = '', localPhotoMetadata = new Map();
+  const localPrefix = 'houseplanner.v3.anonymous.';
+  function localKey(id) { return localPrefix + id; }
+  function localEnvelope(kind, title, payload, id, metadata) {
+    const clean = clone(payload); if (kind === 'home') delete clean.exampleRetired;
+    const refs = kind === 'home' ? referencedPhotos(clean) : [];
+    const photoManifest = refs.map(ref => { const item = metadata.get(ref); if (!item) throw Error('A local photo is missing its metadata. Create a local copy again.'); return item; });
+    const envelope = { schemaVersion: 3, localDesignId: id, kind, title, payload: clean, photoManifest, modifiedAt: new Date().toISOString() };
+    const validation = window.HomePlannerContracts?.validate('local', envelope);
+    if (validation && !validation.valid) throw Error('This design exceeds the local format limits: ' + validation.errors.slice(0, 2).join('; '));
+    return envelope;
+  }
 
-  function load() { try { const s = localStorage.getItem(STORAGE_KEY); const p = s ? JSON.parse(s) : null; return p && Array.isArray(p.rooms) && p.rooms.length ? p : null; } catch (e) { return null; } }
+  function load() { try { const s = localStorage.getItem(STORAGE_KEY); const p = s ? JSON.parse(s) : null; return p && Array.isArray(p.rooms) ? p : null; } catch (e) { return null; } }
   let saveTimer = null;
   function flushSave() {
     clearTimeout(saveTimer); saveTimer = null;
     let saved = true;
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); saveNote = 'All changes saved in this browser'; }
+    try {
+      if (!cloudWorkspace && localDesignId) {
+        const payload = localKind === 'shelf' ? (bookshelfUI?.shelf() || state.bookshelfDraft?.design) : state;
+        const title = (localKind === 'home' ? state.name : localTitle).trim().slice(0, 120) || 'Untitled design';
+        localStorage.setItem(localKey(localDesignId), JSON.stringify(localEnvelope(localKind, title, payload, localDesignId, localPhotoMetadata)));
+      } else if (!cloudWorkspace) localStorage.setItem(hostedMode ? 'houseplanner.anonymous.v3' : STORAGE_KEY, JSON.stringify(state));
+      saveNote = cloudWorkspace ? 'Unsynced changes: use Save to cloud' : 'All changes saved in this browser';
+    }
     catch (e) { saved = false; saveNote = 'Browser storage is unavailable, so changes are not kept. Export a backup.'; }
     storageAvailable = saved;
     renderStatus();
@@ -400,6 +464,7 @@
     return saved;
   }
   function save() {
+    editGeneration++;
     saveNote = 'Saving…'; renderStatus();
     clearTimeout(saveTimer); saveTimer = setTimeout(flushSave, 300);
   }
@@ -499,7 +564,7 @@
   // ================= Render: top bar + rooms =================
   function renderRooms() {
     $('#projectName').value = state.name || '';
-    const cur = room().id, groups = byLevel();
+    const cur = room()?.id, groups = byLevel();
     $('#roomSwitch').innerHTML = [...groups].map(([lv, rs]) => `<optgroup label="${esc(lv)}">${rs.map((r) => `<option value="${r.id}" ${r.id === cur ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</optgroup>`).join('');
     $('#roomList').innerHTML = [...groups].map(([lv, rs]) => `
       <p class="level">${esc(lv)}</p>
@@ -512,6 +577,7 @@
   // ================= Render: room panel =================
   function renderRoomPanel() {
     const r = room();
+    if (!r) { $('#roomPanel').innerHTML = '<p class="empty">Start by adding a room.</p>'; return; }
     const tabs = `<div class="tabs" role="tablist">
       <button role="tab" data-room-tab="layout" aria-selected="${roomTab === 'layout'}">Layout and colors</button>
       <button role="tab" data-room-tab="photos" aria-selected="${roomTab === 'photos'}">Photos and notes (${r.photos.length})</button></div>`;
@@ -519,7 +585,7 @@
       $('#roomPanel').innerHTML = `<h2>${esc(r.name)}</h2>${tabs}
         ${photoStrip(r.photos, 'room:' + r.id)}
         <label class="field" style="margin-top:12px"><span>Notes</span><textarea data-room="notes" rows="5" placeholder="Radiator under the window, sockets on the east wall, sloped ceiling…">${esc(r.notes)}</textarea></label>
-        <p class="note">Photos are for reference. To have Claude model the room, send the photos and sizes in chat, then paste back the block Claude gives you under Claude handoff.</p>`;
+        <p class="note">Photos are for reference and remain in this browser unless you explicitly export or upload them.</p>`;
       hydratePhotos($('#roomPanel'));
       return;
     }
@@ -559,7 +625,8 @@
 
   // ================= Render: inspector =================
   function renderInspector() {
-    const el = $('#inspector'), it = selItem(), op = selOpening();
+    const el = $('#inspector'); if (!room()) { el.innerHTML = ''; return; }
+    const it = selItem(), op = selOpening();
     if (it && it.shelfDesign && !it.fixed) {
       el.innerHTML = `<h2>${esc(it.name)}</h2><div class="ins-thumb">${thumbImg(it, 'thumb3d big')}</div>
         <p class="note">Custom bookshelf · ${it.w} × ${it.d} × ${it.h} cm. Edit the exact boards, wall placement and cut list in the builder.</p>
@@ -698,16 +765,18 @@
     const quiet = performance.now() - lastInput;
     if (quiet < 800) { setTimeout(pumpThumbs, 800 - quiet + 20); return; }
     thumbBusy = true;
-    const job = thumbQueue.shift(), done = () => { thumbBusy = false; setTimeout(pumpThumbs, 30); };
+    const job = thumbQueue.shift(), generation = workspaceGeneration, done = () => { thumbBusy = false; setTimeout(pumpThumbs, 30); };
     // saved from an earlier visit? then no rendering at all
-    Store.getThumb(job.key).catch(() => null).then((saved) => {
+    (cloudWorkspace ? Promise.resolve(null) : Store.getThumb(job.key).catch(() => null)).then((saved) => {
+      if (generation !== workspaceGeneration) return done();
       if (saved) { thumbs.set(job.key, saved); showThumb(job.key, saved); return done(); }
       const pic = job.o.image ? getPhoto(job.o.image).then((u) => u && HouseModels.preloadImage(u)).catch(() => {}) : Promise.resolve();
       pic.then(() => (window.requestIdleCallback || ((f) => setTimeout(f, 50)))(() => {
         try {
+          if (generation !== workspaceGeneration) return done();
           HouseModels.init(THREE);
           const url = HouseModels.thumbnail(job.o, { photo: photoFor3D });
-          thumbs.set(job.key, url); showThumb(job.key, url); Store.putThumb(job.key, url).catch(() => {});
+          thumbs.set(job.key, url); showThumb(job.key, url); if (!cloudWorkspace) Store.putThumb(job.key, url).catch(() => {});
         } catch (e) { thumbFail = true; thumbQueue.length = 0; }
         done();
       }, { timeout: 2000 }));
@@ -727,6 +796,7 @@
       <div class="acts"><button class="btn small" data-place="${p.id}">Place</button><button class="btn light small" data-edit-piece="${p.id}">Edit</button></div></li>`;
   }
   function renderCatalog() {
+    if (!room()) { $('#catalogPanel').innerHTML = '<p class="note">Add a room to place furniture.</p>'; return; }
     const el = $('#catalogPanel'), lights = state.catalog.filter((p) => isLight(p.type)), furn = state.catalog.filter((p) => !isLight(p.type));
     let body;
     if (catTab === 'mine') {
@@ -750,24 +820,115 @@
     hydratePhotos(el);
   }
 
+  // ================= Local design copies =================
+  function renderLocalList() {
+    const list = $('#localList'); if (!list) return;
+    const entries = [], legacy = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key.startsWith(localPrefix)) {
+        try { const e = JSON.parse(localStorage.getItem(key)); if (e.schemaVersion === 3 && key === localKey(e.localDesignId) && ['home', 'shelf'].includes(e.kind)) entries.push(e); } catch (_) { /* Keep unreadable data untouched. */ }
+      } else if (key === STORAGE_KEY || key === 'houseplanner.anonymous.v3' || key.startsWith('houseplanner.local.copy.')) {
+        try { const p = JSON.parse(localStorage.getItem(key)); if (Array.isArray(p?.rooms) && Array.isArray(p?.catalog)) legacy.push({ key, title: p.name || 'Untitled' }); } catch (_) { /* Keep unreadable data untouched. */ }
+      }
+    }
+    entries.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+    list.innerHTML = entries.map(e => `<li><span>${esc(e.title)} (${esc(e.kind)})${e.localDesignId === localDesignId ? ' · open' : ''}</span><button class="btn light small" data-local-open="${esc(e.localDesignId)}">Open</button><button class="btn light small" data-local-rename="${esc(e.localDesignId)}">Rename</button><button class="btn light small" data-local-copy="${esc(e.localDesignId)}">Copy</button><button class="btn danger small" data-local-delete="${esc(e.localDesignId)}">Delete</button></li>`).join('') +
+      legacy.map((e, i) => `<li><span>Previous local plan: ${esc(e.title)}</span><button class="btn light small" data-local-legacy="${i}">Copy previous plan</button></li>`).join('');
+    list._legacyKeys = legacy.map(e => e.key);
+    if (!entries.length && !legacy.length) list.innerHTML = '<li><span class="note">No local designs yet.</span></li>';
+  }
+  async function createLocalCopy(kind, title, payload, sourceFromStore = false) {
+    if (!title || title.length > 120) throw Error('Enter a name of 1–120 characters.');
+    const generation = workspaceGeneration, id = crypto.randomUUID(), next = clone(payload), mapping = new Map(), metadata = new Map();
+    if (kind === 'home') {
+      next.name = title;
+      const refs = referencedPhotos(next); if (refs.length > 100) throw Error('A local design can contain at most 100 photos.');
+      for (const old of refs) {
+        const blob = await photoBlob(old, generation, sourceFromStore), photoId = crypto.randomUUID();
+        const meta = await photoMetadata(photoId, blob);
+        const data = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(reader.error); reader.readAsDataURL(blob); });
+        if (generation !== workspaceGeneration) throw Error('Workspace changed; local copy cancelled.');
+        await Store.putPhoto(photoId, data); if (generation !== workspaceGeneration) throw Error('Workspace changed; local copy cancelled.');
+        mapping.set(old, photoId); metadata.set(photoId, meta);
+      }
+      replacePhotoReferences(next, mapping);
+    }
+    await window.HomePlannerContractsReady;
+    if (generation !== workspaceGeneration) throw Error('Workspace changed; local copy cancelled.');
+    const envelope = localEnvelope(kind, title, next, id, metadata);
+    localStorage.setItem(localKey(id), JSON.stringify(envelope));
+    return envelope;
+  }
+  function openLocal(envelope) {
+    if (cloudWorkspace && editGeneration !== savedGeneration && !confirm('Cloud edits are unsaved. Export a backup before leaving if needed. Continue?')) return false;
+    if (!cloudWorkspace && (localDesignId || saveTimer) && !flushSave()) throw Error('The open local design could not be saved.');
+    workspaceGeneration++; clearTimeout(saveTimer); saveTimer = null;
+    if (window.HomePlannerCloud) HomePlannerCloud.clearCurrent();
+    if (bookshelfUI) bookshelfUI.reset(); bookshelfActive = false; $('.layout').hidden = false;
+    for (const url of privateObjectUrls) URL.revokeObjectURL(url); privateObjectUrls.clear(); photoCache.clear(); photoLoading.clear(); thumbs.clear(); thumbQueue.length = 0;
+    $('#lbImg').removeAttribute('src'); if ($('#lightbox').open) $('#lightbox').close(); if ($('#modal').open) $('#modal').close();
+    draft = null; selected = null; readyPhotoIds.clear(); readyPhotoMetadata.clear(); readyPhotoDesign = null; persistedCloud = null; cloudWorkspace = false; usePersonalSeeds = false;
+    localDesignId = envelope.localDesignId; localKind = envelope.kind; localTitle = envelope.title;
+    localPhotoMetadata = new Map(envelope.photoManifest.map(p => [p.photoId, p]));
+    state = envelope.kind === 'home' ? normState(envelope.payload) : normState(emptyHome()); virtualShelfRoom = null; three.lastRoom = null;
+    if (envelope.kind === 'shelf') { virtualShelfRoom = normRoom({ id: 'shelf-preview', name: 'Shelf preview', width: 500, length: 500, height: 500 }); bookshelfUI.openShelf(envelope.payload, envelope.title); }
+    else { renderAll(); renderView(); }
+    editGeneration = savedGeneration = 0; saveNote = 'All changes saved in this browser'; renderStatus();
+    if ($('#saveDlg').open) $('#saveDlg').close(); return true;
+  }
+  function readLocal(id) {
+    const e = JSON.parse(localStorage.getItem(localKey(id)) || 'null');
+    if (!e || e.localDesignId !== id || !window.HomePlannerContracts?.validate('local', e).valid) throw Error('This local design is invalid or validation is unavailable. Its data was left untouched.');
+    return e;
+  }
+
   // ================= Render: save panel =================
+  const namedVersionsKey = 'houseplanner.named-versions.v3';
+  function readNamedVersions() {
+    try { const value = JSON.parse(localStorage.getItem(namedVersionsKey) || '[]'); return Array.isArray(value) ? value : []; } catch (_) { return []; }
+  }
+  async function listSavedVersions() {
+    const cached = readNamedVersions(); let indexed;
+    try { indexed = await Store.listVersions(); } catch (e) { if (!cached.length) throw e; indexed = []; }
+    const versions = new Map(indexed.map(v => [v.id, v])); cached.forEach(v => versions.set(v.id, v)); return [...versions.values()];
+  }
+  let savePanelSequence = 0;
   async function renderSavePanel() {
+    const sequence = ++savePanelSequence;
     const el = $('#savePanel');
     el.innerHTML = `<div class="sec-head"><h2>Save</h2><button class="btn light small" data-close-save>Close</button></div>
-      <p class="note" style="margin:0 0 10px">Everything autosaves in this browser. Save a version to keep a snapshot you can return to, for example before trying a new color scheme.</p>
+      <p class="note" style="margin:0 0 10px">${cloudWorkspace ? 'Cloud edits stay in this tab until you use Save to cloud. Export a backup before leaving.' : 'Everything autosaves in this browser. Save a version to keep a snapshot you can return to.'}</p>
       <div class="version-add"><input id="versionName" placeholder="Version name, e.g. Sage living room" aria-label="Version name"><button class="btn small" id="saveVersion">Save version</button></div>
       <ul class="versions" id="versionList"><li><span class="note">Loading versions…</span></li></ul>
       <div class="btnrow"><button class="btn light small" id="exportBtn">Export backup</button><button class="btn light small" id="importBtn">Import backup</button></div>
-      <p class="note">A backup file includes photos. Use it to move the plan to another computer or keep a copy.</p>`;
+      <p class="note">A backup file includes photos. Use it to move the plan to another computer or keep a copy.</p>
+      <section aria-label="Local designs"><h3>Local designs</h3><p class="note">Local copies stay in this browser. Older work is copied only when you choose it.</p>
+      <div class="btnrow"><button class="btn small" data-local-new="home">New local home</button><button class="btn small" data-local-new="shelf">New local shelf</button><button class="btn light small" data-local-copy-current>Copy current locally</button></div><ul class="versions" id="localList"></ul></section>`;
+    renderLocalList();
+    if (hostedMode) { $('#versionList').innerHTML = '<li><span class="note">Versions are available in the original local workspace. Use cloud revisions and backups here.</span></li>'; $('#saveVersion').disabled = true; return; }
     let list = [];
-    try { list = (await Store.listVersions()).sort((a, b) => b.date.localeCompare(a.date)); } catch (e) { $('#versionList').innerHTML = '<li><span class="note">Versions need browser storage, which is unavailable here.</span></li>'; return; }
+    try { list = (await listSavedVersions()).sort((a, b) => b.date.localeCompare(a.date)); } catch (e) { if (sequence === savePanelSequence) $('#versionList').innerHTML = '<li><span class="note">Versions need browser storage, which is unavailable here.</span></li>'; return; }
+    if (sequence !== savePanelSequence) return;
     $('#versionList').innerHTML = list.map((v) => `<li><span>${esc(v.name)}<small>${new Date(v.date).toLocaleString()}</small></span>
       <button class="btn light small" data-restore="${v.id}">Restore</button><button class="btn danger small" data-del-version="${v.id}" aria-label="Delete version">Delete</button></li>`).join('') || '<li><span class="note">No saved versions yet.</span></li>';
   }
   async function saveVersion(name) {
+    if (hostedMode) return false;
     const v = { id: 'v' + uid(), name: name || `Version ${new Date().toLocaleString()}`, date: new Date().toISOString(), data: clone(state) };
-    try { await Store.putVersion(v); toast(`Saved version "${v.name}"`); renderSavePanel(); return true; }
-    catch (e) { toast('Could not save the version: browser storage is unavailable.'); return false; }
+    // The synchronous local snapshot makes Restore usable immediately. IndexedDB
+    // remains a compatible secondary store for existing versions.
+    ++savePanelSequence;
+    try {
+      localStorage.setItem(namedVersionsKey, JSON.stringify([v, ...readNamedVersions()]));
+      const list = $('#versionList'), row = document.createElement('li');
+      row.innerHTML = `<span>${esc(v.name)}<small>${new Date(v.date).toLocaleString()}</small></span><button class="btn light small" data-restore="${v.id}">Restore</button><button class="btn danger small" data-del-version="${v.id}" aria-label="Delete version">Delete</button>`;
+      if (list) list.prepend(row);
+      void Store.putVersion(v).catch(() => {}); toast(`Saved version "${v.name}"`); return true;
+    } catch (_) {
+      try { await Store.putVersion(v); toast(`Saved version "${v.name}"`); await renderSavePanel(); return true; }
+      catch (e) { toast('Could not save the version: browser storage is unavailable.'); return false; }
+    }
   }
 
   // ================= Render: plan =================
@@ -852,7 +1013,9 @@
     }
   }
   function renderPlan() {
-    const r = room(), W = r.width, L = r.length, svg = $('#plan'), fs = Math.max(W, L) / 36, pad = T + fs * 3.2;
+    const r = room(), svg = $('#plan');
+    if (!r) { svg.setAttribute('viewBox', '0 0 600 400'); svg.innerHTML = '<text x="300" y="200" text-anchor="middle">Add a room to begin</text>'; return; }
+    const W = r.width, L = r.length, fs = Math.max(W, L) / 36, pad = T + fs * 3.2;
     svg.setAttribute('viewBox', `${-pad} ${-pad} ${W + 2 * pad} ${L + 2 * pad}`);
     const bad = clashes(r);
     let h = `<defs><pattern id="swingHatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="rgba(210,60,40,.06)"/><line x1="0" y1="0" x2="0" y2="8" stroke="rgba(190,60,40,.35)" stroke-width="1.5" vector-effect="non-scaling-stroke"/></pattern><pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse"><path d="M50 0H0V50" fill="none" stroke="rgba(0,0,0,.09)" stroke-width="1" vector-effect="non-scaling-stroke"/></pattern></defs>`;
@@ -890,12 +1053,13 @@
 
   function renderSaveChip() {
     const c = $('#saveState'); if (!c) return;
-    const busy = /Saving/.test(saveNote), bad = /unavailable/.test(saveNote);
-    c.textContent = busy ? 'Saving…' : bad ? 'Not saved' : 'Saved'; c.className = 'save-state' + (busy ? ' busy' : bad ? ' bad' : ''); c.title = saveNote;
+    const busy = /Saving/.test(saveNote), bad = /unavailable/.test(saveNote), unsynced = /Unsynced/.test(saveNote);
+    c.textContent = busy ? 'Saving…' : bad ? 'Not saved' : unsynced ? 'Unsynced' : 'Saved'; c.className = 'save-state' + (busy ? ' busy' : bad ? ' bad' : ''); c.title = saveNote;
   }
   function renderStatus() {
     renderSaveChip();
-    const r = room(), bad = clashes(r).size, sw = swingClashes(r).size;
+    const r = room(); if (!r) { $('#status').textContent = 'No rooms yet. ' + saveNote; return; }
+    const bad = clashes(r).size, sw = swingClashes(r).size;
     $('#status').innerHTML = `<span>${esc(r.name)}: ${(r.width / 100).toFixed(2)} x ${(r.length / 100).toFixed(2)} m, ceiling ${(r.height / 100).toFixed(2)} m</span>
       <span>${plural(r.items.length, 'item')}</span>
       ${bad ? `<span class="warn">${plural(bad, 'item')} overlap, extend past a wall${sw ? ' or block a door' : ''} (dashed red)</span>` : ''}<span>${esc(saveNote)}</span>`;
@@ -940,6 +1104,7 @@
   function resize3D() { if (!three.ok) return; const host = $('#three'), w = host.clientWidth, h = host.clientHeight; if (!w || !h) return; three.renderer.setSize(w, h); three.camera.aspect = w / h; three.camera.updateProjectionMatrix(); if (!three.userMoved && three.lastRoom) fitCamera(); }
   // Walls between the camera and the room turn see-through, with everything mounted on them
   function fadeWalls() {
+    if (!room()) return;
     const r = room(), c = three.camera.position, hide = { n: c.z < 0, s: c.z > r.length, w: c.x < 0, e: c.x > r.width };
     for (const k in three.wallArt || {}) three.wallArt[k].forEach((o) => { o.visible = !hide[k]; });
     for (const k in three.walls) {
@@ -987,7 +1152,9 @@
   }
   function build3D() {
     if (!three.ok) return;
-    const HM = window.HouseModels, r = room(), g = three.group, W = r.width, L = r.length, H = r.height;
+    const r = room();
+    if (!r) { while (three.group.children.length) disposeTree(three.group.children.pop()); three.lastRoom = null; return; }
+    const HM = window.HouseModels, g = three.group, W = r.width, L = r.length, H = r.height;
     while (g.children.length) disposeTree(g.children.pop());
     three.scene.background = new THREE.Color(evening ? '#1B1E22' : '#E9EBE6');
     three.scene.environment = evening ? null : three.envMap;
@@ -1110,7 +1277,7 @@
       <p class="note">Add what you have now. Everything can be changed later, and sizes can be left blank.</p>
       <div class="row2">
         <label class="field"><span>Name</span><input id="nrName" placeholder="Living room" autocomplete="off"></label>
-        <label class="field"><span>Floor or level</span><input id="nrLevel" list="nrLevels" value="${esc(room().level || lv[0] || 'Ground floor')}"><datalist id="nrLevels">${lv.map((l) => `<option value="${esc(l)}">`).join('')}</datalist></label>
+        <label class="field"><span>Floor or level</span><input id="nrLevel" list="nrLevels" value="${esc(room()?.level || lv[0] || 'Ground floor')}"><datalist id="nrLevels">${lv.map((l) => `<option value="${esc(l)}">`).join('')}</datalist></label>
       </div>
       <div class="row3">
         <label class="field"><span>Width, cm</span><input id="nrW" type="number" inputmode="numeric" placeholder="400"></label>
@@ -1198,13 +1365,14 @@
   }
 
   function handoffDialog() {
-    openModal(`<h2>Claude handoff</h2>
-      <p class="note">Send photos, sizes and descriptions to Claude in chat. Claude replies with a block of data: paste it here to add or update rooms, furniture and lights. Items with an id that already exists are updated; everything else is added. A version is saved automatically before each import.</p>
-      <label class="field" style="margin-top:12px"><span>Paste from Claude</span><textarea id="hoText" rows="9" spellcheck="false" placeholder='{ "rooms": [ ... ], "catalog": [ ... ] }' style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px"></textarea></label>
+    if (!room()) return toast('Add a room first.');
+    openModal(`<h2>Plan data import</h2>
+      <p class="note">Paste a block of plan data here to add or update rooms, furniture and lights. Items with an id that already exists are updated; everything else is added. A version is saved automatically before each import.</p>
+      <label class="field" style="margin-top:12px"><span>Paste plan data</span><textarea id="hoText" rows="9" spellcheck="false" placeholder='{ "rooms": [ ... ], "catalog": [ ... ] }' style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px"></textarea></label>
       <p class="note" id="hoMsg"></p>
       <div class="modal-actions"><button class="btn light" data-a="close">Close</button><button class="btn" data-a="apply">Add to plan</button></div>
-      <h3>Send the current plan to Claude</h3>
-      <p class="note">Copies the plan as text, without photos. Paste it into the chat when you want Claude to change something, then paste the reply back above.</p>
+      <h3>Copy the current plan</h3>
+      <p class="note">Copies the plan as text, without photos. You can edit the data externally and paste it back above.</p>
       <div class="btnrow" style="margin-top:8px"><button class="btn light" data-a="copyRoom">Copy ${esc(room().name)}</button><button class="btn light" data-a="copyAll">Copy whole plan</button></div>`,
     async (e) => {
       const a = e.target.closest('[data-a]'); if (!a) return;
@@ -1217,7 +1385,7 @@
           ? { rooms: [strip(r)], catalog: state.catalog.filter((p) => used.has(p.id)).map((p) => { const c = clone(p); delete c.photos; return c; }) }
           : { name: state.name, rooms: state.rooms.map(strip), catalog: state.catalog.map((p) => { const c = clone(p); delete c.photos; return c; }) };
         const ok = await copyText('House planner data (v2):\n' + JSON.stringify(payload));
-        toast(ok ? 'Copied. Paste it into the chat with Claude.' : 'Copy failed. Export a backup instead.');
+        toast(ok ? 'Copied the plan data.' : 'Copy failed. Export a backup instead.');
         return;
       }
       if (act === 'apply') {
@@ -1227,7 +1395,8 @@
           if (s < 0 || en < s) throw new Error('No data block found. Paste the part that starts with { and ends with }.');
           const p = JSON.parse(raw.slice(s, en + 1));
           if (!Array.isArray(p.rooms) && !Array.isArray(p.catalog)) throw new Error('The block has no "rooms" or "catalog" list.');
-          await saveVersion(`Before Claude import, ${new Date().toLocaleString()}`);
+          const generation = workspaceGeneration; await saveVersion(`Before plan data import, ${new Date().toLocaleString()}`);
+          if (generation !== workspaceGeneration) throw Error('Workspace changed; import cancelled.');
           const res = applyPatch(p);
           closeModal(); commit(); toast(res);
         } catch (err) { msg.textContent = `Not added: ${err.message}`; msg.style.color = 'var(--danger)'; }
@@ -1260,7 +1429,9 @@
   // Lightbox
   const lb = $('#lightbox'); let lbCur = null;
   async function openLightbox(owner, id) {
-    lbCur = { owner, id }; $('#lbImg').src = (await getPhoto(id)) || '';
+    const generation = workspaceGeneration;
+    const url = await getPhoto(id); if (generation !== workspaceGeneration) return;
+    lbCur = { owner, id }; $('#lbImg').src = url || '';
     const cap = $('#lbCap'), room = owner.startsWith('room:');
     cap.hidden = !room; cap.value = photoLabel(owner, id); lb.showModal();
   }
@@ -1349,24 +1520,81 @@
   function applyWallColor(h) { const r = room(); if (wallTarget === 'all') WALLS.forEach(([k]) => { r.walls[k] = h; }); else r.walls[wallTarget] = h; renderRoomPanel(); refreshDrawing(); }
 
   async function exportBackup() {
-    const ids = new Set(); state.rooms.forEach((r) => r.photos.forEach((i) => ids.add(i))); state.catalog.forEach((p) => p.photos.forEach((i) => ids.add(i)));
-    const photos = {}; for (const id of ids) { if (id.startsWith('url:')) continue; const u = await getPhoto(id); if (u) photos[id] = u; } // tour photos ship with the app
-    const blob = new Blob([JSON.stringify({ format: 'house-planner-backup', version: 2, exportedAt: new Date().toISOString(), state, photos })], { type: 'application/json' });
+    const backupState = clone(state), generation = workspaceGeneration;
+    const ids = new Set(); backupState.rooms.forEach(r => { r.photos.forEach(i => ids.add(i)); r.items.forEach(i => { if (i.image) ids.add(i.image); }); }); backupState.catalog.forEach(p => { p.photos.forEach(i => ids.add(i)); if (p.image) ids.add(p.image); });
+    const photos = {};
+    async function exportPhoto(id) {
+      let u = await getPhoto(id);
+      if (id.startsWith('url:')) {
+        const path = id.slice(4);
+        if (!/^photos\/[a-zA-Z0-9_./-]+$/.test(path) || path.includes('..')) throw new Error('A photo is not a local bundled asset; export cannot fetch remote URLs.');
+        const response = await fetch(path); if (!response.ok) throw new Error('A bundled photo could not be read. Export from the original running app.');
+        const blob = await response.blob();
+        u = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(reader.error); reader.readAsDataURL(blob); });
+      }
+      if (u?.startsWith('blob:') && privateObjectUrls.has(u)) { const blob = await (await fetch(u)).blob(); u = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(reader.error); reader.readAsDataURL(blob); }); }
+      if (generation !== workspaceGeneration) throw Error('The workspace changed; export was cancelled.');
+      if (!u || !/^data:image\/(jpeg|png|webp);base64,/i.test(u)) throw new Error('A referenced photo is missing or has an unsupported format. Backup was not created.');
+      return [id, u];
+    }
+    const photoIds = [...ids];
+    for (let i = 0; i < photoIds.length; i += 4) {
+      for (const [id, data] of await Promise.all(photoIds.slice(i, i + 4).map(exportPhoto))) photos[id] = data;
+    }
+    const blob = new Blob([JSON.stringify({ format: 'house-planner-backup', version: 2, exportedAt: new Date().toISOString(), state: backupState, photos })], { type: 'application/json' });
     const slug = (state.name || 'House').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'House';
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${today()}_${slug}_Planner-Backup_v1.json`;
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1500);
     toast(`Exported backup with ${plural(Object.keys(photos).length, 'photo')}`);
   }
   async function importBackup(file) {
+    const generation = workspaceGeneration;
     try {
       const data = JSON.parse(await file.text());
-      const s = data.format === 'house-planner-backup' ? data.state : data;
-      if (!s || !Array.isArray(s.rooms)) throw new Error('This file is not a house planner backup.');
-      if (!confirm('Replace the current plan with this backup? A version of the current plan is saved first.')) return;
-      await saveVersion(`Before import, ${new Date().toLocaleString()}`);
-      for (const [id, url] of Object.entries(data.photos || {})) { photoCache.set(id, url); try { await Store.putPhoto(id, url); } catch (e) { /* session only */ } }
-      if (bookshelfActive) bookshelfUI.close();
-      state = normState(s); selected = null; three.lastRoom = null; commit(); toast('Backup imported'); if ($('#saveDlg').open) $('#saveDlg').close();
+      if (generation !== workspaceGeneration) throw Error('Workspace changed; import cancelled.');
+      const source = data.format === 'house-planner-backup' ? data.state : data;
+      if (!source || !Array.isArray(source.rooms) || !Array.isArray(source.catalog)) throw Error('This file is not a complete house planner backup.');
+      const next = clone(source), refs = new Set();
+      next.rooms.forEach(r => { (r.photos || []).forEach(id => refs.add(id)); (r.items || []).forEach(i => { if (i.image) refs.add(i.image); }); });
+      next.catalog.forEach(p => { (p.photos || []).forEach(id => refs.add(id)); if (p.image) refs.add(p.image); });
+      if (refs.size > 100) throw Error('The backup contains more than 100 referenced photos. Split the design before importing.');
+      const mapping = new Map(), photoData = data.photos || {};
+      for (const id of refs) {
+        const value = photoData[id];
+        if (typeof value !== 'string' || !/^data:image\/(jpeg|png|webp);base64,[a-z0-9+/=]+$/i.test(value) || value.length > 14000000) throw Error('A referenced photo is missing or invalid. Export a complete backup from the original app; no remote photos are fetched.');
+        const image = new Image(); image.src = value;
+        try { await image.decode(); } catch (_) { throw Error('A photo could not be decoded; no changes were imported.'); }
+        if (generation !== workspaceGeneration) throw Error('Workspace changed; import cancelled.');
+        if (!image.naturalWidth || !image.naturalHeight || image.naturalWidth * image.naturalHeight > 40000000) throw Error('A photo has invalid or oversized dimensions.');
+        mapping.set(id, crypto.randomUUID());
+      }
+      const replaceHolder = holder => { if (Array.isArray(holder.photos)) holder.photos = holder.photos.map(id => mapping.get(id)); if (holder.image) holder.image = mapping.get(holder.image); };
+      next.rooms.forEach(r => { const labels = {}; Object.entries(r.photoLabels || {}).forEach(([id, label]) => { if (mapping.has(id)) labels[mapping.get(id)] = label; }); r.photoLabels = labels; replaceHolder(r); (r.items || []).forEach(replaceHolder); });
+      next.catalog.forEach(replaceHolder); next.removedPhotos = [];
+      const shelfCount = next.catalog.filter(p => p.shelfDesign).length;
+      const destination = hostedMode ? 'a new local copy on this browser (not uploaded)' : 'the current local plan, after a local version is saved';
+      if (!confirm(`Import preview: ${next.rooms.length} rooms, ${shelfCount} saved shelf designs, ${refs.size} photos. Destination: ${destination}. Continue?`)) return;
+      if (generation !== workspaceGeneration) throw Error('Workspace changed; import cancelled.');
+      if (!hostedMode) await saveVersion(`Before import, ${new Date().toLocaleString()}`);
+      const importedMetadata = new Map();
+      for (const [oldId, id] of mapping) {
+        const blob = await (await fetch(photoData[oldId])).blob(); importedMetadata.set(id, await photoMetadata(id, blob));
+        if (generation !== workspaceGeneration) throw Error('Workspace changed; import cancelled.');
+        await Store.putPhoto(id, photoData[oldId]); if (generation !== workspaceGeneration) throw Error('Workspace changed; import cancelled.');
+      }
+      if (hostedMode) {
+        await window.HomePlannerContractsReady;
+        if (generation !== workspaceGeneration) throw Error('Workspace changed; import cancelled.');
+        const priorSeeds = usePersonalSeeds; usePersonalSeeds = false; const normalized = normState(next); usePersonalSeeds = priorSeeds;
+        const id = crypto.randomUUID(), envelope = localEnvelope('home', normalized.name || 'Imported house', normalized, id, importedMetadata);
+        localStorage.setItem(localKey(id), JSON.stringify(envelope));
+        if (openLocal(envelope)) toast('Backup imported as a new local design. Create a cloud copy explicitly when ready.');
+        return;
+      }
+      if (bookshelfActive) bookshelfUI.reset(); bookshelfActive = false; $('.layout').hidden = false; virtualShelfRoom = null;
+      for (const url of privateObjectUrls) URL.revokeObjectURL(url); privateObjectUrls.clear();
+      photoCache.clear(); thumbs.clear(); thumbQueue.length = 0; for (const [oldId, id] of mapping) photoCache.set(id, photoData[oldId]); readyPhotoIds.clear(); readyPhotoMetadata.clear();
+      state = normState(next); selected = null; three.lastRoom = null; commit(); toast('Backup imported locally; no upload was performed.'); if ($('#saveDlg').open) $('#saveDlg').close();
     } catch (err) { alert(`Import failed: ${err.message}`); }
   }
 
@@ -1374,6 +1602,7 @@
   $$('.seg button').forEach((b) => b.addEventListener('click', () => { view = b.dataset.view; renderView(); }));
   $('#projectName').addEventListener('input', (e) => { state.name = e.target.value; save(); });
   $('#roomSwitch').addEventListener('change', (e) => switchRoom(e.target.value));
+  $('#newRoomBtn').addEventListener('click', newRoomDialog);
   $('#handoffBtn').addEventListener('click', handoffDialog);
   $('#roomList').addEventListener('click', (e) => { const b = e.target.closest('[data-room-id]'); if (b) switchRoom(b.dataset.roomId); });
   $('#eveningBtn').addEventListener('click', (e) => { evening = !evening; e.currentTarget.setAttribute('aria-pressed', String(evening)); build3D(); });
@@ -1390,8 +1619,9 @@
   $('#photoPicker').addEventListener('change', async (e) => {
     const files = [...e.target.files]; e.target.value = '';
     if (!files.length || !photoOwner) return;
-    const owner = photoOwner; toast(`Adding ${plural(files.length, 'photo')}…`);
-    const ids = await storePhotos(files), arr = ownerPhotos(owner);
+    const owner = photoOwner, generation = workspaceGeneration; toast(`Adding ${plural(files.length, 'photo')}…`);
+    const ids = await storePhotos(files); if (generation !== workspaceGeneration) return;
+    const arr = ownerPhotos(owner);
     if (!arr) return;
     arr.push(...ids);
     if (owner === 'draft' && draft) draft.newPhotos.push(...ids); else { save(); renderRooms(); }
@@ -1507,7 +1737,7 @@
   $('#artPicker').addEventListener('change', async (e) => {
     const f = e.target.files[0]; e.target.value = ''; const it = selItem();
     if (!f || !it || it.type !== 'art') return;
-    toast('Adding picture…'); const [id] = await storePhotos([f]); if (!id) return;
+    const generation = workspaceGeneration; toast('Adding picture…'); const [id] = await storePhotos([f]); if (!id || generation !== workspaceGeneration) return;
     it.image = id; syncToPiece(it); commit(); toast('Picture added');
   });
 
@@ -1524,19 +1754,57 @@
 
   $('#savePanel').addEventListener('click', async (e) => {
     const t = e.target;
+    const localAction = t.closest('[data-local-new],[data-local-copy-current],[data-local-open],[data-local-rename],[data-local-copy],[data-local-delete],[data-local-legacy]');
+    if (localAction) {
+      try {
+        await window.HomePlannerContractsReady;
+        if (!cloudWorkspace && saveTimer && !flushSave()) throw Error('The open local design could not be saved.');
+        if (localAction.dataset.localOpen) { openLocal(readLocal(localAction.dataset.localOpen)); return; }
+        if (localAction.dataset.localDelete) {
+          const id = localAction.dataset.localDelete, entry = readLocal(id);
+          if (!confirm(`Delete local design "${entry.title}"? Other copies and their photos are kept.`)) return;
+          const active = localDesignId === id;
+          if (active) { clearTimeout(saveTimer); saveTimer = null; localDesignId = null; localPhotoMetadata.clear(); }
+          localStorage.removeItem(localKey(id));
+          if (active) { const blank = localEnvelope('home', 'New house', normState(emptyHome()), crypto.randomUUID(), new Map()); openLocal(blank); toast('Local design deleted.'); }
+          else renderLocalList();
+          return;
+        }
+        if (localAction.dataset.localRename) {
+          const id = localAction.dataset.localRename, entry = readLocal(id), name = prompt('New local design name', entry.title);
+          if (name === null) return; const title = name.trim(); if (!title || title.length > 120) throw Error('Enter a name of 1–120 characters.');
+          entry.title = title; if (entry.kind === 'home') entry.payload.name = title; entry.modifiedAt = new Date().toISOString();
+          if (!window.HomePlannerContracts.validate('local', entry).valid) throw Error('The renamed design is invalid.');
+          localStorage.setItem(localKey(id), JSON.stringify(entry));
+          if (localDesignId === id) { localTitle = title; if (localKind === 'home') { state.name = title; renderStatus(); $('#projectName').value = title; } }
+          renderLocalList(); return;
+        }
+        let kind, payload, suggested, fromStore = false;
+        if (localAction.dataset.localNew) { kind = localAction.dataset.localNew; payload = kind === 'home' ? emptyHome() : Bookshelf.preset('staggered', 240, 200); suggested = kind === 'home' ? 'New house' : 'New bookshelf'; }
+        else if (localAction.dataset.localCopy) { const source = readLocal(localAction.dataset.localCopy); kind = source.kind; payload = source.payload; suggested = source.title + ' copy'; fromStore = true; }
+        else if (localAction.dataset.localLegacy !== undefined) { const key = $('#localList')._legacyKeys[Number(localAction.dataset.localLegacy)]; payload = JSON.parse(localStorage.getItem(key)); kind = 'home'; suggested = (payload.name || 'Previous plan') + ' copy'; fromStore = true; }
+        else { kind = cloudWorkspace && HomePlannerCloud.snapshot().current?.kind === 'shelf' || localKind === 'shelf' && localDesignId ? 'shelf' : 'home'; payload = kind === 'shelf' ? bookshelfUI.shelf() : clone(state); suggested = (kind === 'home' ? state.name : localTitle || 'Bookshelf') + ' copy'; }
+        const name = prompt('Local design name', suggested); if (name === null) return;
+        const envelope = await createLocalCopy(kind, name.trim(), payload, fromStore); openLocal(envelope); toast('Local copy created.');
+      } catch (err) { alert(`Local design: ${err.message}`); }
+      return;
+    }
     if (t.id === 'saveVersion') { if (await saveVersion(valOf('versionName'))) $('#versionName').value = ''; return; }
-    if (t.id === 'exportBtn') return exportBackup();
+    if (t.id === 'exportBtn') { try { await exportBackup(); } catch (err) { alert(`Export failed: ${err.message}`); } return; }
     if (t.id === 'importBtn') return $('#importInput').click();
     const rs = t.closest('[data-restore]');
     if (rs) {
-      const v = (await Store.listVersions()).find((x) => x.id === rs.dataset.restore); if (!v) return;
+      const v = (await listSavedVersions()).find((x) => x.id === rs.dataset.restore); if (!v) return;
       if (!confirm(`Restore "${v.name}"? The current plan is saved as a version first.`)) return;
       await saveVersion(`Before restore, ${new Date().toLocaleString()}`);
       if (bookshelfActive) bookshelfUI.close();
       state = normState(v.data); selected = null; three.lastRoom = null; commit(); toast(`Restored "${v.name}"`); $('#saveDlg').close(); return;
     }
     const dv = t.closest('[data-del-version]');
-    if (dv && confirm('Delete this saved version?')) { await Store.delVersion(dv.dataset.delVersion); renderSavePanel(); }
+    if (dv && confirm('Delete this saved version?')) {
+      try { localStorage.setItem(namedVersionsKey, JSON.stringify(readNamedVersions().filter(v => v.id !== dv.dataset.delVersion))); await Store.delVersion(dv.dataset.delVersion); renderSavePanel(); }
+      catch (_) { toast('Could not delete the version: browser storage is unavailable.'); }
+    }
   });
   const saveDlg = $('#saveDlg');
   $('#saveBtn').addEventListener('click', () => { renderSavePanel(); saveDlg.showModal(); });
@@ -1598,11 +1866,39 @@
     const matches = state.rooms.flatMap(r => r.items.filter(i => i.catalogId === pid && i.shelfDesign).map(item => ({ room: r, item })));
     return matches.find(p => p.room.id === state.activeRoomId) || (matches.length === 1 ? matches[0] : null);
   }
+  function proposalCurrent(p) {
+    const cloud = HomePlannerCloud, now = cloud.snapshot();
+    return cloud.isCurrent(p.account) && now.current?.id === p.designId && now.current?.revision === p.revision && editGeneration === p.edit && Date.parse(p.result.expiresAt) > Date.now();
+  }
   bookshelfUI = BookshelfBuilder.init($('#bookshelfBuilder'), {
-    rooms: () => state.rooms.filter(r => ['office', 'living'].includes(r.seedId) || /^(Office|Living room)$/i.test(r.name)),
+    rooms: () => virtualShelfRoom ? [virtualShelfRoom] : state.rooms,
     pieces: () => state.catalog, activeRoom: () => state.activeRoomId, toast,
-    draft: function (d, immediate = false) { if (arguments.length) { state.bookshelfDraft = d; if (immediate) return flushSave(); save(); } return state.bookshelfDraft; },
-    storageAvailable: () => storageAvailable, findPlacement: findBookshelfPlacement,
+    draft: function (d, immediate = false) { if (arguments.length) { state.bookshelfDraft = d; if (immediate) { editGeneration++; return flushSave(); } save(); } return state.bookshelfDraft; },
+    storageAvailable: () => storageAvailable, cloudWorkspace: () => cloudWorkspace, findPlacement: findBookshelfPlacement,
+    canPropose: () => !!(window.HomePlannerCloud?.snapshot().me?.capabilities?.ai && window.HomePlannerCloud?.snapshot().current && window.HomePlannerContracts && typeof window.HomePlannerCanonicalize === 'function'),
+    propose: async (shelf, promptText, shelfId) => {
+      const cloud = HomePlannerCloud, account = cloud.snapshot(), edit = editGeneration, base = account.current;
+      if (!base || !account.me?.capabilities?.ai || typeof window.HomePlannerCanonicalize !== 'function') throw Error('AI edits are not configured.');
+      const validation = window.HomePlannerContracts?.validate('shelf', shelf); if (!validation?.valid) throw Error('This shelf does not meet the proposal contract.');
+      const saved = persistedCloud?.id === base.id && persistedCloud.revision === base.revision ? persistedCloud : null;
+      const savedShelf = base.kind === 'shelf' ? saved?.payload : saved?.payload?.catalog?.find(p => p.id === shelfId)?.shelfDesign;
+      const localShelf = base.kind === 'shelf' ? shelf : state.catalog.find(p => p.id === shelfId)?.shelfDesign;
+      if (!savedShelf || !localShelf || window.HomePlannerCanonicalize(savedShelf) !== window.HomePlannerCanonicalize(shelf) || window.HomePlannerCanonicalize(localShelf) !== window.HomePlannerCanonicalize(shelf)) throw Error('Save this shelf design and then save the cloud design before requesting a preview.');
+      const encoded = new TextEncoder().encode(window.HomePlannerCanonicalize(shelf));
+      const hashBytes = await crypto.subtle.digest('SHA-256', encoded);
+      const baseHash = [...new Uint8Array(hashBytes)].map(x => x.toString(16).padStart(2, '0')).join('');
+      const requestId = crypto.randomUUID(), body = { requestId, designId: base.id, baseRevision: base.revision, baseHash, shelf, prompt: promptText };
+      if (base.kind === 'home') body.shelfId = shelfId;
+      if (!window.HomePlannerContracts.validate('proposalRequest', body).valid) throw Error('The proposal request does not meet the contract.');
+      const now = cloud.snapshot();
+      if (!cloud.isCurrent(account) || now.current?.id !== base.id || now.current?.revision !== base.revision || editGeneration !== edit) throw Error('The account or design changed. Request a new preview.');
+      const result = await cloud.request('/api/shelf-proposals', { method: 'POST', headers: { 'Idempotency-Key': requestId }, body });
+      if (!window.HomePlannerContracts.validate('proposal', result).valid || result.baseRevision !== base.revision || result.baseHash !== baseHash) throw Error('The proposal response is invalid.');
+      const proposal = { result, account, edit, designId: base.id, revision: base.revision };
+      if (!proposalCurrent(proposal)) throw Error('The design changed. Request a new preview.');
+      return proposal;
+    },
+    proposalCurrent,
     hasPlacement: (id, rid) => state.rooms.some(r => r.id === rid && r.items.some(i => i.id === id && i.shelfDesign)),
     show: active => {
       bookshelfActive = active; $('.layout').hidden = active;
@@ -1627,6 +1923,7 @@
       return messages;
     },
     saveDesign: (d, place, r) => {
+      if (virtualShelfRoom) { state.bookshelfDraft = clone(d); save(); toast('Use Private designs to save this shelf to cloud.'); return null; }
       const s = Bookshelf.normalize(d.design), ex = d.pieceId && piece(d.pieceId);
       const p = normPiece(Object.assign({}, ex || {}, { id: ex ? ex.id : 'c' + uid(), type: 'shelf', style: 'custom',
         name: d.name || 'Custom bookshelf', w: s.width, d: s.depth, h: s.height, color: d.color, books: false,
@@ -1650,4 +1947,102 @@
   });
   $('#bookshelfBtn').addEventListener('click', () => bookshelfActive ? bookshelfUI.close() : bookshelfUI.open());
   renderAll(); renderSavePanel(); renderView();
+  window.addEventListener('beforeunload', e => { if (cloudWorkspace && editGeneration !== savedGeneration) { e.preventDefault(); e.returnValue = ''; } });
+  if (window.HomePlannerCloudUI) HomePlannerCloudUI({
+    clearWorkspace() {
+      if (!hostedMode) return;
+      if (!cloudWorkspace && saveTimer) flushSave();
+      workspaceGeneration++; clearTimeout(saveTimer); saveTimer = null;
+      if (bookshelfUI) bookshelfUI.reset(); bookshelfActive = false; $('.layout').hidden = false;
+      $('#bookshelfBtn').setAttribute('aria-expanded', 'false'); $('#roomSwitch').disabled = false;
+      $('#handoffBtn').disabled = false; $$('.seg button').forEach(b => { b.disabled = false; });
+      for (const url of privateObjectUrls) URL.revokeObjectURL(url); privateObjectUrls.clear(); photoCache.clear(); photoLoading.clear(); thumbs.clear(); thumbQueue.length = 0;
+      if ($('#modal').open) $('#modal').close(); if ($('#lightbox').open) $('#lightbox').close(); if ($('#saveDlg').open) $('#saveDlg').close();
+      draft = null; selected = null; virtualShelfRoom = null; readyPhotoIds = new Set(); readyPhotoMetadata.clear(); readyPhotoDesign = null; persistedCloud = null; usePersonalSeeds = false;
+      localDesignId = crypto.randomUUID(); localKind = 'home'; localPhotoMetadata.clear(); $('#lbImg').removeAttribute('src');
+      cloudWorkspace = false; state = normState(emptyHome()); three.lastRoom = null; editGeneration = savedGeneration = 0;
+      saveNote = 'Local only'; renderAll(); renderView();
+    },
+    identityChanged() { /* Only explicitly opened cloud designs use the ephemeral cloud workspace. */ },
+    preserveLocal() { if (!cloudWorkspace && saveTimer && !flushSave()) throw Error('The local design could not be saved. Export a backup before continuing.'); },
+    hasUnsaved: () => cloudWorkspace && editGeneration !== savedGeneration,
+    editStamp: () => editGeneration,
+    markSaved: () => { savedGeneration = editGeneration; saveNote = 'Saved to cloud'; renderStatus(); },
+    writeBody(kind, title, copy) {
+      if (!title || title.length > 120) throw Error('Enter a name of 1–120 characters.');
+      const payload = copy ? (kind === 'shelf' ? (bookshelfUI.shelf() || state.bookshelfDraft?.design) : clone(state)) :
+        (kind === 'shelf' ? Bookshelf.preset('staggered', 240, 200) : normState(emptyHome()));
+      if (!payload) throw Error('Open the shelf editor first.');
+      let ids = [];
+      if (kind === 'home') {
+        delete payload.exampleRetired; // local seed migration marker is outside the frozen home contract
+        ids = referencedPhotos(payload);
+      }
+      if (ids.length > 100) throw Error('A design can contain at most 100 photos.');
+      return { kind, title, schemaVersion: 3, payload: clone(payload), photoIds: ids };
+    },
+    withoutPhotos(body) {
+      const empty = clone(body); if (empty.kind === 'home') replacePhotoReferences(empty.payload, new Map()); empty.photoIds = []; return empty;
+    },
+    async preparePhotos(body, target, edit) {
+      const account = HomePlannerCloud.snapshot(), generation = workspaceGeneration, mapping = new Map(), blobs = new Map(), metadata = new Map();
+      const guard = () => { const now = HomePlannerCloud.snapshot(); return generation === workspaceGeneration && edit === editGeneration && now.current?.id === target.id && now.current?.revision === target.revision; };
+      for (const id of body.photoIds) {
+        if (!guard() || !HomePlannerCloud.isCurrent(account)) throw Error('Account, design or edits changed; save cancelled.');
+        const blob = await photoBlob(id, generation); blobs.set(id, blob);
+        if (readyPhotoDesign === target.id && readyPhotoIds.has(id) && readyPhotoMetadata.has(id)) { mapping.set(id, id); metadata.set(id, readyPhotoMetadata.get(id)); continue; }
+        const ready = await HomePlannerCloud.uploadPhoto(target.id, id, blob, guard);
+        mapping.set(id, ready.photoId); metadata.set(ready.photoId, ready);
+      }
+      if (!guard() || !HomePlannerCloud.isCurrent(account)) throw Error('Account, design or edits changed; save cancelled.');
+      const result = clone(body); if (body.kind === 'home') replacePhotoReferences(result.payload, mapping);
+      result.photoIds = body.photoIds.map(id => mapping.get(id));
+      return { body: result, mapping, blobs, metadata, target: target.id };
+    },
+    acceptCloudSave(prepared, edit) {
+      if (edit !== editGeneration) return;
+      const converted = new Map(); for (const [oldId, newId] of prepared.mapping) converted.set(newId, prepared.blobs.get(oldId));
+      if (!cloudWorkspace) this.openNew(prepared.body.kind, prepared.body.payload);
+      else if (prepared.body.kind === 'home') replacePhotoReferences(state, prepared.mapping);
+      for (const url of privateObjectUrls) URL.revokeObjectURL(url); privateObjectUrls.clear(); photoCache.clear(); readyPhotoIds.clear(); readyPhotoMetadata = new Map(prepared.metadata);
+      for (const [id, blob] of converted) { const url = URL.createObjectURL(blob); privateObjectUrls.add(url); photoCache.set(id, url); readyPhotoIds.add(id); }
+      readyPhotoDesign = prepared.target; const current = HomePlannerCloud.snapshot().current;
+      persistedCloud = { id: prepared.target, revision: current.revision, kind: prepared.body.kind, payload: clone(prepared.body.payload) };
+      if (prepared.body.kind === 'home') renderAll();
+    },
+    openNew(kind, payload) {
+      workspaceGeneration++; clearTimeout(saveTimer); saveTimer = null; if (bookshelfUI) bookshelfUI.reset();
+      for (const url of privateObjectUrls) URL.revokeObjectURL(url); privateObjectUrls.clear(); photoCache.clear(); thumbs.clear(); thumbQueue.length = 0; readyPhotoIds.clear(); readyPhotoMetadata.clear(); readyPhotoDesign = null;
+      selected = null; cloudWorkspace = true; usePersonalSeeds = false; localDesignId = null; localPhotoMetadata.clear();
+      state = kind === 'home' ? clone(payload) : normState(emptyHome()); virtualShelfRoom = null;
+      if (kind === 'shelf') { virtualShelfRoom = normRoom({ id: 'shelf-preview', name: 'Shelf preview', width: 500, length: 500, height: 500 }); bookshelfUI.openShelf(payload, 'Bookshelf'); }
+      else { $('.layout').hidden = false; bookshelfActive = false; renderAll(); renderView(); }
+      const current = HomePlannerCloud.snapshot().current; persistedCloud = current ? { id: current.id, revision: current.revision, kind, payload: clone(payload) } : null;
+      editGeneration = savedGeneration = 0;
+    },
+    async openCloud(design, stamp, stillCurrent) {
+      await window.HomePlannerContractsReady;
+      const manifest = design.photoManifest || design.photos || [];
+      if (!Array.isArray(manifest)) throw Error('Invalid photo manifest.');
+      const ids = manifest.map(p => p?.photoId);
+      if (manifest.some(p => !p || !/^[0-9a-f-]{36}$/i.test(p.photoId || '') || !['image/jpeg','image/png','image/webp'].includes(p.mime) || !Number.isInteger(p.bytes) || p.bytes < 1 || p.bytes > 10485760 || !/^[a-f0-9]{64}$/.test(p.checksum || '')) || new Set(ids).size !== ids.length) throw Error('Invalid photo manifest metadata.');
+      const refs = design.kind === 'home' ? referencedPhotos(design.payload) : [];
+      if (refs.length !== ids.length || refs.some(id => !ids.includes(id))) throw Error('The design has missing or unreferenced photos.');
+      const body = { kind: design.kind, title: design.title, schemaVersion: 3, payload: design.payload, photoIds: ids };
+      const valid = window.HomePlannerContracts?.validate('writeDesign', body);
+      if (!valid?.valid) throw Error('The server returned a design that does not match the contract.');
+      if (!HomePlannerCloud.isCurrent(stamp) || !stillCurrent()) throw Error('Account, design or edits changed while loading.');
+      const blobs = await Promise.all(ids.map(id => HomePlannerCloud.photo(design.id, id)));
+      if (!HomePlannerCloud.isCurrent(stamp) || !stillCurrent()) throw Error('Account, design or edits changed while loading.');
+      for (let i = 0; i < blobs.length; i++) {
+        const actual = await photoMetadata(ids[i], blobs[i]);
+        if (actual.mime !== manifest[i].mime || actual.bytes !== manifest[i].bytes || actual.checksum !== manifest[i].checksum) throw Error('A private photo does not match its manifest.');
+        if (!HomePlannerCloud.isCurrent(stamp) || !stillCurrent()) throw Error('Account, design or edits changed while loading.');
+      }
+      this.openNew(design.kind, design.payload);
+      ids.forEach((id, i) => { const url = URL.createObjectURL(blobs[i]); privateObjectUrls.add(url); photoCache.set(id, url); readyPhotoIds.add(id); readyPhotoMetadata.set(id, manifest[i]); });
+      readyPhotoDesign = design.id; persistedCloud = { id: design.id, revision: design.revision, kind: design.kind, payload: clone(design.payload) };
+      if (design.kind === 'home') renderAll();
+    }
+  });
 })();

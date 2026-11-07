@@ -22,15 +22,19 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - name: Collect site files
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build only from allowlisted inputs
         run: |
-          mkdir _site
-          cp index.html *.js styles.css _site/ && cp -r photos _site/
-          v=${GITHUB_SHA::8}; sed -i -E "s#(src|href)=\"(app|house-data|models3d)\.js\"#\1=\"\2.js?v=$v\"#g; s#href=\"styles\.css\"#href=\"styles.css?v=$v\"#" _site/index.html
-          grep -c "?v=$v" _site/index.html
+          node scripts/prepare-hosting.mjs "$RUNNER_TEMP/homeplanner-input" "$RUNNER_TEMP/homeplanner-input-manifest.json"
+          cd "$RUNNER_TEMP/homeplanner-input"
+          npm ci
+          npm run build
+          npm run audit:public
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: _site
+          path: ${{ runner.temp }}/homeplanner-input/dist
       - id: deployment
         uses: actions/deploy-pages@v4

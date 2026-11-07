@@ -4,5 +4,15 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "git": { "deploymentEnabled": false },
-  "headers": [{ "source": "/api/(.*)", "headers": [{ "key": "Cache-Control", "value": "private, no-store" }] }]
+  "functions": { "api/**/*.js": { "includeFiles": "{shared/schema/**,bookshelf.js}" } },
+  "rewrites": [{ "source": "/auth/callback", "destination": "/index.html" }],
+  "headers": [
+    { "source": "/api/(.*)", "headers": [{ "key": "Cache-Control", "value": "private, no-store" }] },
+    { "source": "/(.*)", "headers": [
+      { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: blob: https://*.googleusercontent.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'" },
+      { "key": "Referrer-Policy", "value": "no-referrer" },
+      { "key": "Cross-Origin-Opener-Policy", "value": "same-origin-allow-popups" },
+      { "key": "X-Content-Type-Options", "value": "nosniff" }
+    ] }
+  ]
 }
