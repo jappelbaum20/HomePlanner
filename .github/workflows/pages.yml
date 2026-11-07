@@ -26,6 +26,8 @@ jobs:
         with:
           node-version: 22
       - name: Build only from allowlisted inputs
+        env:
+          HOMEPLANNER_BASE_PATH: /HomePlanner/
         run: |
           node scripts/prepare-hosting.mjs "$RUNNER_TEMP/homeplanner-input" "$RUNNER_TEMP/homeplanner-input-manifest.json"
           cd "$RUNNER_TEMP/homeplanner-input"

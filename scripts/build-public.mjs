@@ -7,6 +7,8 @@ import { auditPublic, enumerate, PUBLIC_FILES } from './audit-public.mjs';
 
 const root = process.cwd();
 const dist = path.join(root, 'dist');
+const basePath = process.env.HOMEPLANNER_BASE_PATH || '/';
+if (!/^\/(?:[a-zA-Z0-9_-]+\/)*$/.test(basePath)) throw new Error('Invalid application base path');
 await mkdir(dist, { recursive: true });
 const current = await enumerate(dist);
 const unexpected = current.filter(file => !PUBLIC_FILES.includes(file));
@@ -37,7 +39,10 @@ html = html.replace(/\s*<link\s+[^>]*href=["']https:\/\/fonts\.(?:googleapis|gst
 const sdkMarker = '<script src="client/contracts-loader.js"></script>';
 if (html.split(sdkMarker).length !== 2 || html.includes('vendor/supabase.js')) throw new Error('Unexpected SDK insertion point.');
 html = html.replace(sdkMarker, '<script src="vendor/supabase.js"></script>\n  ' + sdkMarker);
+html = html.replace('<base href="/">', '<base href="' + basePath + '">');
 await writeFile(path.join(dist, 'index.html'), html);
+const adminHtml = await readFile(path.join(dist, 'admin.html'), 'utf8');
+await writeFile(path.join(dist, 'admin.html'), adminHtml.replace('<base href="/">', '<base href="' + basePath + '">'));
 await mkdir(path.join(dist, 'vendor'), { recursive: true });
 for (const [source, target] of [
   ['node_modules/three/build/three.min.js', 'three.min.js'],

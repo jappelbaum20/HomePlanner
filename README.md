@@ -4,7 +4,7 @@ Browser app for planning the new house: rooms with photos and notes, wall and fl
 
 ## Run it locally
 
-No build step. Open `index.html`, or serve the folder:
+For the existing personal workspace, serve the repository folder locally:
 
 ```bash
 python3 -m http.server 8000   # then open http://localhost:8000
@@ -12,7 +12,7 @@ python3 -m http.server 8000   # then open http://localhost:8000
 
 three.js and the font load from a CDN, so the first load needs internet. The 3D models, materials and textures are generated in `models3d.js`; nothing else is downloaded.
 
-Live site: https://jappelbaum20.github.io/HomePlanner/ (redeploys on every push to `main`).
+GitHub Pages provides a static build at https://jappelbaum20.github.io/HomePlanner/. Account storage and server editing require the full hosted backend. See [Hosting](docs/HOSTING.md).
 
 ## The workflow
 
