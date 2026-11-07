@@ -1,0 +1,13 @@
+{
+  "name": "home-planner",
+  "version": "0.0.0",
+  "private": true,
+  "engines": { "node": ">=22 <25" },
+  "scripts": {
+    "build": "node scripts/build-public.mjs",
+    "audit:public": "node scripts/audit-public.mjs",
+    "test": "node --test tests/bookshelf.test.cjs tests/public-assets.test.cjs"
+  },
+  "dependencies": { "ajv": "8.20.0" },
+  "devDependencies": { "esbuild": "0.28.2", "ignore": "7.0.5" }
+}
