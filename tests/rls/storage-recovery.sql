@@ -13,7 +13,10 @@ begin
   insert into public.designs(owner_id,kind,title,schema_version,payload) values(u,'shelf','A',3,'{}') returning id into d;
   insert into public.designs(owner_id,kind,title,schema_version,payload) values(other_user,'shelf','B',3,'{}') returning id into foreign_d;
   r:=public.hp_reserve_photo(u,d,'image/png',1,repeat('a',64)); pending:=(r->>'photoId')::uuid;
+  -- Final metadata write runs with service claims, not the caller's JWT.
+  perform set_config('request.jwt.claims','{"role":"service_role"}',true);
   insert into storage.objects(bucket_id,name) values('design-photos',r->>'rawKey');
+  perform set_config('request.jwt.claims','{"sub":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","role":"authenticated","session_id":"aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa","app_metadata":{"provider":"google"}}',true);
   update public.design_photos set expires_at=clock_timestamp()-interval '59 minutes' where id=pending;
   if public.hp_claim_photo_cleanup(u,t1) is not null then raise exception 'pending grace ignored'; end if;
   update public.design_photos set expires_at=clock_timestamp()-interval '61 minutes' where id=pending;

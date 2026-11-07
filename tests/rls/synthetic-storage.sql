@@ -7,6 +7,9 @@ insert into auth.sessions(id,user_id) values('aaaaaaaa-1111-4111-8111-aaaaaaaaaa
 select public.hp_create_design('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','aaaaaaaa-2222-4222-8222-aaaaaaaaaaaa',repeat('a',64),
  '{"kind":"shelf","title":"A","schemaVersion":3,"payload":{},"photoIds":[]}'::jsonb);
 select public.hp_reserve_photo('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',id,'image/png',1,repeat('a',64)) from public.designs;
+insert into auth.users(id) values('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+insert into auth.sessions(id,user_id) values('bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+select set_config('test.foreign_raw_key',(select raw_key from public.design_photos limit 1),true);
 set local role authenticated;
 select set_config('request.jwt.claims','{"sub":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","role":"authenticated","session_id":"aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa","app_metadata":{"provider":"google"}}',true);
 insert into storage.objects(bucket_id,name) select 'design-photos',raw_key from public.design_photos;
@@ -17,6 +20,13 @@ do $$ begin
   exception when insufficient_privilege then null;
     when others then if sqlerrm <> 'HP_INVALID' then raise; end if; end;
   if has_table_privilege('authenticated','storage.objects','select,update,delete') then raise exception 'unexpected synthetic Storage grant'; end if;
+end $$;
+select set_config('request.jwt.claims','{"sub":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","role":"authenticated","session_id":"bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb","app_metadata":{"provider":"google"}}',true);
+do $$ begin
+ begin
+  insert into storage.objects(bucket_id,name) values('design-photos',current_setting('test.foreign_raw_key'));
+  raise exception 'foreign owned raw upload accepted';
+ exception when insufficient_privilege then null; end;
 end $$;
 reset role;
 rollback;

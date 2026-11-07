@@ -41,9 +41,12 @@ begin
   if not found then raise exception 'HP_INVALID'; end if;
   select * into w from private.photo_work where photo_id=p.id;
   if new.name=p.raw_key then
+    -- End-user ownership/session authorization is enforced by the INSERT RLS
+    -- policy during Storage's permission probe. The final metadata write uses
+    -- Storage's trusted service identity, so this trigger checks lifecycle only.
+    -- Keep these locks/state checks for both probes and final service writes.
     if p.status <> 'pending' or p.expires_at <= clock_timestamp()
-       or (w.mode is not null and w.mode <> 'completing')
-       or auth.uid() is distinct from p.owner_id or not private.session_live() then
+       or (w.mode is not null and w.mode <> 'completing') then
       raise exception 'HP_INVALID';
     end if;
   else
