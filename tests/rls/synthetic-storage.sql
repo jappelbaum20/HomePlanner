@@ -14,7 +14,8 @@ do $$ begin
   begin
     insert into storage.objects(bucket_id,name) values('design-photos','forged/key');
     raise exception 'forged storage path unexpectedly accepted';
-  exception when insufficient_privilege then null; end;
+  exception when insufficient_privilege then null;
+    when others then if sqlerrm <> 'HP_INVALID' then raise; end if; end;
   if has_table_privilege('authenticated','storage.objects','select,update,delete') then raise exception 'unexpected synthetic Storage grant'; end if;
 end $$;
 reset role;

@@ -3,6 +3,7 @@ const { createHash } = require('node:crypto');
 const { validate } = require('../shared/contracts');
 const { authenticate } = require('./auth');
 const { fail, uuid, id, revision, jsonBody, wrap, method } = require('./errors');
+const { recoverStorage } = require('./photos');
 
 function canonical(value) {
   if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
@@ -48,6 +49,7 @@ function createItemHandler(deps) {
     if (req.method === 'DELETE') {
       if (Object.keys(jsonBody(req, 4096)).length) fail(422, 'invalid_data', 'Invalid deletion request.');
       await ctx.backend.rpc('hp_delete_design', { p_user_id: ctx.userId, p_id: designId, p_revision: base });
+      await recoverStorage(ctx);
       return { status: 204 };
     }
     const body = checkedWrite(req);

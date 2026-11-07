@@ -18,9 +18,10 @@ const A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', BUSER = 'bbbbbbbb-bbbb-4bbb-8b
 const write = () => ({ kind: 'shelf', title: 'Shelf', schemaVersion: 3, payload: B.saetter3(), photoIds: [] });
 
 function fake() {
-  const designs = new Map(), keys = new Map(), photos = new Map(), objects = new Map();
+  const designs = new Map(), keys = new Map(), photos = new Map(), objects = new Map(), work = new Map();
   const errors = (status, code) => { throw new ApiError(status, code, code); };
   const backend = {
+    storageRecoveryAvailable: true,
     async verify(token) { return token === 'a.b.c' ? { userId: A, displayName: 'A' } : token === 'b.b.c' ? { userId: BUSER, displayName: 'B' } : null; },
     async list(ctx) { return { items: [...designs.values()].filter(x => x.owner === ctx.userId && !x.deleted).map(x => ({ id: x.id, revision: x.revision })), nextCursor: null }; },
     async get(ctx, id) { const d = designs.get(id); return d && d.owner === ctx.userId && !d.deleted ? d : null; },
@@ -48,18 +49,40 @@ function fake() {
         photos.set(pid, { id: pid, design_id: d.id, owner_id: args.p_user_id, raw_key: raw, requested_mime: args.p_mime, requested_bytes: args.p_bytes, requested_checksum: args.p_checksum, status: 'pending', expires_at: expires });
         return { photoId: pid, rawKey: raw, expiresAt: expires };
       }
-      if (name === 'hp_photo_ready') {
+      if (name === 'hp_begin_photo_completion') {
         const d = designs.get(args.p_design_id), p = photos.get(args.p_photo_id);
         if (!d || d.deleted || !p || p.owner_id !== args.p_user_id || p.design_id !== d.id) errors(404, 'not_found');
+        if (p.status === 'pending') {
+          if (work.has(p.id)) errors(409, 'conflict');
+          work.set(p.id, { mode:'completing', token:args.p_token });
+        }
+        return { ...p };
+      }
+      if (name === 'hp_finish_photo_completion') {
+        const d = designs.get(args.p_design_id), p = photos.get(args.p_photo_id);
+        if (!d || d.deleted || !p || p.owner_id !== args.p_user_id || p.design_id !== d.id) errors(404, 'not_found');
+        if (work.get(p.id)?.token !== args.p_token) errors(409, 'conflict');
         Object.assign(p, { status: 'ready', object_key: args.p_key, mime: p.requested_mime, bytes: args.p_bytes, checksum: args.p_checksum });
+        work.delete(p.id);
         return { photoId: p.id, mime: p.mime, bytes: p.bytes, checksum: p.checksum };
       }
-      if (name === 'hp_photo_raw_removed') return null;
+      if (name === 'hp_claim_photo_cleanup') {
+        const p = [...photos.values()].find(x => x.owner_id === args.p_user_id && x.status === 'ready' && !x.raw_removed_at && !work.has(x.id));
+        if (!p) return null;
+        work.set(p.id, { mode:'raw', token:args.p_token });
+        return { photoId:p.id, designId:p.design_id, rawKey:p.raw_key, mode:'raw',rawRequired:objects.has(p.raw_key),rawVerified:false };
+      }
+      if (name === 'hp_record_photo_removal') return null;
+      if (name === 'hp_finish_photo_cleanup') {
+        const p = photos.get(args.p_photo_id);
+        if (!p || work.get(p.id)?.token !== args.p_token) errors(409, 'conflict');
+        p.raw_removed_at = new Date().toISOString(); work.delete(p.id); return null;
+      }
       throw new Error('unexpected fake call');
     },
     async download(key) { if (!objects.has(key)) throw new Error('offline storage'); return objects.get(key); },
     async upload(key, data) { if (objects.has(key)) throw new Error('already exists'); objects.set(key, data); },
-    async remove(key) { objects.delete(key); }
+    async removeVerified(key) { objects.delete(key); }
   };
   return { backend, objects, photos };
 }

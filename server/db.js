@@ -11,6 +11,18 @@ function mapDatabaseError(error) {
   fail(503, 'unavailable', 'Service is temporarily unavailable.');
 }
 function checked(result) { if (result.error) mapDatabaseError(result.error); return result.data; }
+async function removeVerified(bucket, key, expectedExisting) {
+  // Application quota tracks objects accessible through Storage, not physical
+  // provider media. Claimed paths are fenced against all later uploads.
+  // Provider-internal asynchronous byte cleanup remains its responsibility.
+  void expectedExisting;
+  const missing = error => Number(error?.statusCode ?? error?.status) === 404 && (error?.code === undefined || ['NoSuchKey', 'not_found', 'ObjectNotFound'].includes(error?.code));
+  const removed = await bucket.remove([key]);
+  if (removed.error && !missing(removed.error)) throw new Error('Storage removal failed');
+  const present = await bucket.exists(key);
+  if (present.error ? !missing(present.error) : present.data !== false) throw new Error('Storage absence not confirmed');
+}
+
 function createBackend() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_PUBLISHABLE_KEY;
@@ -20,6 +32,7 @@ function createBackend() {
   const options = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
   const privileged = createClient(url, serverKey, options);
   return {
+    storageRecoveryAvailable: true,
     async verify(token) {
       const client = createClient(url, key, { ...options, global: { headers: { Authorization: `Bearer ${token}` } } });
       const { data, error } = await client.auth.getUser(token);
@@ -59,10 +72,12 @@ function createBackend() {
       const blob = checked(await privileged.storage.from(storageBucket).download(key));
       return Buffer.from(await blob.arrayBuffer());
     },
-    async upload(key, bytes, mime) {
-      checked(await privileged.storage.from(storageBucket).upload(key, bytes, { contentType: mime, upsert: false }));
+    async upload(key, bytes, mime, token) {
+      checked(await privileged.storage.from(storageBucket).upload(key, bytes, { contentType: mime, upsert: false, headers: { 'x-hp-completion': token } }));
     },
-    async remove(key) { checked(await privileged.storage.from(storageBucket).remove([key])); }
+    async removeVerified(key, expectedExisting) {
+      await removeVerified(privileged.storage.from(storageBucket), key, expectedExisting);
+    }
   };
 }
-module.exports = { createBackend, storageBucket, mapDatabaseError };
+module.exports = { createBackend, storageBucket, mapDatabaseError, removeVerified };
