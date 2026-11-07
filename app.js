@@ -261,13 +261,20 @@
     o.removedRooms = Array.isArray(s.removedRooms) ? s.removedRooms.slice() : [];
     // favourites, shown at the top of Furniture and lights: 'p:<piece id>' or 'l:<generic item name>'
     o.favorites = (Array.isArray(s.favorites) ? s.favorites : []).filter((k) => typeof k === 'string');
-    if (s.bookshelfDraft && s.bookshelfDraft.design && s.bookshelfDraft.target) {
-      const d = s.bookshelfDraft, t = d.target;
-      o.bookshelfDraft = { name: String(d.name || 'Custom bookshelf').slice(0, 100), color: hex(d.color, '#A46B42'),
+    function normBookshelfDraft(d) {
+      if (!d || !d.design || !d.target) return null;
+      const t = d.target;
+      return { name: String(d.name || 'Custom bookshelf').slice(0, 100), color: hex(d.color, '#A46B42'),
         design: Bookshelf.normalize(d.design), pieceId: d.pieceId ? String(d.pieceId) : null,
         itemId: d.itemId ? String(d.itemId) : null, itemRoomId: d.itemRoomId ? String(d.itemRoomId) : null,
+        tab: d.tab === 'saetter' ? 'saetter' : 'custom',
         target: { roomId: String(t.roomId || ''), wall: ['n', 'e', 's', 'w'].includes(t.wall) ? t.wall : 'n',
           offset: num(t.offset, 0, 3000, 20), gap: num(t.gap, 0, 3000, 2), elev: num(t.elev, 0, 800, 0) } };
+    }
+    if (s.bookshelfDraft) {
+      o.bookshelfDraft = normBookshelfDraft(s.bookshelfDraft);
+      const other = normBookshelfDraft(s.bookshelfDraft.alternate);
+      if (o.bookshelfDraft && other && other.tab !== o.bookshelfDraft.tab) o.bookshelfDraft.alternate = other;
     }
     // your paint palette: [{ id, name, hex }]
     o.paints = (Array.isArray(s.paints) ? s.paints : []).map((p) => ({ id: p.id || 'c' + uid(), name: String(p.name || p.hex || ''), hex: hex(p.hex, '') })).filter((p) => p.hex);

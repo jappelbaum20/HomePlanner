@@ -6,12 +6,25 @@
   const number = (v, fallback) => Number.isFinite(Number(v)) ? round(Number(v)) : fallback;
   function normalize(raw) {
     const s = raw && typeof raw === 'object' ? raw : {};
-    return { version: 1, width: number(s.width, 240), height: number(s.height, 200),
+    const result = { version: 1, width: number(s.width, 240), height: number(s.height, 200),
       depth: number(s.depth, 30), thickness: number(s.thickness, 2.4),
       levels: (Array.isArray(s.levels) ? s.levels : []).filter(l => l && typeof l === 'object').slice(0, 25).map(l => ({
         y: number(l.y, 0), left: number(l.left, 0), right: number(l.right, 240),
         dividers: (Array.isArray(l.dividers) ? l.dividers : []).slice(0, 30).map(x => number(x, 0))
       })) };
+    // Older designs remain unchanged. The optional template records the extra
+    // modeled parts wherever a shelf design is saved, placed, or exported.
+    if (s.template === 'saetter3') Object.assign(result, { template: 'saetter3',
+      separatorHeight: number(s.separatorHeight, 3), backThickness: number(s.backThickness, .5) });
+    return result;
+  }
+  function saetter3() {
+    const width = 45.5, height = 40.6, thickness = 1.1;
+    const dividers = [.55, 11.65, 22.75, 33.85, 44.95];
+    return normalize({ template: 'saetter3', width, height, depth: 10.5, thickness,
+      separatorHeight: 3, backThickness: .5,
+      levels: Array.from({ length: 4 }, (_, i) => ({ y: round(i * (height - thickness) / 3),
+        left: 0, right: width, dividers: i < 3 ? [...dividers] : [] })) });
   }
   function preset(kind = 'staggered', width = 240, height = 200, depth = 30, thickness = 2.4, rows = 5) {
     const levels = [];
@@ -33,14 +46,23 @@
   }
   function boards(s) {
     const t = s.thickness, out = [];
+    const backed = s.template === 'saetter3', back = backed ? s.backThickness : 0;
+    const boardDepth = round(s.depth - back);
+    if (backed) out.push({ id: 'B1', kind: 'Back', x: 0, y: 0, w: s.width, h: s.height,
+      length: s.height, depth: s.width, thickness: back, renderDepth: back, z: round(-s.depth / 2 + back / 2) });
     s.levels.forEach((l, i) => {
       out.push({ id: `S${i + 1}`, kind: 'Shelf', x: l.left, y: l.y, w: round(l.right - l.left), h: t,
-        length: round(l.right - l.left), depth: s.depth, thickness: t });
+        length: round(l.right - l.left), depth: boardDepth, thickness: t, ...(backed ? { z: back / 2 } : {}) });
       const next = s.levels[i + 1];
       if (next) l.dividers.forEach((x, j) => {
         const h = round(next.y - l.y - t);
-        out.push({ id: `D${i + 1}.${j + 1}`, kind: 'Divider', x: round(x - t / 2), y: round(l.y + t), w: t, h,
-          length: h, depth: s.depth, thickness: t });
+        const a = Math.max(l.left, next.left), b = Math.min(l.right, next.right);
+        const side = Math.abs(x - t / 2 - a) < .002 || Math.abs(x + t / 2 - b) < .002;
+        const short = backed && !side, partHeight = short ? s.separatorHeight : h;
+        const part = { id: `D${i + 1}.${j + 1}`, kind: short ? 'Separator' : 'Divider', x: round(x - t / 2), y: round(l.y + t), w: t, h: partHeight,
+          length: partHeight, depth: boardDepth, thickness: t, ...(backed ? { z: back / 2 } : {}) };
+        out.push(part);
+        if (short) out.push({ ...part, id: part.id + 'T', y: round(next.y - partHeight) });
       });
     });
     return out;
@@ -50,6 +72,10 @@
     if (!(s.width >= 20 && s.width <= 1000 && s.height >= 20 && s.height <= 800 && s.depth >= 10 && s.depth <= 100 && t >= .9 && t <= 6))
       errors.push('Use width 20–1000 cm, height 20–800 cm, depth 10–100 cm and board thickness 0.9–6 cm.');
     if (s.levels.length < 2) errors.push('Add at least a bottom and a top shelf.');
+    if (s.template === 'saetter3') {
+      if (!(s.backThickness > 0 && s.backThickness < s.depth)) errors.push('Back thickness must be positive and less than the overall depth.');
+      if (!(s.separatorHeight > 0)) errors.push('Separator height must be positive.');
+    }
     if (s.levels.length && (Math.abs(s.levels[0].y) > .001 || Math.abs(s.levels.at(-1).y + t - s.height) > .001))
       errors.push('Bottom shelf must start at 0; top shelf underside must be height minus board thickness.');
     s.levels.forEach((l, i) => {
@@ -58,6 +84,8 @@
         errors.push(`${label}: endpoints and height must stay inside the overall dimensions.`);
       if (!next) return;
       if (next.y - l.y <= t) errors.push(`${label}: leave a positive opening below the next shelf.`);
+      if (s.template === 'saetter3' && s.separatorHeight * 2 > next.y - l.y - t + .001)
+        errors.push(`Bay ${i + 1}: the upper and lower separators must not overlap.`);
       const a = Math.max(l.left, next.left), b = Math.min(l.right, next.right);
       const xs = [...l.dividers].sort((x, y) => x - y);
       if (xs.some(x => x - t / 2 < a - .001 || x + t / 2 > b + .001))
@@ -114,7 +142,7 @@
     });
     return [...new Set(errors)];
   }
-  const api = { normalize, preset, boards, validate, resize, dividerPosition, placement, fit, round };
+  const api = { normalize, preset, saetter3, boards, validate, resize, dividerPosition, placement, fit, round };
   root.Bookshelf = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
