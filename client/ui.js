@@ -48,8 +48,9 @@ window.HomePlannerCloudUI = bridge => {
         message('Uploading photos…');
         const prepared = await bridge.preparePhotos(body, result, stamp);
         const saved = await cloud.save(prepared.body);
-        bridge.acceptCloudSave(prepared, stamp); bridge.markSaved();
-        message(`Saved to cloud · revision ${saved.revision}`);
+        const unchanged = stamp === bridge.editStamp();
+        if (unchanged) { bridge.acceptCloudSave(prepared, stamp); bridge.markSaved(); }
+        message(unchanged ? `Saved to cloud · revision ${saved.revision}` : `Saved revision ${saved.revision}; newer edits remain unsynced.`);
       } else {
         bridge.openNew(kind, body.payload); bridge.markSaved(); message(`Saved to cloud · revision ${result.revision}`);
       }
