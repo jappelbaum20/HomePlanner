@@ -13,6 +13,7 @@ async page => {
     window.HomePlannerCloud = {
       init() { setTimeout(() => listener(snapshot()), 0); return true; }, subscribe(fn) { listener = fn; }, snapshot,
       isCurrent(s) { return !!userId && s.generation === generation && s.userId === userId; },
+      async verificationStamp(original) { if (!this.isCurrent(original)) throw Error('Account changed; verification was cancelled.'); return snapshot(); },
       async signIn() {}, async signOut() { generation++; userId = null; listener(snapshot()); },
       async request(path, options = {}) {
         if (path === '/api/admin/challenge') return { clientId:'fixture.apps.googleusercontent.com', nonce:'fixture-nonce', expiresIn:300 };
