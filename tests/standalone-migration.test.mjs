@@ -27,6 +27,15 @@ test('additive migration retains v3 rows and upgrades a shelf with CAS', async (
     const body={...old,schemaVersion:4,payload};
     const upgraded=(await db.query('SELECT hp_app.hp_update_design($1,$2,$3,$4::jsonb) AS x',[u,created.design.id,1,JSON.stringify(body)])).rows[0].x;
     assert.equal(upgraded.design.id,created.design.id); assert.equal(Number(upgraded.revision),2); assert.deepEqual(upgraded.design.payload,payload);
+    for (const downgrade of [old, {...old,schemaVersion:4}]) {
+      await db.exec('SAVEPOINT downgrade');
+      await assert.rejects(db.query('SELECT hp_app.hp_update_design($1,$2,$3,$4::jsonb)',[u,created.design.id,2,JSON.stringify(downgrade)]),/HP_CONFLICT/);
+      await db.exec('ROLLBACK TO SAVEPOINT downgrade');
+      const retained=(await db.query('SELECT revision,schema_version,payload FROM hp_app.designs WHERE id=$1',[created.design.id])).rows[0];
+      assert.equal(Number(retained.revision),2);
+      assert.equal(retained.schema_version,4);
+      assert.deepEqual(retained.payload,payload);
+    }
     await db.exec('SAVEPOINT invalid_doc');
     const invalid={...body,payload:{...payload,wall:{...payload.wall,widthCm:9}}};
     await assert.rejects(db.query('SELECT hp_app.hp_update_design($1,$2,$3,$4::jsonb)',[u,created.design.id,2,JSON.stringify(invalid)]),/designs_shelf_v4_envelope_check/);

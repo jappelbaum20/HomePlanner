@@ -31,4 +31,18 @@ END $$;
 GRANT EXECUTE ON FUNCTION hp_private.shelf_payload_v4(jsonb) TO hp_app_runtime;
 ALTER TABLE hp_app.designs ADD CONSTRAINT designs_shelf_v4_envelope_check
   CHECK (schema_version <> 4 OR kind <> 'shelf' OR hp_private.shelf_payload_v4(payload));
+-- Reject legacy replacement atomically, including callers with a current revision.
+CREATE FUNCTION hp_private.guard_design_document_version() RETURNS trigger
+LANGUAGE plpgsql SET search_path = '' AS $$
+BEGIN
+  IF NEW.schema_version < OLD.schema_version OR
+     (OLD.kind = 'shelf' AND OLD.payload->'version' = '2'::jsonb AND
+      (NEW.kind IS DISTINCT FROM 'shelf' OR NEW.payload->'version' IS DISTINCT FROM '2'::jsonb)) THEN
+    RAISE EXCEPTION 'HP_CONFLICT';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER design_document_version_monotonic
+BEFORE UPDATE ON hp_app.designs
+FOR EACH ROW EXECUTE FUNCTION hp_private.guard_design_document_version();
 RESET ROLE;
