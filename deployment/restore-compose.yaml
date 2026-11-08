@@ -1,0 +1,69 @@
+# Only for a newly named, isolated restore-drill project. No public ports.
+services:
+  db:
+    image: postgres:17.11-bookworm@sha256:665dc7b37ac52a17e298511414c21d23ffa4e6a6ef6225b3e5d59c7afb35e994
+    environment:
+      POSTGRES_USER: homeplanner_bootstrap
+      POSTGRES_DB: homeplanner
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
+    volumes: [restore_db:/var/lib/postgresql/data]
+    networks: [isolated]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U homeplanner_bootstrap -d homeplanner']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 150
+    security_opt: [no-new-privileges:true]
+    logging: {driver: json-file, options: {max-size: 10m, max-file: '3'}}
+  maintenance:
+    image: homeplanner-web:local
+    entrypoint: [/bin/sh, /app/deployment/operations-lock.sh]
+    volumes:
+      - type: bind
+        source: ${HOMEPLANNER_OPERATIONS_LOCK:?Set shared operations lock file}
+        target: /run/homeplanner-operations.lock
+        read_only: true
+        bind: {create_host_path: false}
+    environment:
+      HOMEPLANNER_MIGRATION_DATABASE_URL_FILE: /run/secrets/migration_url
+      HOMEPLANNER_AUTH_DB_PASSWORD_FILE: /run/secrets/auth_password
+      HOMEPLANNER_APP_DB_PASSWORD_FILE: /run/secrets/app_password
+      HOMEPLANNER_PHOTO_MAINTENANCE_DB_PASSWORD_FILE: /run/secrets/photo_maintenance_password
+    secrets: [migration_url, auth_password, app_password, photo_maintenance_password]
+    networks: [isolated]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
+  photo-verify:
+    image: homeplanner-web:local
+    user: "1000:1000"
+    entrypoint: [node, /app/deployment/verify-restored-access.cjs]
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - type: bind
+        source: ${HOMEPLANNER_RESTORE_PHOTO_DIR:?Set isolated photo directory}
+        target: /photos
+        read_only: true
+        bind: {create_host_path: false}
+    mem_limit: 128m
+    pids_limit: 32
+networks:
+  isolated: {internal: true}
+volumes:
+  restore_db: {}
+secrets:
+  db_password: {file: '${HOMEPLANNER_RESTORE_DB_PASSWORD_FILE:?Set isolated password file}'}
+  migration_url: {file: '${HOMEPLANNER_RESTORE_MIGRATION_URL_FILE:?Set isolated migration URL file}'}
+  auth_password: {file: '${HOMEPLANNER_RESTORE_AUTH_PASSWORD_FILE:?Set isolated auth password file}'}
+  app_password: {file: '${HOMEPLANNER_RESTORE_APP_PASSWORD_FILE:?Set isolated app password file}'}
+  photo_maintenance_password: {file: '${HOMEPLANNER_RESTORE_PHOTO_MAINTENANCE_PASSWORD_FILE:?Set isolated maintenance password file}'}

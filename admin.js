@@ -16,12 +16,12 @@
       clearProof('Verification expired. Prepare a new Google verification.');
       throw Error('Verification expired. Prepare a new Google verification.');
     }
-    return { 'X-Google-Id-Token': proof.token, 'X-Admin-Challenge': proof.nonce };
+    return { 'X-Admin-Grant': proof.grantId };
   }
   async function adminRequest(path, options = {}) {
     try { return await cloud.request(path, { ...options, headers: { ...headers(), ...options.headers } }); }
     catch (error) {
-      if (error.status === 401 || error.status === 403) clearProof('Verification failed or expired. Check the Google account and recent sign-in, then try again.');
+      if (error.status === 401 || error.status === 403) clearProof('Verification failed or expired. Check the Google account, then try again.');
       throw error;
     }
   }
@@ -66,19 +66,26 @@
       if (!challenge || typeof challenge.clientId !== 'string' || !challenge.clientId.endsWith('.apps.googleusercontent.com') || typeof challenge.nonce !== 'string' || !Number.isInteger(challenge.expiresIn) || challenge.expiresIn < 1 || challenge.expiresIn > 300) throw Error('Invalid verification challenge.');
       await loadGoogle(); if (!cloud.isCurrent(stamp) || attempt !== sequence) return;
       const expires = Date.now() + Math.max(0, challenge.expiresIn * 1000 - 10000);
-      window.google.accounts.id.initialize({ client_id: challenge.clientId, nonce: challenge.nonce, essential_claims: 'auth_time', auto_select: false, ux_mode: 'popup',
+      let submitted = false;
+      window.google.accounts.id.initialize({ client_id: challenge.clientId, nonce: challenge.nonce, auto_select: false, ux_mode: 'popup',
         callback: async response => {
-          if (attempt !== sequence || !cloud.isCurrent(stamp) || Date.now() >= expires || typeof response?.credential !== 'string') return;
-          proof = { token: response.credential, nonce: challenge.nonce, expires, stamp };
-          clearTimeout(timer);
-          timer = setTimeout(() => clearProof('Verification expired. Prepare a new Google verification.'), Math.max(0, expires - Date.now()));
+          if (submitted || attempt !== sequence || !cloud.isCurrent(stamp) || Date.now() >= expires || typeof response?.credential !== 'string') return;
+          submitted = true;
           try {
-            await adminRequest('/api/admin/bootstrap', { method: 'POST', body: {} });
+            const grant = await cloud.request('/api/admin/bootstrap', { method: 'POST', body: {}, expected: stamp,
+              headers: { 'X-Google-Id-Token': response.credential, 'X-Admin-Challenge': challenge.nonce } });
+            if (attempt !== sequence || !cloud.isCurrent(stamp)) return;
+            if (grant?.isAdmin !== true || typeof grant.grantId !== 'string' || !grant.grantId.length || grant.grantId.length > 512 || !Number.isInteger(grant.expiresIn) || grant.expiresIn < 1 || grant.expiresIn > 600) throw Error('Invalid verification grant.');
+            const grantExpires = Date.now() + Math.max(0, grant.expiresIn * 1000 - 10000);
+            proof = { grantId: grant.grantId, expires: grantExpires, stamp };
+            clearTimeout(timer);
+            timer = setTimeout(() => clearProof('Verification expired. Prepare a new Google verification.'), Math.max(0, grantExpires - Date.now()));
             const me = await adminRequest('/api/me');
             if (!cloud.isCurrent(stamp) || !proof || me.userId !== stamp.userId || me.isAdmin !== true) throw Error('Admin access is unavailable for this account.');
             await load(stamp);
           } catch (error) {
-            if (error.status !== 401 && error.status !== 403) { clearProof(); fail(error); }
+            if (error.status === 401 || error.status === 403) clearProof('Verification failed or expired. Check the Google account, then try again.');
+            else { clearProof(); fail(error); }
           }
         }
       });
@@ -90,6 +97,7 @@
   }
   cloud.subscribe(next => {
     if (next.generation !== generation) { generation = next.generation; clearProof(); form.reset(); budgetForm.reset(); }
+    else if (proof && !cloud.isCurrent(proof.stamp)) clearProof();
     signIn.hidden = !!next.me; signOut.hidden = !next.me; verification.hidden = !next.me;
     if (!next.me) status.textContent = next.error || 'Sign in to request admin access.';
     else if (!proof) status.textContent = 'Prepare Google verification to access settings.';
@@ -111,7 +119,7 @@
     event.preventDefault(); const stamp = cloud.snapshot(); if (!proof || !Number.isSafeInteger(revision)) return;
     const match = /^(\d{1,5})(?:\.(\d{1,6}))?$/.exec(budgetForm.elements.budget.value.trim());
     const amount = match && Number(match[1]) * 1000000 + Number((match[2] || '').padEnd(6, '0'));
-    if (!Number.isSafeInteger(amount) || amount < 1 || amount > 10000000000) return fail(Error('Enter a cap from $0.000001 to $10,000.'));
+    if (!Number.isSafeInteger(amount) || amount < 1 || amount > 10000000000) return fail(Error('Enter a cap from $0.000001 to $10000.'));
     try { show(await adminRequest('/api/admin/budget', { method: 'PUT', headers: { 'If-Match': `"${revision}"` }, body: { globalBudgetMicros: amount } }), stamp); }
     catch (error) { if (error.status === 409) { status.textContent = 'Settings changed elsewhere. Reloading current settings.'; await load(stamp).catch(fail); } else if (error.status !== 401 && error.status !== 403) fail(error); }
   });

@@ -1,30 +1,28 @@
-/* Offline fake API/SDK regression. This does not test real Google, server authorization, or storage. */
+/* Offline fake cookie API regression. This does not test real Google, server authorization, or storage. */
 async page => {
   const checks = [], writes = [];
   const check = (condition, label) => checks.push({ label, pass: !!condition });
   const origin = 'http://127.0.0.1:8765';
-  await page.addInitScript(() => {
-    window.HOMEPLANNER_CONFIG = { url: 'https://fixture.invalid', publishableKey: 'fixture-public' };
-    window.HomePlannerSupabase = { createClient(_url, _key, options = {}) { return { storage: { from() { return { async upload(path, blob, uploadOptions) {
-      const response = await options.global.fetch('https://fixture.invalid/storage/' + encodeURIComponent(path), { method:'POST', body:blob, headers:{'content-type':uploadOptions.contentType} });
-      return { error: response.ok ? null : new Error('fixture upload failure') };
-    } }; } }, auth: {
-      onAuthStateChange(callback) { window.__authEmit = session => callback('SIGNED_IN', session); setTimeout(() => window.__authEmit({ user: { id: 'user-a' }, access_token: 'token-a' }), 0); },
-      async signInWithOAuth() { return {}; }, async signOut() { return {}; }, async getSession() { return {data:{session:null}}; }
-    } }; } };
-  });
+  const userId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab', sessionId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', csrf='A'.repeat(43), protocolErrors=[];
+  await page.context().addCookies([{name:'fixture_session',value:'a',url:origin,httpOnly:true,sameSite:'Lax'}]);
   let stored = null, cleanedPhoto = null, cleanedMeta = null, corruptManifest = false, conflict = false, reservationCount = 0, completeCount = 0, uploadCount = 0, uploadToken = '', failComplete = true;
   const photoId = '22222222-2222-4222-8222-222222222222';
   const secondId = '33333333-3333-4333-8333-333333333333';
   const copyIds=['55555555-5555-4555-8555-555555555555','66666666-6666-4666-8666-666666666666'], fixtures=new Map();
-  await page.route('https://fixture.invalid/storage/**', route => { uploadCount++; uploadToken = route.request().headers().authorization; const path=decodeURIComponent(route.request().url()), id=[secondId,...copyIds].find(x=>path.includes(x)); if(id){const bytes=route.request().postDataBuffer(),mime=route.request().headers()['content-type'];fixtures.set(id,{bytes,meta:{photoId:id,mime,bytes:bytes.length,checksum:require('crypto').createHash('sha256').update(bytes).digest('hex')}});} return route.fulfill({status:200,body:'{}'}); });
+
   await page.route('**/api/**', async route => {
     const request = route.request(), url = new URL(request.url()), method = request.method();
     const json = (status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
-    if (url.pathname === '/api/me') return json(200, { userId:'user-a', displayName:'Test user', isAdmin:false, capabilities:{cloud:true,ai:false} });
+    const headers=await request.allHeaders();
+    if (!headers.cookie?.includes('fixture_session=a') || headers.authorization) protocolErrors.push('cookie/authorization');
+    if (!['GET','HEAD'].includes(method) && (headers.origin!==origin || headers['x-homeplanner-session']!==sessionId || headers['x-homeplanner-csrf']!==csrf)) protocolErrors.push('mutation headers');
+    if (url.pathname === '/api/session') return json(200,{userId,sessionId,displayName:'Test user',csrfToken:csrf});
+    if (url.pathname.endsWith('/raw') && method==='PUT') { uploadCount++; uploadToken = route.request().headers()['x-homeplanner-session']; const path=decodeURIComponent(route.request().url()), id=[secondId,...copyIds].find(x=>path.includes(x)); if(id){const bytes=route.request().postDataBuffer(),mime=route.request().headers()['content-type'];fixtures.set(id,{bytes,meta:{photoId:id,mime,bytes:bytes.length,checksum:require('crypto').createHash('sha256').update(bytes).digest('hex')}});} return route.fulfill({status:200,body:'{}'}); }
+
+    if (url.pathname === '/api/me') return json(200, { userId, displayName:'Test user', isAdmin:false, capabilities:{cloud:true,ai:false} });
     if (url.pathname === '/api/designs' && method === 'GET') return json(200, {items:stored ? [{id:stored.id,kind:stored.kind,title:stored.title,revision:stored.revision}] : [],nextCursor:null});
     if (url.pathname === '/api/designs' && method === 'POST') { const body=request.postDataJSON();writes.push({method,body,key:request.headers()['idempotency-key']});const id=writes.filter(w=>w.method==='POST').length>2?'44444444-4444-4444-8444-444444444444':'11111111-1111-4111-8111-111111111111';stored={...body,id,revision:1};return json(201,{design:stored,revision:1}); }
-    if (url.pathname.endsWith('/photos') && method === 'POST') { reservationCount++; const body=request.postDataJSON(), id=[photoId,secondId,...copyIds][reservationCount-1]; return json(201,{photoId:id,uploadCapability:{bucket:'design-photos',path:`user-a/${stored.id}/${id}/raw`,contentType:body.mime,upsert:false},expiresAt:'2099-01-01T00:00:00Z'}); }
+    if (url.pathname.endsWith('/photos') && method === 'POST') { reservationCount++; const body=request.postDataJSON(), id=[photoId,secondId,...copyIds][reservationCount-1]; return json(201,{photoId:id,uploadUrl:`/api/designs/${stored.id}/photos/${id}/raw`,contentType:body.mime,maxBytes:10485760,expiresAt:'2099-01-01T00:00:00Z'}); }
     if (url.pathname.endsWith('/complete') && method === 'POST') { completeCount++; if(failComplete){failComplete=false;return json(503,{error:{message:'Fixture completion failure'}});} const id=[secondId,...copyIds].find(x=>url.pathname.includes(x)); return json(200,id?fixtures.get(id).meta:cleanedMeta); }
     if (url.pathname.includes('/photos/') && method === 'GET') {const id=[secondId,...copyIds].find(x=>url.pathname.includes(x)), fixture=id?fixtures.get(id):{bytes:cleanedPhoto,meta:cleanedMeta};return route.fulfill({status:200,contentType:fixture.meta.mime,body:fixture.bytes});}
     if (url.pathname.startsWith('/api/designs/') && method === 'GET') return json(200,{design:{...stored,photoManifest:stored.photoIds.map(id=>{const meta=fixtures.get(id)?.meta||cleanedMeta;return {...meta,checksum:corruptManifest?'0'.repeat(64):meta.checksum};})}});
@@ -32,7 +30,7 @@ async page => {
     if (url.pathname.startsWith('/api/designs/') && method === 'PUT') { writes.push({method,body:request.postDataJSON(),match:request.headers()['if-match']}); if (conflict) return json(409,{error:{code:'conflict',message:'Changed',requestId:'11111111-1111-4111-8111-111111111111'}}); stored={...stored,...request.postDataJSON(),revision:stored.revision+1}; return json(200,{design:stored,revision:stored.revision}); }
     return json(404,{});
   });
-  await page.goto(origin + '/public/'); await page.evaluate(() => window.HomePlannerContractsReady);
+  await page.goto(origin + '/'); await page.evaluate(() => window.HomePlannerContractsReady);
   await page.getByRole('button',{name:'Private designs'}).click(); await page.getByRole('button',{name:'New home'}).waitFor();
   page.once('dialog', d => d.accept('Test home')); await page.getByRole('button',{name:'New home'}).click();
   await page.getByText('Saved to cloud · revision 1').waitFor();
@@ -66,7 +64,7 @@ async page => {
   check(stored.photoIds.length===0 && stored.payload.rooms[0].photos.length===0 && writes.filter(w=>w.method==='PUT').length===2,'failed completion leaves only a photo-free cloud draft');
   await page.getByRole('button',{name:'Save to cloud'}).click(); await page.getByText('Saved to cloud · revision 2').waitFor();
   const finalWrite=writes.filter(w=>w.method==='PUT').at(-1);
-  check(reservationCount===1 && uploadCount===1 && completeCount===2 && uploadToken==='Bearer token-a','retry reuses immutable upload and captured session');
+  check(reservationCount===1 && uploadCount===1 && completeCount===2 && uploadToken===sessionId,'retry reuses immutable upload and captured session');
   check(finalWrite.match==='"1"' && finalWrite.body.photoIds[0]===photoId && finalWrite.body.payload.rooms[0].photos[0]===photoId && finalWrite.body.payload.rooms[0].photoLabels[photoId]==='Fixture','CAS commits remapped references only after ready');
   await page.reload();await page.getByRole('button',{name:'Private designs'}).click();await page.getByText('Photo cloud copy (home)').waitFor();await page.getByRole('button',{name:'Open',exact:true}).click();
   await page.getByRole('tab',{name:/Photos and notes/}).click();await page.waitForFunction(()=>[...document.querySelectorAll('img[data-photo]')].some(i=>i.naturalWidth===3));
@@ -101,5 +99,6 @@ async page => {
   await page.getByRole('spinbutton',{name:'Width, cm',exact:true}).fill('211');await page.waitForTimeout(450);await page.reload();
   await page.getByRole('button',{name:'Save and versions'}).click();await page.locator('#localList li').filter({hasText:'Local shelf fixture'}).getByRole('button',{name:'Open',exact:true}).click();
   check(await page.getByRole('spinbutton',{name:'Width, cm',exact:true}).inputValue()==='211','local shelf envelope can be reopened after reload');
+  check(protocolErrors.length===0,'requests use same-origin cookies and captured session/CSRF headers: '+protocolErrors.join(','));
   if (checks.some(x=>!x.pass)) throw Error(JSON.stringify(checks)); return { checks:checks.length, failures:[] };
 }

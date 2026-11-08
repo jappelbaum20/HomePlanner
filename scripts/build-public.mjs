@@ -3,15 +3,17 @@ import path from 'node:path';
 import Ajv from 'ajv';
 import standaloneCode from 'ajv/dist/standalone/index.js';
 import { build } from 'esbuild';
-import { auditPublic, enumerate, PUBLIC_FILES } from './audit-public.mjs';
+import { auditPublic, enumerate, PUBLIC_FILES, VPS_PUBLIC_FILES } from './audit-public.mjs';
 
 const root = process.cwd();
-const dist = path.join(root, 'dist');
+const vps = process.argv.includes('--vps');
+const dist = path.join(root, vps ? 'dist-vps' : 'dist');
 const basePath = process.env.HOMEPLANNER_BASE_PATH || '/';
 if (!/^\/(?:[a-zA-Z0-9_-]+\/)*$/.test(basePath)) throw new Error('Invalid application base path');
+if (vps && basePath !== '/') throw new Error('The VPS contract requires the root base path.');
 await mkdir(dist, { recursive: true });
 const current = await enumerate(dist);
-const unexpected = current.filter(file => !PUBLIC_FILES.includes(file));
+const unexpected = current.filter(file => !(vps ? VPS_PUBLIC_FILES : PUBLIC_FILES).includes(file));
 if (unexpected.length) throw new Error('Refusing to build over unexpected output; inspect the dist directory.');
 const sources = ['styles.css', 'app.js', 'models3d.js', 'bookshelf.js', 'bookshelf-builder.js', 'starter-data.js', 'shared/contracts.js', 'shared/canonical.js',
   'admin.html', 'admin.js', 'client/contracts-loader.js', 'client/cloud.js', 'client/ui.js'];
@@ -38,7 +40,7 @@ for (const [from, to] of replacements) {
 html = html.replace(/\s*<link\s+[^>]*href=["']https:\/\/fonts\.(?:googleapis|gstatic)\.com[^"']*["'][^>]*>/gi, '');
 const sdkMarker = '<script src="client/contracts-loader.js"></script>';
 if (html.split(sdkMarker).length !== 2 || html.includes('vendor/supabase.js')) throw new Error('Unexpected SDK insertion point.');
-html = html.replace(sdkMarker, '<script src="vendor/supabase.js"></script>\n  ' + sdkMarker);
+html = html.replace(sdkMarker, `<script src="vendor/${vps ? 'better-auth' : 'supabase'}.js"></script>\n  ` + sdkMarker);
 html = html.replace('<base href="/">', '<base href="' + basePath + '">');
 await writeFile(path.join(dist, 'index.html'), html);
 const adminHtml = await readFile(path.join(dist, 'admin.html'), 'utf8');
@@ -50,22 +52,22 @@ for (const [source, target] of [
   ['node_modules/three/examples/js/environments/RoomEnvironment.js', 'RoomEnvironment.js'],
   ['node_modules/three/examples/js/geometries/RoundedBoxGeometry.js', 'RoundedBoxGeometry.js']
 ]) await copyFile(path.join(root, source), path.join(dist, 'vendor', target));
-const sdk = await build({ stdin: { contents: "export { createClient } from '@supabase/supabase-js';", resolveDir: root, sourcefile: 'sdk-entry.js' },
-  bundle: true, write: false, platform: 'browser', format: 'iife', globalName: 'HomePlannerSupabase', target: 'es2020', legalComments: 'none' });
-await writeFile(path.join(dist, 'vendor/supabase.js'), sdk.outputFiles[0].contents);
-const url = process.env.HOMEPLANNER_PUBLIC_SUPABASE_URL || '', key = process.env.HOMEPLANNER_PUBLIC_SUPABASE_KEY || '';
+const sdk = await build({ stdin: { contents: vps ? "export { createAuthClient } from 'better-auth/client';" : "export { createClient } from '@supabase/supabase-js';", resolveDir: root, sourcefile: 'sdk-entry.js' },
+  bundle: true, write: false, platform: 'browser', format: 'iife', globalName: vps ? 'HomePlannerAuth' : 'HomePlannerSupabase', target: 'es2020', legalComments: 'none' });
+await writeFile(path.join(dist, vps ? 'vendor/better-auth.js' : 'vendor/supabase.js'), sdk.outputFiles[0].contents);
+const url = vps ? '' : process.env.HOMEPLANNER_PUBLIC_SUPABASE_URL || '', key = vps ? '' : process.env.HOMEPLANNER_PUBLIC_SUPABASE_KEY || '';
 if ((url || key) && (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(url) || !/^sb_publishable_[A-Za-z0-9_-]+$/.test(key))) throw new Error('Public Supabase configuration is invalid.');
-await writeFile(path.join(dist, 'client/config.js'), `window.HOMEPLANNER_CONFIG = ${JSON.stringify({ url, publishableKey: key })};\n`);
+await writeFile(path.join(dist, 'client/config.js'), `window.HOMEPLANNER_CONFIG = ${JSON.stringify(vps ? { selfHosted: true } : { url, publishableKey: key })};\n`);
 const ajv = new Ajv({ allErrors: true, strict: true, strictRequired: false, strictTypes: false, strictNumbers: true, code: { source: true } });
-for (const name of ['shelf-v1', 'home-v2', 'api-v3']) ajv.addSchema(JSON.parse(await readFile(path.join(root, `shared/schema/${name}.json`), 'utf8')));
+for (const name of ['shelf-v1', 'home-v2', 'api-v3', 'vps-v1']) ajv.addSchema(JSON.parse(await readFile(path.join(root, `shared/schema/${name}.json`), 'utf8')));
 const base = 'https://schemas.homeplanner.invalid/';
 const names = { shelf: 'shelf-v1', home: 'home-v2', writeDesign: 'api-v3#/definitions/writeDesign',
   local: 'api-v3#/definitions/local', proposalRequest: 'api-v3#/definitions/proposalRequest',
   proposal: 'api-v3#/definitions/proposal', photoRequest: 'api-v3#/definitions/photoRequest',
-  modelConfig: 'api-v3#/definitions/modelConfig', error: 'api-v3#/definitions/error' };
+  modelConfig: 'api-v3#/definitions/modelConfig', error: 'api-v3#/definitions/error', session: 'vps-v1#/definitions/session', uploadReservation: 'vps-v1#/definitions/uploadReservation' };
 const generated = standaloneCode(ajv, Object.fromEntries(Object.entries(names).map(([name, schema]) => [name, base + schema])));
 const bundled = await build({ stdin: { contents: generated, resolveDir: root, sourcefile: 'validators.generated.js' }, bundle: true,
   write: false, platform: 'browser', format: 'iife', globalName: 'HomePlannerSchemaValidators', target: 'es2020', legalComments: 'none' });
 await writeFile(path.join(dist, 'shared/validators.js'), bundled.outputFiles[0].contents);
-const files = await auditPublic(dist);
+const files = await auditPublic(dist, vps ? 'vps' : 'legacy');
 console.log(`Built and audited ${files.length} public files.`);

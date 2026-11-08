@@ -8,7 +8,7 @@ function createHandler(deps) {
     method(req, ['GET']);
     const ctx = await authenticate(req, deps);
     let isAdmin = false, ai = false;
-    if (req.headers['x-google-id-token'] || req.headers['x-admin-challenge']) {
+    if (req.headers['x-admin-grant']) {
       await requireAdmin(req, ctx, deps); isAdmin = true;
     }
     try { ai = Boolean(selected(await ctx.backend.rpc('hp_model_config_get', {}), deps)); } catch { ai = false; }

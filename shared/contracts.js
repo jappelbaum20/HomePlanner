@@ -3,14 +3,15 @@
   if (typeof module === 'object' && module.exports) {
     const Ajv = require('ajv');
     const ajv = new Ajv({ allErrors: true, strict: true, strictRequired: false, strictTypes: false, strictNumbers: true });
-    for (const schema of [require('./schema/shelf-v1.json'), require('./schema/home-v2.json'), require('./schema/api-v3.json')]) ajv.addSchema(schema);
+    for (const schema of [require('./schema/shelf-v1.json'), require('./schema/home-v2.json'), require('./schema/api-v3.json'), require('./schema/vps-v1.json')]) ajv.addSchema(schema);
     const base = 'https://schemas.homeplanner.invalid/';
     const validators = {};
     for (const [name, schema] of Object.entries({
       shelf: 'shelf-v1', home: 'home-v2', writeDesign: 'api-v3#/definitions/writeDesign',
       local: 'api-v3#/definitions/local', proposalRequest: 'api-v3#/definitions/proposalRequest',
       proposal: 'api-v3#/definitions/proposal', photoRequest: 'api-v3#/definitions/photoRequest',
-      modelConfig: 'api-v3#/definitions/modelConfig', error: 'api-v3#/definitions/error'
+      modelConfig: 'api-v3#/definitions/modelConfig', error: 'api-v3#/definitions/error',
+      session: 'vps-v1#/definitions/session', uploadReservation: 'vps-v1#/definitions/uploadReservation'
     })) validators[name] = ajv.getSchema(base + schema);
     module.exports = make(validators, require('../bookshelf.js'));
   } else {
@@ -80,6 +81,7 @@
       if (ids.some(id => !referenced.has(id))) errors.push('Unreferenced photo IDs are not allowed.');
     }
     if (['proposalRequest', 'proposal'].includes(name)) errors.push(...shelfErrors(value.shelf));
+    if (name === 'uploadReservation' && !value.uploadUrl.endsWith('/photos/' + value.photoId + '/raw')) errors.push('Upload URL does not match the reserved photo.');
     return { valid: errors.length === 0, errors: [...new Set(errors)] };
   }
   return Object.freeze({ SCHEMA_VERSION: 3, LIMITS, validate });

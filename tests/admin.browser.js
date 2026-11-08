@@ -17,8 +17,9 @@ async page => {
       async request(path, options = {}) {
         if (path === '/api/admin/challenge') return { clientId:'fixture.apps.googleusercontent.com', nonce:'fixture-nonce', expiresIn:300 };
         const headers = options.headers || {}; proofCalls.push({ path, headers, body:options.body });
-        if (deny || headers['X-Google-Id-Token'] !== 'synthetic-id-token' || headers['X-Admin-Challenge'] !== 'fixture-nonce') { const error=Error('denied'); error.status=403; throw error; }
-        if (path === '/api/admin/bootstrap') return {};
+        if (deny) { const error=Error('denied'); error.status=403; throw error; }
+        if (path === '/api/admin/bootstrap') { if (headers['X-Google-Id-Token'] !== 'synthetic-id-token' || headers['X-Admin-Challenge'] !== 'fixture-nonce') throw Error('invalid bootstrap proof'); return {isAdmin:true,grantId:'synthetic-grant',expiresIn:300}; }
+        if (headers['X-Admin-Grant'] !== 'synthetic-grant' || headers['X-Google-Id-Token'] || headers['X-Admin-Challenge']) throw Error('invalid grant');
         if (path === '/api/me') return { userId, isAdmin:true };
         if (options.method === 'PUT') { if (headers['If-Match'] !== `"${revision}"`) { const e=Error('conflict'); e.status=409; throw e; } revision++; if (path.endsWith('/budget')) window.__budget=options.body.globalBudgetMicros; }
         return settings();
@@ -27,7 +28,7 @@ async page => {
     window.__switch = () => { generation++; userId='other-user'; listener(snapshot()); };
     window.__deny = value => { deny=value; }; window.__proofCalls = proofCalls;
     window.google = { accounts: { id: {
-      initialize(options) { window.__gisOptions = { nonce:options.nonce, essential_claims:options.essential_claims, auto_select:options.auto_select }; callback=options.callback; },
+      initialize(options) { window.__gisOptions = { nonce:options.nonce, essential_claims:options.essential_claims, auto_select:options.auto_select }; callback=options.callback; window.__replay=()=>callback({credential:'synthetic-id-token'}); },
       renderButton(el) { const button=document.createElement('button'); button.type='button'; button.textContent='Synthetic Google'; button.onclick=() => callback({credential:'synthetic-id-token'}); el.append(button); }
     } } };
   });
@@ -38,13 +39,15 @@ async page => {
   check(await page.locator('#modelForm').isHidden(), 'ordinary signed-in session cannot see settings');
   await page.locator('#prepareVerification').click(); await page.getByRole('button',{name:'Synthetic Google'}).click();
   await page.locator('#modelForm').waitFor({state:'visible'});
-  check((await page.evaluate(() => window.__gisOptions)).essential_claims === 'auth_time', 'requested documented authentication age claim');
+  await page.evaluate(()=>window.__replay());
+  check(await page.evaluate(()=>window.__proofCalls.filter(c=>c.path==='/api/admin/bootstrap').length)===1,'a repeated provider callback cannot replay the one-use challenge');
+  check((await page.evaluate(() => window.__gisOptions)).essential_claims === undefined, 'verification does not request an unsupported authentication-age claim');
   check(await page.locator('[name=budget]').inputValue() === '25', 'approved lifetime cap is prefilled');
   check(await page.locator('[name=modelId] option').count() === 2, 'two models are selectable');
   await page.locator('#budgetForm button').click(); await page.getByText(/revision 2/).waitFor();
   check(await page.evaluate(() => window.__budget) === 25000000, 'cap submits exact microdollars');
   const calls = await page.evaluate(() => window.__proofCalls);
-  check(calls.every(c => !c.path.includes('synthetic-id-token') && c.headers['X-Google-Id-Token'] === 'synthetic-id-token'), 'proof stays in request headers');
+  check(calls.filter(c=>c.path==='/api/admin/bootstrap').length === 1 && calls.filter(c=>c.path!=='/api/admin/bootstrap').every(c=>c.headers['X-Admin-Grant']==='synthetic-grant' && !c.headers['X-Google-Id-Token'] && !c.headers['X-Admin-Challenge']), 'one-use proof is exchanged for a grant');
   await page.evaluate(() => window.__expireProof());
   check(await page.locator('#modelForm').isHidden(), 'proof expiration hides settings');
   await page.locator('#prepareVerification').click(); await page.getByRole('button',{name:'Synthetic Google'}).click();

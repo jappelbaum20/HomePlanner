@@ -94,7 +94,13 @@ window.HomePlannerCloudUI = bridge => {
     await cloud.remove(); bridge.clearWorkspace(); message('Cloud design deleted.'); await refresh();
   }
   cloud.subscribe(next => {
-    if (next.generation !== lastGeneration) { openSequence++; lastGeneration = next.generation; identity = null; bridge.clearWorkspace(); panel.replaceChildren(); }
+    if (next.generation !== lastGeneration) {
+      openSequence++; lastGeneration = next.generation;
+      // An initial session check or first sign-in must not replace a local plan.
+      // A previously signed-in workspace is cleared on every identity change.
+      if (identity) bridge.clearWorkspace();
+      identity = null; panel.replaceChildren();
+    }
     identity = next.me ? next : null; bridge.identityChanged(!!identity);
     signIn.hidden = !!identity; signOut.hidden = !identity;
     message(next.error || (identity ? `Signed in as ${identity.me.displayName || 'Google user'}.` : ready ? 'Not signed in. Local editing remains available.' : 'Cloud sign-in is not configured.'));

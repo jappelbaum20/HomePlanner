@@ -3,7 +3,7 @@
 
   // ================= Constants =================
   const STORAGE_KEY = 'houseplanner.project.v1';
-  const hostedMode = !!(window.HOMEPLANNER_CONFIG && window.HOMEPLANNER_CONFIG.url && window.HOMEPLANNER_CONFIG.publishableKey);
+  const hostedMode = !!(window.HOMEPLANNER_CONFIG?.selfHosted || window.HomePlannerAuth?.createAuthClient);
   let usePersonalSeeds = !hostedMode, cloudWorkspace = false, workspaceGeneration = 0, editGeneration = 0, savedGeneration = 0;
   let readyPhotoIds = new Set(), readyPhotoMetadata = new Map(), readyPhotoDesign = null, privateObjectUrls = new Set(), virtualShelfRoom = null, persistedCloud = null;
   const emptyHome = () => ({ version: 2, name: 'New house', catalog: [], rooms: [] });
@@ -1951,7 +1951,9 @@
   if (window.HomePlannerCloudUI) HomePlannerCloudUI({
     clearWorkspace() {
       if (!hostedMode) return;
-      if (!cloudWorkspace && saveTimer) flushSave();
+      // Account changes discard private cloud state, while an unrelated local
+      // design remains editable across sign-in and sign-out.
+      if (!cloudWorkspace) return;
       workspaceGeneration++; clearTimeout(saveTimer); saveTimer = null;
       if (bookshelfUI) bookshelfUI.reset(); bookshelfActive = false; $('.layout').hidden = false;
       $('#bookshelfBtn').setAttribute('aria-expanded', 'false'); $('#roomSwitch').disabled = false;

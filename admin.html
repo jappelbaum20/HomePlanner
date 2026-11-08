@@ -6,7 +6,7 @@
 <button class="btn" id="adminSignIn" hidden>Sign in with Google</button><button class="btn light" id="adminSignOut" hidden>Sign out</button>
 <p class="note">After signing in, return to Admin settings from the planner.</p>
 <section id="verification" hidden aria-labelledby="verifyHeading"><h2 id="verifyHeading">Verify administrator access</h2>
-  <p>Use the same Google account as your planner session. Google must have authenticated that account in this browser within the last 10 minutes. If verification fails, sign in to Google again in this browser and retry. Your app must have Google's session-age claim enabled.</p>
+  <p>Verify your identity with the same Google account as your planner session. This is recent identity verification; it does not prove when you last entered your password.</p>
   <button class="btn" id="prepareVerification" type="button">Prepare Google verification</button><div id="googleButton"></div>
 </section>
 <form id="modelForm" hidden>
@@ -23,4 +23,4 @@
 </form><form id="budgetForm" hidden><h2>Lifetime spending cap</h2><p class="note">Total cap in US dollars, including reservations and prior usage. A cap is required before enabling AI.</p>
   <label class="field"><span>Lifetime cap (USD)</span><input name="budget" type="text" inputmode="decimal" placeholder="0.00" required></label>
   <button class="btn" type="submit">Save cap</button></form></main>
-<script src="bookshelf.js"></script><script src="client/config.js"></script><script src="vendor/supabase.js"></script><script src="client/contracts-loader.js"></script><script src="client/cloud.js"></script><script src="admin.js"></script></body></html>
+<script src="bookshelf.js"></script><script src="client/config.js"></script><script src="vendor/better-auth.js"></script><script src="client/contracts-loader.js"></script><script src="client/cloud.js"></script><script src="admin.js"></script></body></html>

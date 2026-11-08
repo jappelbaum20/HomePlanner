@@ -1,6 +1,8 @@
 async page => {
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/three.min.js',r=>r.abort());await page.route('**/three@0.128.0/**',r=>r.abort());
+  await page.route('**/vendor/{OrbitControls,RoomEnvironment,RoundedBoxGeometry}.js',r=>r.abort());
+  await page.evaluate(() => localStorage.setItem('houseplanner.anonymous.v3', JSON.stringify({version:2,name:'Synthetic fixture',rooms:[{id:'office',name:'Office',width:400,length:400,height:250,items:[],openings:[],photos:[],photoLabels:{}}],catalog:[]})));
   await page.reload();await page.getByRole('button',{name:'Bookshelf builder',exact:true}).click();
   const message=await page.locator('#bs3d').innerText(), drawing=await page.locator('#bsDrawing svg').count();
   await page.getByRole('textbox',{name:'Design name',exact:true}).fill('Fallback drawing design');

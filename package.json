@@ -3,21 +3,31 @@
   "version": "0.0.0",
   "private": true,
   "engines": {
-    "node": ">=22 <25"
+    "node": ">=22.12.0 <25"
   },
   "scripts": {
     "build": "node scripts/build-public.mjs",
+    "build:vps": "node scripts/build-public.mjs --vps",
+    "audit:vps": "node scripts/audit-public.mjs --vps",
+    "audit:vps-context": "node scripts/audit-vps-context.mjs",
+    "test:packaging": "node --test tests/vps-packaging.test.cjs tests/vps-composition-db.test.mjs",
+    "start:vps": "node runtime/server.cjs",
+    "test:runtime": "node --test tests/runtime.test.cjs",
     "audit:public": "node scripts/audit-public.mjs",
     "test": "node --test tests/bookshelf.test.cjs tests/public-assets.test.cjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.119.0",
     "ajv": "8.20.0",
+    "better-auth": "1.7.18",
     "google-auth-library": "11.3.3",
+    "pg": "8.23.1",
     "sharp": "0.35.5",
     "three": "0.128.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.15",
+    "@supabase/supabase-js": "2.119.0",
+    "auth": "1.7.18",
     "esbuild": "0.28.2",
     "ignore": "7.0.5"
   }

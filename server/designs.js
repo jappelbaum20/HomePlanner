@@ -20,6 +20,7 @@ function createCollectionHandler(deps) {
   return wrap(async req => {
     method(req, ['GET', 'POST']);
     const ctx = await authenticate(req, deps);
+    if (typeof ctx.backend.recoverStorage === 'function') await ctx.backend.recoverStorage();
     if (req.method === 'GET') {
       const rawLimit = req.query?.limit;
       if (rawLimit !== undefined && (typeof rawLimit !== 'string' || !/^[1-9][0-9]?$/.test(rawLimit) || Number(rawLimit) > 50)) fail(400, 'invalid_limit', 'Limit must be between 1 and 50.');
@@ -49,7 +50,8 @@ function createItemHandler(deps) {
     if (req.method === 'DELETE') {
       if (Object.keys(jsonBody(req, 4096)).length) fail(422, 'invalid_data', 'Invalid deletion request.');
       await ctx.backend.rpc('hp_delete_design', { p_user_id: ctx.userId, p_id: designId, p_revision: base });
-      await recoverStorage(ctx);
+      if (typeof ctx.backend.recoverStorage === 'function') await ctx.backend.recoverStorage();
+      else await recoverStorage(ctx);
       return { status: 204 };
     }
     const body = checkedWrite(req);

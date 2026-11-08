@@ -1,14 +1,16 @@
 /* Offline fake proposal API. Canonicalization conformance is tested separately. */
 async page => {
   const origin='http://127.0.0.1:8765', checks=[], check=(ok,label)=>checks.push({label,pass:!!ok});
-  await page.addInitScript(() => {
-    window.HOMEPLANNER_CONFIG={url:'https://fixture.invalid',publishableKey:'fixture-public'};
-    window.HomePlannerSupabase={createClient(){return{auth:{onAuthStateChange(cb){setTimeout(()=>cb('SIGNED_IN',{user:{id:'a'},access_token:'test-token'}),0);},async signInWithOAuth(){return{};},async signOut(){return{};},async getSession(){return{data:{session:null}};}}};}};
-  });
+  const userId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab', sessionId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', csrf='A'.repeat(43), protocolErrors=[];
+  await page.context().addCookies([{name:'fixture_session',value:'a',url:origin,httpOnly:true,sameSite:'Lax'}]);
   let stored, proposalCalls=0, lastProposal;
   await page.route('**/api/**',async route=>{
     const req=route.request(), path=new URL(req.url()).pathname, method=req.method();const json=(status,body)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
-    if(path==='/api/me')return json(200,{userId:'a',displayName:'Fixture',isAdmin:false,capabilities:{cloud:true,ai:true}});
+    const headers=await req.allHeaders();
+    if (!headers.cookie?.includes('fixture_session=a') || headers.authorization) protocolErrors.push('cookie/authorization');
+    if (!['GET','HEAD'].includes(method) && (headers.origin!==origin || headers['x-homeplanner-session']!==sessionId || headers['x-homeplanner-csrf']!==csrf)) protocolErrors.push('mutation headers');
+    if(path==='/api/session')return json(200,{userId,sessionId,displayName:'Fixture',csrfToken:csrf});
+    if(path==='/api/me')return json(200,{userId,displayName:'Fixture',isAdmin:false,capabilities:{cloud:true,ai:true}});
     if(path==='/api/designs'&&method==='GET')return json(200,{items:[],nextCursor:null});
     if(path==='/api/designs'&&method==='POST'){stored={...req.postDataJSON(),id:'11111111-1111-4111-8111-111111111111',revision:1};return json(201,{design:stored,revision:1});}
     if(path.startsWith('/api/designs/')&&method==='PUT'){stored={...stored,...req.postDataJSON(),revision:stored.revision+1};return json(200,{design:stored,revision:stored.revision});}
@@ -18,7 +20,7 @@ async page => {
     }
     return json(404,{});
   });
-  await page.goto(origin+'/public/');await page.evaluate(()=>window.HomePlannerContractsReady);await page.getByRole('button',{name:'Private designs'}).click();await page.getByRole('button',{name:'New shelf'}).waitFor();
+  await page.goto(origin+'/');await page.evaluate(()=>window.HomePlannerContractsReady);await page.getByRole('button',{name:'Private designs'}).click();await page.getByRole('button',{name:'New shelf'}).waitFor();
   page.once('dialog',d=>d.accept('Fixture shelf'));await page.getByRole('button',{name:'New shelf'}).click();await page.getByText('Saved to cloud · revision 1').waitFor();await page.locator('#cloudClose').click();
   const depth=page.getByRole('spinbutton',{name:'Depth, cm'});const before=await depth.inputValue();
   page.once('dialog',d=>d.accept('Make the shelf a little deeper'));await page.getByRole('button',{name:'Request AI preview'}).click();await page.getByText('A fixture preview').waitFor();
@@ -36,5 +38,6 @@ async page => {
   await page.getByRole('button',{name:'Private designs'}).click();await page.getByRole('button',{name:'Save to cloud'}).click();await page.getByText('Saved to cloud · revision 2').waitFor();await page.locator('#cloudClose').click();
   page.once('dialog',d=>d.accept('Edit this saved catalog shelf'));await page.getByRole('button',{name:'Request AI preview'}).click();await page.getByText('A fixture preview').waitFor();
   check(lastProposal.shelfId===stored.payload.catalog[0].id && lastProposal.baseRevision===2,'home proposal names the saved catalog shelf and current revision');
+  check(protocolErrors.length===0,'cookie and mutation protocol: '+protocolErrors.join(','));
   if(checks.some(x=>!x.pass))throw Error(JSON.stringify(checks));return{checks:checks.length,failures:[]};
 }

@@ -6,10 +6,10 @@ async page => {
   const tab = name => page.getByRole('tab', { name, exact: true });
   const field = name => page.getByRole('spinbutton', { name, exact: true });
   const name = page.getByRole('textbox', { name: 'Design name', exact: true });
-  const state = () => page.evaluate(() => JSON.parse(localStorage.getItem('houseplanner.project.v1')));
+  const state = () => page.evaluate(() => JSON.parse(localStorage.getItem('houseplanner.anonymous.v3')));
   const edit = async (label, value) => { await field(label).fill(String(value)); await field(label).press('Tab'); };
   await page.goto('http://127.0.0.1:8765/');
-  await page.evaluate(() => localStorage.removeItem('houseplanner.project.v1'));
+  await page.evaluate(() => localStorage.setItem('houseplanner.anonymous.v3', JSON.stringify({version:2,name:'Synthetic fixture',rooms:[{id:'office',name:'Office',width:400,length:400,height:250,items:[],openings:[],photos:[],photoLabels:{}}],catalog:[]})));
   await page.reload();
   await button('Bookshelf builder').click();
   await name.fill('Custom draft retained'); await edit('Width, cm', 181);
@@ -55,7 +55,7 @@ async page => {
   check(project.bookshelfDraft.alternate?.name === 'Custom draft retained', 'saving and placing preserves the other tab');
   const geometry = await page.evaluate(() => {
     if (!window.THREE || !window.HouseModels) return 'unavailable';
-    const d = JSON.parse(localStorage.getItem('houseplanner.project.v1')).bookshelfDraft.design;
+    const d = JSON.parse(localStorage.getItem('houseplanner.anonymous.v3')).bookshelfDraft.design;
     const parts = Bookshelf.boards(d), obj = HouseModels.buildItem({ type: 'shelf', w: d.width, d: d.depth, h: d.height, color: '#76513D', shelfDesign: d, elev: 1 }, { evening: false });
     obj.updateMatrixWorld(true);
     return parts.every((p, i) => { const size = new THREE.Box3().setFromObject(obj.children[i]).getSize(new THREE.Vector3()); return Math.abs(size.x - p.w) < 1e-4 && Math.abs(size.y - p.h) < 1e-4 && Math.abs(size.z - (p.renderDepth ?? p.depth)) < 1e-4; });
@@ -89,7 +89,8 @@ async page => {
   check(await name.inputValue() === 'Custom draft retained' && await field('Width, cm').inputValue() === '181', 'custom draft survives placement and a second reload');
   await page.route('**/three.min.js', route => route.abort());
   await page.route('**/three@0.128.0/**', route => route.abort());
-  await page.reload(); await button('Bookshelf builder').click(); await tab('SÆTTER 3').click();
+  await page.route('**/vendor/{OrbitControls,RoomEnvironment,RoundedBoxGeometry}.js', route => route.abort());
+  await page.reload(); await button('Save and versions').click(); await page.locator('#localList li').filter({hasText:'Synthetic fixture'}).getByRole('button',{name:'Open',exact:true}).click(); await button('Bookshelf builder').click(); await tab('SÆTTER 3').click();
   check((await page.locator('#bs3d').innerText()).includes('3D needs') && await page.locator('#bsDrawing svg').count() === 1, 'SÆTTER drawing remains editable without 3D libraries');
   check(!await button('Save design').isDisabled(), 'SÆTTER can still be saved without 3D libraries');
   check(!errors.length, 'no browser JavaScript errors');

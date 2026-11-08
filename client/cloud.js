@@ -1,45 +1,68 @@
-/* Browser auth and API boundary. The SDK is injected as a pinned, self-hosted bundle. */
+/* Same-origin cookie session and private API boundary. */
 window.HomePlannerCloud = (() => {
   'use strict';
-  const config = window.HOMEPLANNER_CONFIG || {};
-  let sdk = null, session = null, generation = 0, authEventSerial = 0, me = null, current = null, busy = null, pendingCreate = null;
+  let auth = null, session = null, generation = 0, epoch = 0, serial = 0, verification = null, me = null, current = null, busy = null, pendingCreate = null;
   const pending = new Set(), listeners = new Set(), uploads = new Map();
-  const validConfig = () => !!(config.url && config.publishableKey && window.HomePlannerSupabase?.createClient);
-  function sessionKey(value) {
-    if (!value) return null;
-    try { const part = value.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'); const claims = JSON.parse(atob(part)); if (claims.session_id) return claims.session_id; } catch (_) { /* Non-JWT fixture or invalid token. */ }
-    return value.access_token || null;
-  }
-  const snapshot = () => ({ generation, userId: session?.user?.id || null, me, current: current && { ...current } });
+  const signalKey = 'homeplanner.session.changed';
+  const snapshot = () => ({ generation, epoch, userId: session?.userId || null, sessionId: session?.sessionId || null, me, current: current && { ...current } });
+  function cancelPending() { for (const controller of pending) controller.abort(); pending.clear(); }
+  function notify(error) { listeners.forEach(fn => fn(error ? { ...snapshot(), error } : snapshot())); }
+  function broadcast() { try { localStorage.setItem(signalKey, crypto.randomUUID()); } catch (_) { /* Focus/pageshow still revalidate if storage is unavailable. */ } }
   function invalidate() {
-    generation++; for (const controller of pending) controller.abort(); pending.clear();
-    session = null; me = null; current = null; busy = null; pendingCreate = null; uploads.clear();
-    listeners.forEach(fn => fn(snapshot()));
+    generation++; epoch++; cancelPending();
+    session = null; me = null; current = null; busy = null; pendingCreate = null; uploads.clear(); notify();
   }
-  function isCurrent(stamp) { return !!session && stamp.generation === generation && stamp.userId === session.user.id; }
+  function isCurrent(stamp) { return !!session && !!stamp && stamp.generation === generation && stamp.epoch === epoch && stamp.userId === session.userId && stamp.sessionId === session.sessionId; }
+  function checkedPath(path) {
+    if (typeof path !== 'string' || !path.startsWith('/api/') || path.startsWith('//') || new URL(path, location.origin).origin !== location.origin) throw Error('Invalid private API path.');
+    return path;
+  }
+  function mutationHeaders(stamp, headers) {
+    if (!isCurrent(stamp)) throw Error('Account changed; the operation was cancelled.');
+    const result = new Headers(headers || {});
+    if (result.has('Authorization')) throw Error('Cookie authentication is required.');
+    result.set('X-HomePlanner-Session', stamp.sessionId);
+    result.set('X-HomePlanner-CSRF', session.csrfToken);
+    return result;
+  }
+  async function responseError(response) {
+    const payload = await response.json().catch(() => null);
+    const error = Error(payload?.error?.message || `Request failed (${response.status}).`);
+    error.status = response.status; error.code = payload?.error?.code; return error;
+  }
+  async function ensureVerified(stamp) {
+    if (verification) await verification;
+    if (!isCurrent(stamp)) throw Error('Account changed; the operation was cancelled.');
+  }
   async function request(path, options = {}) {
-    if (!session?.access_token || !session.user?.id) throw Error('Sign in before using private designs.');
-    const stamp = snapshot(), token = session.access_token, controller = new AbortController();
-    pending.add(controller);
-    const headers = { Authorization: `Bearer ${token}`, ...options.headers };
-    if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+    checkedPath(path);
+    const stamp = options.expected || snapshot(); await ensureVerified(stamp);
+    const controller = new AbortController(); pending.add(controller);
+    const method = (options.method || 'GET').toUpperCase(), unsafe = !['GET', 'HEAD'].includes(method);
+    const headers = unsafe ? mutationHeaders(stamp, options.headers) : new Headers(options.headers || {});
+    if (headers.has('Authorization')) throw Error('Cookie authentication is required.');
+    if (options.body !== undefined) headers.set('Content-Type', 'application/json');
     try {
-      const response = await fetch(path, { ...options, headers, cache: 'no-store', signal: controller.signal,
+      const response = await fetch(path, { method, headers, credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', signal: controller.signal,
         body: options.body === undefined ? undefined : JSON.stringify(options.body) });
       if (!isCurrent(stamp)) throw Error('Account changed; the response was discarded.');
+      if (!response.ok) {
+        const error = await responseError(response);
+        if (!isCurrent(stamp)) throw Error('Account changed; the response was discarded.');
+        if (error.status === 401 || error.code === 'session_changed') { serial++; invalidate(); broadcast(); void refreshSession(); }
+        throw error;
+      }
       const payload = response.status === 204 ? null : await response.json().catch(() => null);
       if (!isCurrent(stamp)) throw Error('Account changed; the response was discarded.');
-      if (!response.ok) { const error = Error(payload?.error?.message || `Request failed (${response.status}).`); error.status = response.status; throw error; }
       return payload;
     } finally { pending.delete(controller); }
   }
   async function photo(designId, photoId) {
-    if (!session?.access_token) throw Error('Sign in before loading photos.');
-    const stamp = snapshot(), token = session.access_token, controller = new AbortController();
-    pending.add(controller);
+    const stamp = snapshot(); await ensureVerified(stamp);
+    const controller = new AbortController(); pending.add(controller);
     try {
       const response = await fetch(`/api/designs/${encodeURIComponent(designId)}/photos/${encodeURIComponent(photoId)}`, {
-        headers: { Authorization: `Bearer ${token}` }, cache: 'no-store', signal: controller.signal
+        credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', signal: controller.signal
       });
       if (!isCurrent(stamp) || !response.ok) throw Error('A private photo could not be loaded.');
       const blob = await response.blob();
@@ -47,84 +70,111 @@ window.HomePlannerCloud = (() => {
       return blob;
     } finally { pending.delete(controller); }
   }
-  // A separate SDK client pins the token captured at the start of the operation.
-  // Its fetch wrapper also aborts storage traffic when the session changes.
   async function uploadPhoto(designId, sourceId, blob, guard) {
-    const stamp = snapshot(), token = session?.access_token;
+    const stamp = snapshot();
     const check = () => { if (!isCurrent(stamp) || !guard()) throw Error('Account, design or edits changed; upload cancelled.'); };
-    check();
+    await ensureVerified(stamp); check();
     if (!blob || !['image/jpeg','image/png','image/webp'].includes(blob.type) || !blob.size || blob.size > 10485760) throw Error('A photo is missing or has an unsupported size or format.');
     const bytes = await blob.arrayBuffer(); check();
     const checksum = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(x => x.toString(16).padStart(2, '0')).join(''); check();
     const key = `${designId}:${sourceId}:${checksum}`, base = `/api/designs/${encodeURIComponent(designId)}/photos`;
     let entry = uploads.get(key);
+    if (entry && !entry.ready && Date.parse(entry.expiresAt) <= Date.now()) { uploads.delete(key); entry = null; }
     if (!entry) {
-      const reserved = await request(base, { method: 'POST', body: { mime: blob.type, bytes: blob.size, checksum } }); check();
-      const cap = reserved?.uploadCapability;
-      if (!/^[0-9a-f-]{36}$/i.test(reserved?.photoId || '') || cap?.bucket !== 'design-photos' || cap.path !== `${stamp.userId}/${designId}/${reserved.photoId}/raw` || cap.contentType !== blob.type || cap.upsert !== false) throw Error('Invalid photo reservation.');
-      entry = { photoId: reserved.photoId, cap, expiresAt: reserved.expiresAt, uploaded: false, ready: null }; uploads.set(key, entry);
+      const reserved = await request(base, { method: 'POST', body: { mime: blob.type, bytes: blob.size, checksum }, expected: stamp }); check();
+      await window.HomePlannerContractsReady; check();
+      const expiresAt = Date.parse(reserved?.expiresAt);
+      if (!window.HomePlannerContracts?.validate('uploadReservation', reserved).valid || reserved.uploadUrl !== `${base}/${reserved.photoId}/raw` || reserved.contentType !== blob.type || blob.size > reserved.maxBytes || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) throw Error('Invalid photo reservation.');
+      entry = { ...reserved, uploaded: false, ready: null }; uploads.set(key, entry);
     }
     if (entry.ready) return entry.ready;
     if (!entry.uploaded) {
       const controller = new AbortController(); pending.add(controller);
       try {
-        const scoped = window.HomePlannerSupabase.createClient(config.url, config.publishableKey, {
-          auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-          global: { headers: { Authorization: `Bearer ${token}` }, fetch: (input, init = {}) => {
-            check(); const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
-            headers.set('Authorization', `Bearer ${token}`);
-            return fetch(input, { ...init, headers, signal: controller.signal });
-          } }
-        });
-        const result = await scoped.storage.from(entry.cap.bucket).upload(entry.cap.path, blob, { contentType: entry.cap.contentType, upsert: false });
+        const response = await fetch(entry.uploadUrl, { method: 'PUT', headers: mutationHeaders(stamp, { 'Content-Type': entry.contentType }),
+          credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', signal: controller.signal, body: blob });
         check();
-        // A failed or lost upload response can still mean that the immutable object exists.
-        // Completion verifies its bytes; it is the only authority for readiness.
-        entry.uploaded = !result.error;
-      } finally { pending.delete(controller); }
+        if (response.status === 401 || response.status === 409) {
+          const error = await responseError(response); check();
+          if (error.status === 401 || error.code === 'session_changed') { serial++; invalidate(); broadcast(); void refreshSession(); throw error; }
+        }
+        // Even a lost/error response can mean immutable bytes reached the server.
+        // Completion verifies the bytes and is the sole readiness authority.
+        entry.uploaded = response.ok;
+      } catch (error) { check(); if (error.name === 'AbortError') throw error; }
+      finally { pending.delete(controller); }
     }
     check();
     let ready;
-    try { ready = await request(`${base}/${encodeURIComponent(entry.photoId)}/complete`, { method: 'POST', body: {} }); }
+    try { ready = await request(`${base}/${encodeURIComponent(entry.photoId)}/complete`, { method: 'POST', body: {}, expected: stamp }); }
     catch (error) { if (error.status === 409 && Date.parse(entry.expiresAt) <= Date.now()) uploads.delete(key); throw error; }
     check();
     if (ready?.photoId !== entry.photoId || !['image/jpeg','image/png','image/webp'].includes(ready.mime) || !Number.isInteger(ready.bytes) || ready.bytes < 1 || ready.bytes > 10485760 || !/^[a-f0-9]{64}$/.test(ready.checksum || '')) throw Error('Invalid completed photo metadata.');
     entry.ready = ready; entry.uploaded = true; return ready;
   }
-  async function setSession(next) {
-    const id = next?.user?.id || null, previous = session?.user?.id || null;
-    if (id !== previous || (id && sessionKey(next) !== sessionKey(session))) invalidate();
-    if (!id) { listeners.forEach(fn => fn(snapshot())); return; }
-    session = next; const stamp = snapshot();
-    try {
-      const result = await request('/api/me');
-      if (!isCurrent(stamp) || result.userId !== id) throw Error('Session identity could not be verified.');
-      me = result; listeners.forEach(fn => fn(snapshot()));
-    } catch (error) { if (isCurrent(stamp)) { invalidate(); listeners.forEach(fn => fn({ ...snapshot(), error: error.message })); } }
+  function refreshSession(announce = true) {
+    const ticket = ++serial; epoch++; cancelPending();
+    const task = (async () => {
+      try {
+        const response = await fetch('/api/session', { credentials: 'same-origin', mode: 'same-origin', cache: 'no-store' });
+        if (ticket !== serial) return;
+        if (response.status === 401) { const hadSession = !!session; if (hadSession) invalidate(); else notify(); if (hadSession) broadcast(); return; }
+        if (!response.ok) throw await responseError(response);
+        const next = await response.json();
+        await window.HomePlannerContractsReady;
+        if (ticket !== serial) return;
+        if (!window.HomePlannerContracts?.validate('session', next).valid || next.userId === next.sessionId) throw Error('Session identity could not be verified.');
+        const changed = !session || next.userId !== session.userId || next.sessionId !== session.sessionId;
+        if (changed) invalidate();
+        session = next;
+        const identityResponse = await fetch('/api/me', { credentials: 'same-origin', mode: 'same-origin', cache: 'no-store' });
+        if (!identityResponse.ok) throw await responseError(identityResponse);
+        const result = await identityResponse.json();
+        if (ticket !== serial || session !== next) return;
+        if (result.userId !== next.userId) throw Error('Session identity could not be verified.');
+        me = result; notify(); if (changed && announce) broadcast();
+      } catch (error) {
+        if (ticket !== serial) return;
+        invalidate(); notify(error.message || 'Session verification is unavailable.');
+      }
+    })();
+    verification = task;
+    task.finally(() => { if (verification === task) verification = null; });
+    return task;
   }
   function init() {
-    if (!validConfig()) return false;
-    sdk = window.HomePlannerSupabase.createClient(config.url, config.publishableKey, {
-      auth: { flowType: 'pkce', detectSessionInUrl: true, persistSession: true, autoRefreshToken: true }
+    if (!window.HomePlannerAuth?.createAuthClient) return false;
+    auth = window.HomePlannerAuth.createAuthClient({ baseURL: location.origin });
+    window.addEventListener('storage', event => {
+      if (event.key !== signalKey) return;
+      serial++; invalidate(); void refreshSession(false);
     });
-    sdk.auth.onAuthStateChange((_event, next) => {
-      const eventSerial = ++authEventSerial;
-      if (session && (next?.user?.id !== session.user.id || sessionKey(next) !== sessionKey(session))) invalidate();
-      setTimeout(() => { if (eventSerial === authEventSerial) void setSession(next); }, 0);
-    });
+    window.addEventListener('focus', () => { void refreshSession(); });
     window.addEventListener('pageshow', event => {
       if (!event.persisted) return;
-      invalidate(); const restoreGeneration = generation, restoreEvent = authEventSerial;
-      void sdk.auth.getSession().then(({ data }) => { if (generation === restoreGeneration && authEventSerial === restoreEvent && !session) return setSession(data.session); }).catch(() => {});
+      serial++; invalidate(); void refreshSession();
     });
-    return true;
+    void refreshSession(); return true;
   }
   async function signIn() {
-    if (!sdk) throw Error('Cloud sign-in is not configured.');
-    const result = await sdk.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${location.origin}/auth/callback` } });
-    if (result.error) throw result.error;
+    if (!auth) throw Error('Cloud sign-in is not configured.');
+    const result = await auth.signIn.social({ provider: 'google', callbackURL: `${location.origin}/` });
+    if (result?.error) throw Error(result.error.message || 'Sign-in is unavailable.');
   }
-  async function signOut() { const old = sdk; invalidate(); if (old) { const { error } = await old.auth.signOut(); if (error) throw error; } }
+  async function signOut() {
+    const stamp = snapshot(); await ensureVerified(stamp);
+    const headers = mutationHeaders(stamp, { 'Content-Type': 'application/json' });
+    const result = fetch('/api/auth/sign-out', { method: 'POST', headers, body: '{}', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store' });
+    serial++; invalidate(); broadcast();
+    try {
+      const response = await result;
+      if (!response.ok) throw await responseError(response);
+      // A peer may have revalidated before the server completed the logout.
+      broadcast();
+    } catch (error) {
+      void refreshSession(); broadcast(); throw error;
+    }
+  }
   async function list(cursor) { const query = new URLSearchParams({ limit: '50' }); if (cursor) query.set('cursor', cursor); return request('/api/designs?' + query); }
   async function open(id) {
     const result = await request(`/api/designs/${encodeURIComponent(id)}`), design = result.design || result;
@@ -165,7 +215,6 @@ window.HomePlannerCloud = (() => {
     if (!isCurrent(stamp) || current?.id !== base.id) throw Error('Account or design changed.');
     current = null;
   }
-  function cancelPending() { for (const controller of pending) controller.abort(); pending.clear(); }
   function select(design) {
     if (current?.id !== design.id || current?.revision !== design.revision) cancelPending();
     current = { id: design.id, kind: design.kind, title: design.title, revision: design.revision };

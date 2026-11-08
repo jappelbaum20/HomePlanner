@@ -19,6 +19,7 @@
 !/scripts/audit-public.mjs
 !/scripts/prepare-hosting.mjs
 !/scripts/hosting-manifest.mjs
+!/scripts/vps-manifest.mjs
 !/client/
 /client/*
 !/client/config.js
@@ -29,11 +30,13 @@
 /shared/*
 !/shared/contracts.js
 !/shared/canonical.js
+!/shared/vps-public-files.json
 !/shared/schema/
 /shared/schema/*
 !/shared/schema/shelf-v1.json
 !/shared/schema/home-v2.json
 !/shared/schema/api-v3.json
+!/shared/schema/vps-v1.json
 # Reserved exact module names; endpoint paths are frozen in the stage A handoff.
 !/server/
 /server/*

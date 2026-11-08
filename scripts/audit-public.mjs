@@ -8,6 +8,7 @@ export const PUBLIC_FILES = Object.freeze([
   'admin.html', 'admin.js', 'client/config.js', 'client/contracts-loader.js', 'client/cloud.js', 'client/ui.js',
   'vendor/supabase.js', 'vendor/three.min.js', 'vendor/OrbitControls.js', 'vendor/RoomEnvironment.js', 'vendor/RoundedBoxGeometry.js'
 ]);
+export const VPS_PUBLIC_FILES = Object.freeze(JSON.parse(await readFile(new URL('../shared/vps-public-files.json', import.meta.url), 'utf8')));
 export async function enumerate(root, prefix = '') {
   const result = [];
   for (const entry of await readdir(path.join(root, prefix), { withFileTypes: true })) {
@@ -20,9 +21,10 @@ export async function enumerate(root, prefix = '') {
   }
   return result.sort();
 }
-export async function auditPublic(root) {
+export async function auditPublic(root, target = 'legacy') {
   const files = await enumerate(root);
-  const expected = [...PUBLIC_FILES].sort();
+  if (!['legacy', 'vps'].includes(target)) throw new Error('Unknown public artifact target.');
+  const expected = [...(target === 'vps' ? VPS_PUBLIC_FILES : PUBLIC_FILES)].sort();
   if (JSON.stringify(files) !== JSON.stringify(expected)) throw new Error('Public artifact does not match the explicit allowlist.');
   const index = await readFile(path.join(root, 'index.html'), 'utf8');
   if (!/<script\s+src=["']starter-data\.js["']\s*><\/script>/i.test(index) || /<script\s+src=["']house-data\.js/i.test(index)) {
@@ -32,15 +34,17 @@ export async function auditPublic(root) {
   if (!starter.includes('window.HOUSE_ROOMS = []') || !starter.includes('window.HOUSE_PIECES = []') || !starter.includes('window.HOUSE_PLACEMENTS = []')) throw new Error('Starter arrays are missing.');
   if (/https?:\/\//i.test(index)) throw new Error('External resources in public index.');
   const scripts = [...index.matchAll(/<script\s+src=["']([^"']+)["']/gi)].map(m => m[1].split('?')[0]);
-  for (const required of ['vendor/three.min.js', 'vendor/OrbitControls.js', 'vendor/RoomEnvironment.js', 'vendor/RoundedBoxGeometry.js', 'vendor/supabase.js', 'shared/canonical.js', 'client/config.js', 'client/contracts-loader.js', 'client/cloud.js', 'client/ui.js']) {
+  for (const required of ['vendor/three.min.js', 'vendor/OrbitControls.js', 'vendor/RoomEnvironment.js', 'vendor/RoundedBoxGeometry.js', target === 'vps' ? 'vendor/better-auth.js' : 'vendor/supabase.js', 'shared/canonical.js', 'client/config.js', 'client/contracts-loader.js', 'client/cloud.js', 'client/ui.js']) {
     if (scripts.filter(s => s === required).length !== 1) throw new Error(`Missing or duplicate public script: ${required}`);
   }
-  if (scripts.indexOf('vendor/supabase.js') > scripts.indexOf('client/cloud.js')) throw new Error('SDK must load before cloud client.');
+  if (scripts.indexOf(target === 'vps' ? 'vendor/better-auth.js' : 'vendor/supabase.js') > scripts.indexOf('client/cloud.js')) throw new Error('SDK must load before cloud client.');
+  if (target === 'vps' && (index.includes('vendor/supabase.js') || /supabase/i.test(await readFile(path.join(root, 'client/config.js'), 'utf8')))) throw new Error('Legacy provider configuration is forbidden in VPS output.');
   return files;
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    const files = await auditPublic(path.resolve('dist'));
+    const target = process.argv.includes('--vps') ? 'vps' : 'legacy';
+    const files = await auditPublic(path.resolve(target === 'vps' ? 'dist-vps' : 'dist'), target);
     console.log(`Public artifact allowlist passed (${files.length} files).`);
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

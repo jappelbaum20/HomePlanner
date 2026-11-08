@@ -2,7 +2,7 @@
 const { createHash, randomUUID } = require('node:crypto');
 const { validate, LIMITS } = require('../shared/contracts');
 const { authenticate } = require('./auth');
-const { fail, id, uuid, jsonBody, wrap, method } = require('./errors');
+const { ApiError, fail, id, uuid, jsonBody, wrap, method } = require('./errors');
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const photoMetadata = p => ({ photoId: p.id, mime: p.mime, bytes: Number(p.bytes), checksum: p.checksum });
 
@@ -50,24 +50,67 @@ async function sanitize(bytes, mime) {
 function createReserveHandler(deps) {
   return wrap(async req => {
     method(req, ['POST']);
+    if (deps?.ensurePhotoOperational) await deps.ensurePhotoOperational();
     const ctx = await authenticate(req, deps);
     const designId = id(req.query?.id);
     const body = jsonBody(req, 4096);
     if (!validate('photoRequest', body).valid) fail(422, 'invalid_data', 'Invalid photo information.');
-    await recoverStorage(ctx);
+    if (deps?.photoStore) await ctx.backend.recoverStorage();
+    else await recoverStorage(ctx);
     const result = await ctx.backend.rpc('hp_reserve_photo', { p_user_id: ctx.userId, p_design_id: designId, p_mime: body.mime, p_bytes: body.bytes, p_checksum: body.checksum });
+    if (deps?.photoStore) {
+      if (!uuid(result?.photoId)) fail(503, 'unavailable', 'Service is temporarily unavailable.');
+      return { status: 201, body: { photoId: result.photoId, expiresAt: result.expiresAt, uploadUrl: `/api/designs/${designId}/photos/${result.photoId}/raw`, contentType: body.mime, maxBytes: body.bytes } };
+    }
     return { status: 201, body: { photoId: result.photoId, uploadCapability: { bucket: 'design-photos', path: result.rawKey, contentType: body.mime, upsert: false }, expiresAt: result.expiresAt } };
   }, deps);
 }
 function createCompleteHandler(deps) {
   return wrap(async req => {
     method(req, ['POST']);
+    if (deps?.ensurePhotoOperational) await deps.ensurePhotoOperational();
     const ctx = await authenticate(req, deps);
     const designId = id(req.query?.id), photoId = id(req.query?.photoId);
     const body = jsonBody(req, 4096);
     if (Object.keys(body).length) fail(422, 'invalid_data', 'Invalid completion request.');
+    return (deps?.withPhotoWork || (fn => fn()))(async () => {
+    if (deps?.ensurePhotoOperational) await deps.ensurePhotoOperational();
+    if (deps?.photoStore) {
+      const reservation = await ctx.backend.photo(ctx, designId, photoId);
+      if (!reservation) fail(404, 'not_found', 'Resource not found.');
+      if (reservation.reservation_session_id !== ctx.sessionId) fail(409, 'session_changed', 'The session has changed.');
+    }
     const token = randomUUID();
     const photo = await ctx.backend.rpc('hp_begin_photo_completion', { p_user_id: ctx.userId, p_design_id: designId, p_photo_id: photoId, p_token: token });
+    if (deps?.photoStore) {
+      const store = deps.photoStore;
+      if (photo.status === 'ready') {
+        const bytes = await store.readPart(ctx.userId, designId, photoId, 'ready');
+        if (bytes.length !== Number(photo.bytes) || digest(bytes) !== photo.checksum) fail(503, 'unavailable', 'Photo is temporarily unavailable.');
+        await ctx.backend.recoverStorage();
+        return { body: photoMetadata(photo) };
+      }
+      assertKey(photo.raw_key, ctx.userId, designId, photoId, 'raw');
+      const raw = await store.readPart(ctx.userId, designId, photoId, 'raw');
+      if (raw.length !== Number(photo.requested_bytes) || raw.length > LIMITS.photoBytes || digest(raw) !== photo.requested_checksum) fail(422, 'invalid_photo', 'The photo does not match the upload request.');
+      const cleaned = await (deps?.sanitize || sanitize)(raw, photo.requested_mime);
+      if (!Buffer.isBuffer(cleaned) || !cleaned.length || cleaned.length > LIMITS.photoBytes) fail(422, 'invalid_photo', 'The photo could not be validated.');
+      const checksum = digest(cleaned);
+      const staged = await store.stageBytes(ctx.userId, designId, photoId, cleaned);
+      let ready;
+      try {
+        ready = await ctx.backend.withPhotoLock(designId, photoId, 'ready', token, async locked => {
+          await deps.ensurePhotoOperational();
+          validateSnapshot(locked.snapshot, ctx.userId, designId, photoId);
+          if (locked.snapshot.requestedMime !== photo.requested_mime || Number(locked.snapshot.requestedBytes) !== raw.length || locked.snapshot.requestedChecksum !== digest(raw)) fail(409, 'conflict', 'The photo request has changed.');
+          await staged.publish('ready');
+          await locked.recordPublication(cleaned.length, checksum);
+          return locked.finishReady(cleaned.length, checksum);
+        });
+      } finally { await staged.dispose(); }
+      await ctx.backend.recoverStorage();
+      return { body: ready };
+    }
     if (photo.status === 'ready') return { body: photoMetadata(photo) };
     const raw = await ctx.backend.download(photo.raw_key);
     if (raw.length !== Number(photo.requested_bytes) || raw.length > LIMITS.photoBytes || digest(raw) !== photo.requested_checksum) fail(422, 'invalid_photo', 'The photo does not match the upload request.');
@@ -84,17 +127,119 @@ function createCompleteHandler(deps) {
     const ready = await ctx.backend.rpc('hp_finish_photo_completion', { p_user_id: ctx.userId, p_design_id: designId, p_photo_id: photoId, p_token: token, p_key: cleanKey, p_bytes: cleaned.length, p_checksum: checksum });
     await recoverStorage(ctx);
     return { body: ready };
+    });
   }, deps);
 }
 function createDownloadHandler(deps) {
   return wrap(async req => {
     method(req, ['GET']);
+    if (deps?.ensurePhotoOperational) await deps.ensurePhotoOperational();
     const ctx = await authenticate(req, deps);
     const photo = await ctx.backend.photo(ctx, id(req.query?.id), id(req.query?.photoId));
-    if (!photo || photo.status !== 'ready') fail(404, 'not_found', 'Resource not found.');
-    const bytes = await ctx.backend.download(photo.object_key);
+    if (!photo || photo.status !== 'ready' || photo.tombstoned_at) fail(404, 'not_found', 'Resource not found.');
+    let bytes;
+    if (deps?.photoStore) {
+      const designId = id(req.query?.id), photoId = id(req.query?.photoId);
+      assertKey(photo.object_key, ctx.userId, designId, photoId, 'ready');
+      bytes = await deps.photoStore.readPart(ctx.userId, designId, photoId, 'ready');
+    } else bytes = await ctx.backend.download(photo.object_key);
     if (bytes.length !== Number(photo.bytes) || digest(bytes) !== photo.checksum) fail(503, 'unavailable', 'Photo is temporarily unavailable.');
     return { bytes, mime: photo.mime };
   }, deps);
 }
-module.exports = { createReserveHandler, createCompleteHandler, createDownloadHandler, recoverStorage, sanitize, digest };
+
+function assertKey(key, owner, design, photo, part) {
+  if (key !== `${owner}/${design}/${photo}/${part}`) throw Error('Invalid storage key');
+}
+function validateSnapshot(s, owner, design, photo) {
+  if (!s || s.ownerId !== owner || s.designId !== design || s.photoId !== photo || s.status !== 'pending' ||
+      !['image/png','image/jpeg','image/webp'].includes(s.requestedMime) ||
+      !Number.isSafeInteger(Number(s.requestedBytes)) || Number(s.requestedBytes) < 1 || Number(s.requestedBytes) > LIMITS.photoBytes ||
+      !/^[a-f0-9]{64}$/.test(s.requestedChecksum || '') || !Number.isFinite(Date.parse(s.expiresAt)) || Date.parse(s.expiresAt) <= Date.now()) throw Error('Invalid photo snapshot');
+  assertKey(s.rawKey, owner, design, photo, 'raw'); assertKey(s.readyKey, owner, design, photo, 'ready');
+}
+function rawError(error) {
+  const safe = error instanceof ApiError ? error : error?.code === 'PHOTO_TOO_LARGE' ? new ApiError(413, 'too_large', 'Request is too large.') : error?.code === 'PHOTO_INVALID' ? new ApiError(422, 'invalid_photo', 'The photo could not be validated.') : new ApiError(503, 'unavailable', 'Service is temporarily unavailable.');
+  return { status: safe.status, body: { error: { code: safe.code, message: safe.message, requestId: randomUUID() } }, headers: safe.headers };
+}
+function createRawHandler({ backend, photoStore, ensurePhotoOperational }) {
+  return async ({ req, stream, session, params }) => {
+    let staged;
+    try {
+      if (ensurePhotoOperational) await ensurePhotoOperational();
+      const owner = id(session?.userId), design = id(params?.id), photo = id(params?.photoId);
+      if (!uuid(session?.sessionId) || !backend || typeof backend.forSession !== 'function') fail(401, 'unauthenticated', 'A valid session is required.');
+      const scoped = backend.forSession({ ...session });
+      const snapshot = await scoped.withPhotoLock(design, photo, 'raw', null, async locked => {
+        validateSnapshot(locked.snapshot, owner, design, photo); return locked.snapshot;
+      });
+      if (req.headers['content-type'] !== snapshot.requestedMime) fail(415, 'content_type', 'The reserved photo content type is required.');
+      staged = await photoStore.stage(owner, design, photo, stream, Number(snapshot.requestedBytes));
+      if (staged.bytes !== Number(snapshot.requestedBytes) || staged.checksum !== snapshot.requestedChecksum) fail(422, 'invalid_photo', 'The photo does not match the upload request.');
+      await scoped.withPhotoLock(design, photo, 'raw', null, async locked => {
+        if (ensurePhotoOperational) await ensurePhotoOperational();
+        validateSnapshot(locked.snapshot, owner, design, photo);
+        if (locked.snapshot.requestedMime !== snapshot.requestedMime || Number(locked.snapshot.requestedBytes) !== staged.bytes || locked.snapshot.requestedChecksum !== staged.checksum) fail(409, 'conflict', 'The photo request has changed.');
+        await staged.publish('raw'); await locked.recordPublication(staged.bytes, staged.checksum);
+      });
+      return { status: 200, body: {} };
+    } catch (e) {
+      // The host requires consumption before it can return a structured error.
+      // Its outer stream is itself bounded and timed; never publish on failure.
+      if (!stream.readableEnded && !stream.destroyed) { try { for await (const _ of stream) {} } catch {} }
+      return rawError(e);
+    } finally { if (staged) { try { await staged.dispose(); } catch {} } }
+  };
+}
+function createPhotoRecovery(store, limit = 4, ensurePhotoOperational = null) {
+  return async ({ session, backend }) => {
+    // Let callers retry an interrupted deletion or completion. No false
+    // receipt or quota release is committed on filesystem or database failure.
+      if (ensurePhotoOperational) await ensurePhotoOperational();
+      for (let i = 0; i < limit; i++) {
+        const token = randomUUID();
+        const claim = await backend.rpc('hp_claim_photo_cleanup', { p_user_id: session.userId, p_token: token });
+        if (!claim) break;
+        const design = id(claim.designId), photo = id(claim.photoId), owner = id(session.userId);
+        if (!['raw','delete'].includes(claim.mode)) throw Error('Invalid cleanup claim');
+        assertKey(claim.rawKey,owner,design,photo,'raw'); assertKey(claim.readyKey,owner,design,photo,'ready');
+        await backend.withPhotoLock(design,photo,'cleanup',token,async locked => {
+          if (ensurePhotoOperational) await ensurePhotoOperational();
+          const s = locked.snapshot;
+          if (!s || s.ownerId !== owner || s.designId !== design || s.photoId !== photo || s.mode !== claim.mode) throw Error('Invalid cleanup snapshot');
+          assertKey(s.rawKey,owner,design,photo,'raw'); assertKey(s.readyKey,owner,design,photo,'ready');
+          for (const part of claim.mode === 'delete' ? ['raw','ready'] : ['raw']) {
+            await store.remove(owner,design,photo,part); await locked.recordRemoval(part);
+          }
+          await locked.finishCleanup();
+        });
+      }
+  };
+}
+function createPhotoService({ backend, store, origin, sanitize: sanitizer, exclusiveWriter, maintenanceReady } = {}) {
+  if (!backend || typeof backend.forSession !== 'function' || !store) throw TypeError('Photo backend and store required');
+  const operational = async () => store.ready() && typeof exclusiveWriter === 'function' && await exclusiveWriter() === true && typeof maintenanceReady === 'function' && await maintenanceReady() === true;
+  const photoReady = async () => await operational() && await store.hasFreeSpace();
+  // Cleanup must remain possible when low disk space makes readiness fail.
+  const ensurePhotoOperational = async () => { if (!await operational()) fail(503, 'unavailable', 'Photo storage is temporarily unavailable.'); };
+  // Hold a slot before reading raw bytes through ready publication. This bounds
+  // concurrent decoder/buffer work; queued requests hold no image bytes.
+  let active = 0; const waiting = [];
+  const withPhotoWork = async fn => {
+    if (active >= 2) {
+      if (waiting.length >= 16) fail(503, 'unavailable', 'Photo processing is busy.');
+      await new Promise(resolve => waiting.push(resolve));
+    } else active++;
+    try { return await fn(); }
+    finally { const next = waiting.shift(); if (next) next(); else active--; }
+  };
+  const deps = { backend, photoStore: store, origin, sanitize: sanitizer, ensurePhotoOperational, withPhotoWork };
+  return {
+    photoHandlers: { photoReserve: createReserveHandler(deps), photoRaw: createRawHandler(deps), photoComplete: createCompleteHandler(deps), photoDownload: createDownloadHandler(deps) },
+    photoRecovery: createPhotoRecovery(store, 4, ensurePhotoOperational),
+    // Capacity admission is process-local. Do not report readiness without an
+    // independently held exclusive volume lease and unattended recovery.
+    photoReady
+  };
+}
+module.exports = { createReserveHandler, createCompleteHandler, createDownloadHandler, createRawHandler, createPhotoRecovery, createPhotoService, recoverStorage, sanitize, digest };
