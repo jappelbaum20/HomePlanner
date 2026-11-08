@@ -5,10 +5,11 @@
   const binding = document.querySelector('#binding'), button = document.querySelector('#prepareBinding'), googleButton = document.querySelector('#bindingGoogle');
   const form = document.querySelector('#requestForm'), availability = document.querySelector('#requestAvailability');
   const messages = { pending: 'Your account is awaiting approval. Submit a request below if you have not already done so.', denied: 'Your access request was not approved.', revoked: 'Your access has been revoked.', approved: 'Your account is approved.' };
-  let sequence = 0;
+  let sequence = 0, identity = null;
   const fail = e => { status.textContent = e?.message || 'Access is temporarily unavailable.'; };
   cloud.subscribe(state => {
-    sequence++; googleButton.replaceChildren();
+    const nextIdentity = `${state.generation}:${state.userId}:${state.sessionId}`;
+    if (identity !== nextIdentity) { identity = nextIdentity; sequence++; googleButton.replaceChildren(); }
     const signedIn = !!state.me, access = state.me?.access?.status || (signedIn ? 'approved' : null);
     signIn.hidden = signedIn; signOut.hidden = !signedIn;
     binding.hidden = !signedIn || access === 'approved';
@@ -32,7 +33,7 @@
     } catch (error) { availability.textContent = error.message; } finally { submit.disabled = false; }
   });
   button.addEventListener('click', async () => {
-    const stamp = cloud.snapshot(), attempt = sequence; button.disabled = true;
+    let stamp = cloud.snapshot(); const attempt = ++sequence; button.disabled = true;
     try {
       const challenge = await cloud.request('/api/access/challenge', { expected: stamp });
       if (!cloud.isCurrent(stamp) || attempt !== sequence || !/^[A-Za-z0-9_-]{43}$/.test(challenge?.nonce || '') || !challenge.clientId?.endsWith('.apps.googleusercontent.com')) throw Error('Verification is unavailable.');
@@ -43,9 +44,9 @@
       if (!cloud.isCurrent(stamp) || attempt !== sequence || !window.google?.accounts?.id) return;
       let used = false; const expires = Date.now() + Math.min(300, challenge.expiresIn || 0) * 1000;
       window.google.accounts.id.initialize({ client_id: challenge.clientId, nonce: challenge.nonce, auto_select: false, ux_mode: 'popup', callback: async response => {
-        if (used || Date.now() >= expires || !cloud.isCurrent(stamp) || attempt !== sequence || typeof response?.credential !== 'string') return;
+        if (used || Date.now() >= expires || attempt !== sequence || typeof response?.credential !== 'string') return;
         used = true;
-        try { await cloud.request('/api/access/bind', { method: 'POST', expected: stamp, body: { token: response.credential, nonce: challenge.nonce } }); location.reload(); }
+        try { stamp = await cloud.verificationStamp(stamp); if (attempt !== sequence || Date.now() >= expires) return; await cloud.request('/api/access/bind', { method: 'POST', expected: stamp, body: { token: response.credential, nonce: challenge.nonce } }); location.reload(); }
         catch (error) { fail(error); }
       } });
       googleButton.replaceChildren(); window.google.accounts.id.renderButton(googleButton, { type: 'standard', size: 'large' });

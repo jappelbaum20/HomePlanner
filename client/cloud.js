@@ -34,6 +34,16 @@ window.HomePlannerCloud = (() => {
     if (verification) await verification;
     if (!isCurrent(stamp)) throw Error('Account changed; the operation was cancelled.');
   }
+  async function verificationStamp(original) {
+    // Only identity verification callbacks may adopt a freshly checked epoch.
+    // Ordinary writes retain strict epoch cancellation.
+    while (verification) await verification;
+    const next = snapshot();
+    if (!original || !next.me || !isCurrent(next) || original.generation !== next.generation ||
+        original.userId !== next.userId || original.sessionId !== next.sessionId)
+      throw Error('Account changed; verification was cancelled.');
+    return next;
+  }
   async function request(path, options = {}) {
     checkedPath(path);
     const stamp = options.expected || snapshot(); await ensureVerified(stamp);
@@ -230,6 +240,6 @@ window.HomePlannerCloud = (() => {
     current = { id: design.id, kind: design.kind, title: design.title, revision: design.revision };
   }
   function clearCurrent() { cancelPending(); current = null; }
-  return { init, signIn, signOut, list, open, create, save, remove, request, photo, uploadPhoto, snapshot, isCurrent, select, clearCurrent,
+  return { init, signIn, signOut, list, open, create, save, remove, request, photo, uploadPhoto, snapshot, isCurrent, verificationStamp, select, clearCurrent,
     subscribe: fn => { listeners.add(fn); return () => listeners.delete(fn); } };
 })();

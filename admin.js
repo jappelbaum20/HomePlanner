@@ -96,7 +96,7 @@
     return googleLoading;
   }
   async function prepareStep() {
-    const stamp = cloud.snapshot(); if (!stamp.me) return;
+    let stamp = cloud.snapshot(); if (!stamp.me) return;
     clearProof(); const attempt = sequence; prepare.disabled = true;
     try {
       const challenge = await cloud.request('/api/admin/challenge');
@@ -107,9 +107,11 @@
       let submitted = false;
       window.google.accounts.id.initialize({ client_id: challenge.clientId, nonce: challenge.nonce, auto_select: false, ux_mode: 'popup',
         callback: async response => {
-          if (submitted || attempt !== sequence || !cloud.isCurrent(stamp) || Date.now() >= expires || typeof response?.credential !== 'string') return;
+          if (submitted || attempt !== sequence || Date.now() >= expires || typeof response?.credential !== 'string') return;
           submitted = true;
           try {
+            stamp = await cloud.verificationStamp(stamp);
+            if (attempt !== sequence || Date.now() >= expires) return;
             const grant = await cloud.request('/api/admin/bootstrap', { method: 'POST', body: {}, expected: stamp,
               headers: { 'X-Google-Id-Token': response.credential, 'X-Admin-Challenge': challenge.nonce } });
             if (attempt !== sequence || !cloud.isCurrent(stamp)) return;
