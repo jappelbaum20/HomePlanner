@@ -313,4 +313,58 @@ GRANT EXECUTE ON FUNCTION hp_app.hp_mail_claim(uuid,integer),hp_app.hp_mail_fini
 -- Existing owner isolation remains permissive; these conditions restrict it.
 CREATE POLICY access_design_read ON hp_app.designs AS RESTRICTIVE FOR SELECT TO hp_app_runtime USING (hp_private.access_approved());
 CREATE POLICY access_photo_read ON hp_app.design_photos AS RESTRICTIVE FOR SELECT TO hp_app_runtime USING (hp_private.access_approved());
+-- Database RPCs enforce approval too; only identity bootstrap retains session-only access.
+CREATE FUNCTION hp_private.assert_session_actor(p_user_id uuid) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+BEGIN
+  IF p_user_id IS NULL OR p_user_id::text IS DISTINCT FROM current_setting('hp.user_id',true) THEN RAISE EXCEPTION 'HP_NOT_FOUND'; END IF;
+  IF NOT hp_auth.lock_live_session(p_user_id,nullif(current_setting('hp.session_id',true),'')::uuid) OR NOT hp_private.actor_live() THEN RAISE EXCEPTION 'HP_NOT_FOUND'; END IF;
+END $$;
+CREATE OR REPLACE FUNCTION hp_app.hp_google_subjects() RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+BEGIN
+  PERFORM hp_private.assert_session_actor(nullif(current_setting('hp.user_id',true),'')::uuid);
+  RETURN (SELECT coalesce(jsonb_agg(a."accountId"),'[]'::jsonb) FROM hp_auth.account a WHERE a."userId"::text=current_setting('hp.user_id',true) AND a."providerId"='google');
+END $$;
+CREATE OR REPLACE FUNCTION hp_app.hp_admin_challenge_issue(p_nonce_hash text,p_google_subject text) RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE uid uuid := nullif(current_setting('hp.user_id',true),'')::uuid; sid uuid := nullif(current_setting('hp.session_id',true),'')::uuid;
+BEGIN
+  PERFORM hp_private.assert_session_actor(uid);
+  IF p_nonce_hash !~ '^[a-f0-9]{64}$' OR NOT EXISTS (SELECT 1 FROM hp_auth.account a WHERE a."userId"=uid AND a."providerId"='google' AND a."accountId"=p_google_subject) THEN RAISE EXCEPTION 'HP_NOT_FOUND'; END IF;
+  INSERT INTO hp_private.admin_challenges VALUES(p_nonce_hash,uid,sid,p_google_subject,clock_timestamp()+interval '5 minutes',NULL);
+  RETURN true;
+END $$;
+CREATE OR REPLACE FUNCTION hp_app.hp_admin_verify(p_nonce_hash text,p_google_subject text,p_grant_hash text) RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE uid uuid := nullif(current_setting('hp.user_id',true),'')::uuid; sid uuid := nullif(current_setting('hp.session_id',true),'')::uuid; b hp_private.admin_binding; rev bigint;
+BEGIN
+  PERFORM hp_private.assert_session_actor(uid);
+  IF p_grant_hash !~ '^[a-f0-9]{64}$' THEN RAISE EXCEPTION 'HP_INVALID'; END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('admin-bootstrap',0));
+  UPDATE hp_private.admin_challenges SET consumed_at=clock_timestamp() WHERE nonce_hash=p_nonce_hash AND user_id=uid AND session_id=sid AND google_subject=p_google_subject AND consumed_at IS NULL AND expires_at>clock_timestamp();
+  IF NOT FOUND THEN RETURN false; END IF;
+  IF NOT EXISTS (SELECT 1 FROM hp_auth.account a WHERE a."userId"=uid AND a."providerId"='google' AND a."accountId"=p_google_subject) THEN RAISE EXCEPTION 'HP_NOT_FOUND'; END IF;
+  SELECT * INTO b FROM hp_private.admin_binding WHERE singleton FOR UPDATE;
+  IF FOUND THEN
+    IF b.user_id<>uid OR b.google_subject<>p_google_subject THEN RAISE EXCEPTION 'HP_NOT_FOUND'; END IF;
+  ELSE
+    INSERT INTO hp_private.admin_binding(singleton,user_id,google_subject) VALUES(true,uid,p_google_subject);
+    SELECT revision INTO rev FROM hp_private.model_config WHERE singleton;
+    INSERT INTO hp_private.admin_audit(actor_id,action,config_revision) VALUES(uid,'admin_bootstrap',rev);
+  END IF;
+  INSERT INTO hp_private.admin_grants VALUES(p_grant_hash,uid,sid,p_google_subject,clock_timestamp()+interval '10 minutes');
+  RETURN true;
+END $$;
+CREATE OR REPLACE FUNCTION hp_app.hp_admin_grant(p_grant_hash text) RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE subject text; uid uuid := nullif(current_setting('hp.user_id',true),'')::uuid;
+BEGIN
+  PERFORM hp_private.assert_session_actor(uid);
+  SELECT g.google_subject INTO subject FROM hp_private.admin_grants g JOIN hp_private.admin_binding b ON b.singleton AND b.user_id=g.user_id AND b.google_subject=g.google_subject
+  WHERE g.grant_hash=p_grant_hash AND g.user_id=uid AND g.session_id::text=current_setting('hp.session_id',true) AND g.expires_at>clock_timestamp();
+  RETURN subject;
+END $$;
+CREATE OR REPLACE FUNCTION hp_private.assert_actor(p_user_id uuid) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+BEGIN
+ PERFORM hp_private.assert_session_actor(p_user_id);
+ PERFORM hp_app.hp_access_assert_approved();
+END $$;
+REVOKE ALL ON FUNCTION hp_private.assert_session_actor(uuid) FROM PUBLIC;
 RESET ROLE;

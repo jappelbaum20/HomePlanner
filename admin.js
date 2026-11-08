@@ -174,7 +174,7 @@
     await window.HomePlannerContractsReady;
     if (!window.HomePlannerContracts?.validate('modelConfig', body).valid) return fail(Error('Settings do not meet the contract.'));
     try { show(await adminRequest('/api/admin/model-config', { method: 'PUT', headers: { 'If-Match': `"${revision}"` }, body }), stamp); }
-    catch (error) { if (error.status === 409) { status.textContent = 'Settings changed elsewhere. Reloading current settings.'; await load(stamp).catch(fail); } else if (error.status !== 401 && error.status !== 403) fail(error); }
+    catch (error) { if (error.obsolete) return; if (error.status === 409) { status.textContent = 'Settings changed elsewhere. Reloading current settings.'; await load(stamp).catch(fail); } else if (error.status !== 401 && error.status !== 403) fail(error); }
   });
   budgetForm.addEventListener('submit', async event => {
     event.preventDefault(); const stamp = cloud.snapshot(); if (!proof || !Number.isSafeInteger(revision)) return;
@@ -182,6 +182,6 @@
     const amount = match && Number(match[1]) * 1000000 + Number((match[2] || '').padEnd(6, '0'));
     if (!Number.isSafeInteger(amount) || amount < 1 || amount > 10000000000) return fail(Error('Enter a cap from $0.000001 to $10000.'));
     try { show(await adminRequest('/api/admin/budget', { method: 'PUT', headers: { 'If-Match': `"${revision}"` }, body: { globalBudgetMicros: amount } }), stamp); }
-    catch (error) { if (error.status === 409) { status.textContent = 'Settings changed elsewhere. Reloading current settings.'; await load(stamp).catch(fail); } else if (error.status !== 401 && error.status !== 403) fail(error); }
+    catch (error) { if (error.obsolete) return; if (error.status === 409) { status.textContent = 'Settings changed elsewhere. Reloading current settings.'; await load(stamp).catch(fail); } else if (error.status !== 401 && error.status !== 403) fail(error); }
   });
 })();

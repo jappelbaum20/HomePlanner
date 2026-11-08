@@ -170,3 +170,12 @@ for(const decisions of [['denied','approved','denied'],['approved','denied','app
   assert.equal(String(e.decision_at),String(r.decided_at));
  }finally{await d.close();}
 });
+
+test('direct business RPCs deny pending actors while identity lookup remains available',async()=>{
+ const d=await setup();try{
+  assert.deepEqual(await app(d,user,us,'SELECT hp_app.hp_google_subjects() x'),['user-sub']);
+  const body={kind:'shelf',title:'blocked',schemaVersion:3,payload:{version:1},photoIds:[]};
+  await assert.rejects(app(d,user,us,'SELECT hp_app.hp_create_design($1,$2,$3,$4::jsonb) x',[user,'77777777-7777-4777-8777-777777777777','a'.repeat(64),JSON.stringify(body)]),/HP_ACCESS_PENDING/);
+  assert.equal(Number((await d.query('SELECT count(*) n FROM hp_app.designs')).rows[0].n),0);
+ }finally{await d.close();}
+});
