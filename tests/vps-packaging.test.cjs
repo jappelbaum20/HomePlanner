@@ -62,3 +62,10 @@ test('prepared context has exactly reviewed files and rejects extra files', () =
   fs.writeFileSync(path.join(target, 'unexpected.txt'), 'fixture');
   assert.notEqual(run(['scripts/audit-vps-context.mjs'], target).status, 0);
 });
+
+test('production photo reserve accepts 20 GiB and rejects a smaller floor', () => {
+ const {createPhotoStore}=require('../server/photo-files.cjs');
+ const config={root:path.resolve(root,'private'),publicRoot:path.resolve(root,'public')};
+ assert.doesNotThrow(()=>createPhotoStore({...config,minFreeBytes:20*1024**3}));
+ assert.throws(()=>createPhotoStore({...config,minFreeBytes:20*1024**3-1}),/minimum free-space/);
+});

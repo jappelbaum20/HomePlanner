@@ -1,0 +1,11 @@
+# Optional overlay; base app keeps assisted editing disabled.
+services:
+  web:
+    environment:
+      OPENAI_API_KEY_FILE: /run/secrets/provider_api_key
+      OPENAI_CONNECTION_VERSION: ${OPENAI_CONNECTION_VERSION:?Set reviewed connection version}
+      OPENAI_VALIDATED_CONNECTIONS: '${OPENAI_VALIDATED_CONNECTIONS:-[]}'
+    secrets: [provider_api_key]
+secrets:
+  provider_api_key:
+    file: ${HOMEPLANNER_PROVIDER_API_KEY_FILE:?Set private provider key file}
