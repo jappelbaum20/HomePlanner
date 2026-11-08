@@ -11,7 +11,7 @@
     form.hidden = budgetForm.hidden = accessAdmin.hidden = true; googleButton.replaceChildren(); requestList.replaceChildren(); requestDetail.replaceChildren(); entitlementList.replaceChildren();
     if (message) status.textContent = message;
   }
-  const fail = error => { status.textContent = error?.message || 'Settings are unavailable.'; };
+  const fail = error => { if (error?.obsolete) return; status.textContent = error?.message || 'Settings are unavailable.'; };
   function headers() {
     if (!proof || Date.now() >= proof.expires || !cloud.isCurrent(proof.stamp)) {
       clearProof('Verification expired. Prepare a new Google verification.');
@@ -20,9 +20,14 @@
     return { 'X-Admin-Grant': proof.grantId };
   }
   async function adminRequest(path, options = {}) {
-    try { return await cloud.request(path, { ...options, headers: { ...headers(), ...options.headers } }); }
-    catch (error) {
-      if (error.status === 401 || error.status === 403) clearProof('Verification failed or expired. Check the Google account, then try again.');
+    const attempt = sequence, owner = proof;
+    try {
+      const result = await cloud.request(path, { ...options, expected: owner?.stamp, headers: { ...headers(), ...options.headers } });
+      if (attempt !== sequence || proof !== owner) throw Object.assign(Error('Verification changed; response discarded.'), { obsolete: true });
+      return result;
+    } catch (error) {
+      if (attempt !== sequence || proof !== owner) error.obsolete = true;
+      else if (error.status === 401 || error.status === 403) clearProof('Verification failed or expired. Check the Google account, then try again.');
       throw error;
     }
   }
@@ -121,6 +126,7 @@
             clearTimeout(timer);
             timer = setTimeout(() => clearProof('Verification expired. Prepare a new Google verification.'), Math.max(0, grantExpires - Date.now()));
             const me = await adminRequest('/api/me');
+            if (attempt !== sequence) return;
             if (!cloud.isCurrent(stamp) || !proof || me.userId !== stamp.userId || me.isAdmin !== true) throw Error('Admin access is unavailable for this account.');
             await load(stamp);
           } catch (error) {
