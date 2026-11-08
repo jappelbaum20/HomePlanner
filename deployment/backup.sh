@@ -10,7 +10,17 @@ umask 077
 cd "$(dirname "$0")"
 exec 9>"$HOMEPLANNER_OPERATIONS_LOCK"
 flock -n 9 || { echo 'Another HomePlanner operation holds the lock.' >&2; exit 1; }
-compose=(docker compose --project-name homeplanner -f compose.yaml)
+if [[ "${HOMEPLANNER_HOST_ADAPTER:-}" = stage1-v1 ]]; then
+  # Fixed target binding; the adapter supplies a clean, reviewed environment.
+  compose=(docker compose --env-file /dev/null --project-name homeplanner
+    -f /srv/homeplanner/config/compose.yaml
+    -f /srv/homeplanner/config/compose.ai.yaml
+    -f /srv/homeplanner/config/stage1-67d4295-recovery/private-compose.yaml)
+elif [[ -z "${HOMEPLANNER_HOST_ADAPTER:-}" ]]; then
+  compose=(docker compose --project-name homeplanner -f compose.yaml)
+else
+  echo 'Unknown host adapter binding.' >&2; exit 1
+fi
 command -v gpg >/dev/null
 gpg --batch --list-keys "$HOMEPLANNER_BACKUP_RECIPIENT" >/dev/null
 [[ -d "$HOMEPLANNER_BACKUP_ROOT" && ! -L "$HOMEPLANNER_BACKUP_ROOT" ]] || exit 1
@@ -39,6 +49,7 @@ on_error() { echo "Backup incomplete at $backup. Inspect staging and any publica
 on_signal() { trap - TERM INT; echo "Backup interrupted at $backup. Inspect staging and any publication target; do not blindly resume HomePlanner." >&2; exit 143; }
 trap on_error ERR
 trap on_signal TERM INT
+echo 'HOMEPLANNER_PHASE stop_web' >&2
 echo 'Stopping HomePlanner web and draining its requests.'
 was_running=0
 [[ -z "$("${compose[@]}" ps -q --status running web)" ]] || was_running=1
@@ -50,6 +61,7 @@ lock="$HOMEPLANNER_PHOTO_DIR/.homeplanner-writer.lock"
 exec 8>>"$lock"
 flock -n 8 || { echo 'Photo volume is still owned by another process.' >&2; exit 1; }
 dbcmd='export PGPASSWORD="$(cat /run/secrets/db_bootstrap_password)"; exec psql -X -v ON_ERROR_STOP=1 -U homeplanner_bootstrap -d homeplanner'
+echo 'HOMEPLANNER_PHASE fence_roles' >&2
 echo 'Disabling app logins and checking for other database sessions.'
 "${compose[@]}" exec -T db sh -c "$dbcmd" <<'SQL'
 DO $$ BEGIN
@@ -87,19 +99,24 @@ if [[ -n "$publish_root" ]]; then
   ledger=$("${compose[@]}" exec -T db sh -c "$dbcmd -At -c \"SELECT string_agg(name, ',' ORDER BY name) FROM hp_migration.applied\"")
 fi
 gpg_args=(--batch --yes --trust-model always --recipient "$HOMEPLANNER_BACKUP_RECIPIENT" --encrypt)
+echo 'HOMEPLANNER_PHASE database_dump' >&2
 "${compose[@]}" exec -T db sh -c 'export PGPASSWORD="$(cat /run/secrets/db_bootstrap_password)"; exec pg_dump -U homeplanner_bootstrap -d homeplanner --format=custom' | gpg "${gpg_args[@]}" >"$backup/database.dump.gpg"
 # Reject links and special entries, then take two views while all writers are stopped.
+echo 'HOMEPLANNER_PHASE photo_capture' >&2
 "${compose[@]}" run --rm --no-deps -T --entrypoint bash photo-read -c 'set -euo pipefail; cd /photos/data; test -z "$(find . ! -type d ! -type f -print -quit)"; tar -cf - .' | gpg "${gpg_args[@]}" >"$backup/photos.tar.gpg"
+echo 'HOMEPLANNER_PHASE photo_hash' >&2
 "${compose[@]}" run --rm --no-deps -T --entrypoint bash photo-read -c 'set -euo pipefail; cd /photos/data; test -z "$(find . ! -type d ! -type f -print -quit)"; find . -type f -print0 | sort -z | xargs -0 -r sha256sum -z' | gpg "${gpg_args[@]}" >"$backup/photos.sha256z.gpg"
 (cd "$backup" && sha256sum database.dump.gpg photos.tar.gpg photos.sha256z.gpg > SHA256SUMS)
 capture_ended=$(date -u +%s)
 if [[ -n "$publish_root" ]]; then
   [[ "$capture_started" =~ ^[0-9]+$ && "$capture_ended" =~ ^[0-9]+$ && "$capture_ended" -ge "$capture_started" ]] || { echo 'Capture clock is invalid; not publishing.' >&2; exit 1; }
+echo 'HOMEPLANNER_PHASE publish' >&2
   manifest_hash=$(python3 -B publish-backup.py prepare "$publish_root" "$nonce" "$capture_name" "$capture_started" "$capture_ended" "$ledger")
   published_hash=$(python3 -B publish-backup.py publish "$publish_root" "$nonce" "$capture_name")
   [[ "$published_hash" = "$manifest_hash" ]] || { echo 'Published manifest changed.' >&2; exit 1; }
   backup="$publish_root/$capture_name"
 fi
+echo 'HOMEPLANNER_PHASE restore_logins' >&2
 "${compose[@]}" exec -T db sh -c "$dbcmd" <<'SQL'
 DO $$ BEGIN
  IF (SELECT count(*) FROM pg_catalog.pg_roles WHERE rolname IN ('hp_auth_login','hp_app_login','hp_photo_maintenance_login') AND NOT rolcanlogin) <> 3
@@ -119,6 +136,7 @@ END $$;
 SQL
 flock -u 8
 exec 8>&-
+echo 'HOMEPLANNER_PHASE restart_web' >&2
 if [[ "$was_running" = 1 ]]; then "${compose[@]}" start web; fi
 trap - ERR TERM INT
 echo "Encrypted capture completed: $backup. Service readiness is not verified; check it separately and verify the capture by an isolated restore drill."
