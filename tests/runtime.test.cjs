@@ -178,3 +178,10 @@ test('shutdown keeps integrations alive until disconnected handlers settle', asy
  await new Promise(r=>setTimeout(r,40)); assert.equal(closed,false);
  release(); await stopping; await pending; assert.equal(closed,true);
 });
+
+test('admin identity widget receives origin-only cross-origin referrers', async t => {
+ const port=await fixture(t);
+ assert.equal((await request(port,'/admin.html')).headers['referrer-policy'],'strict-origin-when-cross-origin');
+ assert.equal((await request(port,'/')).headers['referrer-policy'],'no-referrer');
+ assert.equal((await request(port,'/api/session')).headers['referrer-policy'],'no-referrer');
+});
