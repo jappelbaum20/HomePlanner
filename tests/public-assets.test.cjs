@@ -67,7 +67,7 @@ test('build emits only audited assets, empty starter and equivalent browser cont
   assert.equal(run.status,0,run.stderr || run.stdout);
   const {auditPublic}=await import('../scripts/audit-public.mjs');
   const files=await auditPublic(dist);
-  assert.equal(files.length,21);
+  assert.equal(files.length,23);
   const context=vm.createContext({TextEncoder, console}); context.window=context;
   for (const file of ['bookshelf.js','shared/validators.js','shared/contracts.js','starter-data.js']) vm.runInContext(fs.readFileSync(path.join(dist,file),'utf8'),context,{filename:file,timeout:5000});
   assert.equal(context.HOUSE_SEED.rooms.length,0);
@@ -95,7 +95,7 @@ test('upload rules admit only explicit reviewed sources', async () => {
   assert.deepEqual(uploadFiles(),[...HOSTING_INPUTS].sort());
   const config=JSON.parse(fs.readFileSync(path.join(root,'vercel.json'),'utf8'));
   assert.equal(config.git.deploymentEnabled,false); assert.equal(config.outputDirectory,'dist');
-  assert.deepEqual(config.rewrites,[{source:'/auth/callback',destination:'/index.html'}]);
+  assert.deepEqual(config.rewrites,[{source:'/auth/callback',destination:'/index.html'},{source:'/home',destination:'/index.html'},{source:'/bookshelf',destination:'/bookshelf.html'}]);
 });
 
 test('actual public bytes exclude personal source fingerprints and photos', async t => {

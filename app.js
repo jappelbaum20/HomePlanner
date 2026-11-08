@@ -5,7 +5,7 @@
   const STORAGE_KEY = 'houseplanner.project.v1';
   const hostedMode = !!(window.HOMEPLANNER_CONFIG?.selfHosted || window.HomePlannerAuth?.createAuthClient);
   let usePersonalSeeds = !hostedMode, cloudWorkspace = false, workspaceGeneration = 0, editGeneration = 0, savedGeneration = 0;
-  let readyPhotoIds = new Set(), readyPhotoMetadata = new Map(), readyPhotoDesign = null, privateObjectUrls = new Set(), virtualShelfRoom = null, persistedCloud = null;
+  let readyPhotoIds = new Set(), readyPhotoMetadata = new Map(), readyPhotoDesign = null, privateObjectUrls = new Set(), persistedCloud = null;
   const emptyHome = () => ({ version: 2, name: 'New house', catalog: [], rooms: [] });
   const T = 12, SNAP = 5;
   const WALLS = [['n', 'North', 'top'], ['e', 'East', 'right'], ['s', 'South', 'bottom'], ['w', 'West', 'left']];
@@ -863,6 +863,7 @@
   function openLocal(envelope) {
     if (cloudWorkspace && editGeneration !== savedGeneration && !confirm('Cloud edits are unsaved. Export a backup before leaving if needed. Continue?')) return false;
     if (!cloudWorkspace && (localDesignId || saveTimer) && !flushSave()) throw Error('The open local design could not be saved.');
+    if (envelope.kind === 'shelf') { sessionStorage.setItem('homeplanner.standalone.v2.transfer', JSON.stringify({ document: envelope.payload, title: envelope.title, localDesignId: envelope.localDesignId })); location.assign('/bookshelf'); return true; }
     workspaceGeneration++; clearTimeout(saveTimer); saveTimer = null;
     if (window.HomePlannerCloud) HomePlannerCloud.clearCurrent();
     if (bookshelfUI) bookshelfUI.reset(); bookshelfActive = false; $('.layout').hidden = false;
@@ -871,9 +872,8 @@
     draft = null; selected = null; readyPhotoIds.clear(); readyPhotoMetadata.clear(); readyPhotoDesign = null; persistedCloud = null; cloudWorkspace = false; usePersonalSeeds = false;
     localDesignId = envelope.localDesignId; localKind = envelope.kind; localTitle = envelope.title;
     localPhotoMetadata = new Map(envelope.photoManifest.map(p => [p.photoId, p]));
-    state = envelope.kind === 'home' ? normState(envelope.payload) : normState(emptyHome()); virtualShelfRoom = null; three.lastRoom = null;
-    if (envelope.kind === 'shelf') { virtualShelfRoom = normRoom({ id: 'shelf-preview', name: 'Shelf preview', width: 500, length: 500, height: 500 }); bookshelfUI.openShelf(envelope.payload, envelope.title); }
-    else { renderAll(); renderView(); }
+    state = normState(envelope.payload); three.lastRoom = null;
+    renderAll(); renderView();
     editGeneration = savedGeneration = 0; saveNote = 'All changes saved in this browser'; renderStatus();
     if ($('#saveDlg').open) $('#saveDlg').close(); return true;
   }
@@ -1591,7 +1591,7 @@
         if (openLocal(envelope)) toast('Backup imported as a new local design. Create a cloud copy explicitly when ready.');
         return;
       }
-      if (bookshelfActive) bookshelfUI.reset(); bookshelfActive = false; $('.layout').hidden = false; virtualShelfRoom = null;
+      if (bookshelfActive) bookshelfUI.reset(); bookshelfActive = false; $('.layout').hidden = false;
       for (const url of privateObjectUrls) URL.revokeObjectURL(url); privateObjectUrls.clear();
       photoCache.clear(); thumbs.clear(); thumbQueue.length = 0; for (const [oldId, id] of mapping) photoCache.set(id, photoData[oldId]); readyPhotoIds.clear(); readyPhotoMetadata.clear();
       state = normState(next); selected = null; three.lastRoom = null; commit(); toast('Backup imported locally; no upload was performed.'); if ($('#saveDlg').open) $('#saveDlg').close();
@@ -1871,10 +1871,19 @@
     return cloud.isCurrent(p.account) && now.current?.id === p.designId && now.current?.revision === p.revision && editGeneration === p.edit && Date.parse(p.result.expiresAt) > Date.now();
   }
   bookshelfUI = BookshelfBuilder.init($('#bookshelfBuilder'), {
-    rooms: () => virtualShelfRoom ? [virtualShelfRoom] : state.rooms,
+    rooms: () => state.rooms,
     pieces: () => state.catalog, activeRoom: () => state.activeRoomId, toast,
     draft: function (d, immediate = false) { if (arguments.length) { state.bookshelfDraft = d; if (immediate) { editGeneration++; return flushSave(); } save(); } return state.bookshelfDraft; },
     storageAvailable: () => storageAvailable, cloudWorkspace: () => cloudWorkspace, findPlacement: findBookshelfPlacement,
+    copyStandalone: (d, wall) => {
+      const offset = wall.flip ? wall.width - d.target.offset - d.design.width : d.target.offset;
+      const document = { version: 2, shelf: clone(d.design), wall: { widthCm: wall.width, heightCm: wall.height, color: wall.color }, placement: { offsetCm: offset, elevationCm: d.target.elev, gapCm: d.target.gap }, activeTab: d.tab };
+      if (!window.HomePlannerContracts?.validate('shelfDocument', document).valid) return toast('This wall or placement is outside the standalone limits. Adjust it before copying.');
+      if (cloudWorkspace && editGeneration !== savedGeneration && !confirm('The home has unsaved cloud edits. Continue to the copied shelf?')) return;
+      if (!cloudWorkspace && !flushSave()) return toast('The home could not be saved locally.');
+      try { sessionStorage.setItem('homeplanner.standalone.v2.transfer', JSON.stringify({ document, title: d.name + ' copy' })); location.assign('/bookshelf'); }
+      catch { toast('The shelf could not be copied in this browser.'); }
+    },
     canPropose: () => !!(window.HomePlannerCloud?.snapshot().me?.capabilities?.ai && window.HomePlannerCloud?.snapshot().current && window.HomePlannerContracts && typeof window.HomePlannerCanonicalize === 'function'),
     propose: async (shelf, promptText, shelfId) => {
       const cloud = HomePlannerCloud, account = cloud.snapshot(), edit = editGeneration, base = account.current;
@@ -1923,7 +1932,6 @@
       return messages;
     },
     saveDesign: (d, place, r) => {
-      if (virtualShelfRoom) { state.bookshelfDraft = clone(d); save(); toast('Use Private designs to save this shelf to cloud.'); return null; }
       const s = Bookshelf.normalize(d.design), ex = d.pieceId && piece(d.pieceId);
       const p = normPiece(Object.assign({}, ex || {}, { id: ex ? ex.id : 'c' + uid(), type: 'shelf', style: 'custom',
         name: d.name || 'Custom bookshelf', w: s.width, d: s.depth, h: s.height, color: d.color, books: false,
@@ -1960,7 +1968,7 @@
       $('#handoffBtn').disabled = false; $$('.seg button').forEach(b => { b.disabled = false; });
       for (const url of privateObjectUrls) URL.revokeObjectURL(url); privateObjectUrls.clear(); photoCache.clear(); photoLoading.clear(); thumbs.clear(); thumbQueue.length = 0;
       if ($('#modal').open) $('#modal').close(); if ($('#lightbox').open) $('#lightbox').close(); if ($('#saveDlg').open) $('#saveDlg').close();
-      draft = null; selected = null; virtualShelfRoom = null; readyPhotoIds = new Set(); readyPhotoMetadata.clear(); readyPhotoDesign = null; persistedCloud = null; usePersonalSeeds = false;
+      draft = null; selected = null; readyPhotoIds = new Set(); readyPhotoMetadata.clear(); readyPhotoDesign = null; persistedCloud = null; usePersonalSeeds = false;
       localDesignId = crypto.randomUUID(); localKind = 'home'; localPhotoMetadata.clear(); $('#lbImg').removeAttribute('src');
       cloudWorkspace = false; state = normState(emptyHome()); three.lastRoom = null; editGeneration = savedGeneration = 0;
       saveNote = 'Local only'; renderAll(); renderView();
@@ -2013,12 +2021,11 @@
       if (prepared.body.kind === 'home') renderAll();
     },
     openNew(kind, payload) {
+      if (kind === 'shelf') { const current = HomePlannerCloud.snapshot().current; if (!current?.id) throw Error('Open the shelf in the bookshelf workspace.'); location.assign('/bookshelf?design=' + encodeURIComponent(current.id)); return; }
       workspaceGeneration++; clearTimeout(saveTimer); saveTimer = null; if (bookshelfUI) bookshelfUI.reset();
       for (const url of privateObjectUrls) URL.revokeObjectURL(url); privateObjectUrls.clear(); photoCache.clear(); thumbs.clear(); thumbQueue.length = 0; readyPhotoIds.clear(); readyPhotoMetadata.clear(); readyPhotoDesign = null;
       selected = null; cloudWorkspace = true; usePersonalSeeds = false; localDesignId = null; localPhotoMetadata.clear();
-      state = kind === 'home' ? clone(payload) : normState(emptyHome()); virtualShelfRoom = null;
-      if (kind === 'shelf') { virtualShelfRoom = normRoom({ id: 'shelf-preview', name: 'Shelf preview', width: 500, length: 500, height: 500 }); bookshelfUI.openShelf(payload, 'Bookshelf'); }
-      else { $('.layout').hidden = false; bookshelfActive = false; renderAll(); renderView(); }
+      state = clone(payload); $('.layout').hidden = false; bookshelfActive = false; renderAll(); renderView();
       const current = HomePlannerCloud.snapshot().current; persistedCloud = current ? { id: current.id, revision: current.revision, kind, payload: clone(payload) } : null;
       editGeneration = savedGeneration = 0;
     },
@@ -2030,10 +2037,11 @@
       if (manifest.some(p => !p || !/^[0-9a-f-]{36}$/i.test(p.photoId || '') || !['image/jpeg','image/png','image/webp'].includes(p.mime) || !Number.isInteger(p.bytes) || p.bytes < 1 || p.bytes > 10485760 || !/^[a-f0-9]{64}$/.test(p.checksum || '')) || new Set(ids).size !== ids.length) throw Error('Invalid photo manifest metadata.');
       const refs = design.kind === 'home' ? referencedPhotos(design.payload) : [];
       if (refs.length !== ids.length || refs.some(id => !ids.includes(id))) throw Error('The design has missing or unreferenced photos.');
-      const body = { kind: design.kind, title: design.title, schemaVersion: 3, payload: design.payload, photoIds: ids };
+      const body = { kind: design.kind, title: design.title, schemaVersion: design.schemaVersion, payload: design.payload, photoIds: ids };
       const valid = window.HomePlannerContracts?.validate('writeDesign', body);
       if (!valid?.valid) throw Error('The server returned a design that does not match the contract.');
       if (!HomePlannerCloud.isCurrent(stamp) || !stillCurrent()) throw Error('Account, design or edits changed while loading.');
+      if (design.kind === 'shelf') { location.assign('/bookshelf?design=' + encodeURIComponent(design.id)); return; }
       const blobs = await Promise.all(ids.map(id => HomePlannerCloud.photo(design.id, id)));
       if (!HomePlannerCloud.isCurrent(stamp) || !stillCurrent()) throw Error('Account, design or edits changed while loading.');
       for (let i = 0; i < blobs.length; i++) {

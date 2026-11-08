@@ -15,7 +15,7 @@ await mkdir(dist, { recursive: true });
 const current = await enumerate(dist);
 const unexpected = current.filter(file => !(vps ? VPS_PUBLIC_FILES : PUBLIC_FILES).includes(file));
 if (unexpected.length) throw new Error('Refusing to build over unexpected output; inspect the dist directory.');
-const sources = ['styles.css', 'app.js', 'models3d.js', 'bookshelf.js', 'bookshelf-builder.js', 'starter-data.js', 'shared/contracts.js', 'shared/canonical.js',
+const sources = ['styles.css', 'app.js', 'standalone.js', 'bookshelf.html', 'models3d.js', 'bookshelf.js', 'bookshelf-builder.js', 'starter-data.js', 'shared/contracts.js', 'shared/canonical.js',
   'admin.html', 'admin.js', 'client/contracts-loader.js', 'client/cloud.js', 'client/ui.js'];
 for (const source of sources) {
   await mkdir(path.dirname(path.join(dist, source)), { recursive: true });
@@ -43,6 +43,10 @@ if (html.split(sdkMarker).length !== 2 || html.includes('vendor/supabase.js')) t
 html = html.replace(sdkMarker, `<script src="vendor/${vps ? 'better-auth' : 'supabase'}.js"></script>\n  ` + sdkMarker);
 html = html.replace('<base href="/">', '<base href="' + basePath + '">');
 await writeFile(path.join(dist, 'index.html'), html);
+let bookshelfHtml = await readFile(path.join(dist, 'bookshelf.html'), 'utf8');
+if (bookshelfHtml.split(sdkMarker).length !== 2) throw new Error('Unexpected bookshelf SDK insertion point.');
+bookshelfHtml = bookshelfHtml.replace(sdkMarker, `<script src="vendor/${vps ? 'better-auth' : 'supabase'}.js"></script>` + sdkMarker).replace('<base href="/">', '<base href="' + basePath + '">');
+await writeFile(path.join(dist, 'bookshelf.html'), bookshelfHtml);
 const adminHtml = await readFile(path.join(dist, 'admin.html'), 'utf8');
 await writeFile(path.join(dist, 'admin.html'), adminHtml.replace('<base href="/">', '<base href="' + basePath + '">'));
 await mkdir(path.join(dist, 'vendor'), { recursive: true });
@@ -59,9 +63,9 @@ const url = vps ? '' : process.env.HOMEPLANNER_PUBLIC_SUPABASE_URL || '', key = 
 if ((url || key) && (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(url) || !/^sb_publishable_[A-Za-z0-9_-]+$/.test(key))) throw new Error('Public Supabase configuration is invalid.');
 await writeFile(path.join(dist, 'client/config.js'), `window.HOMEPLANNER_CONFIG = ${JSON.stringify(vps ? { selfHosted: true } : { url, publishableKey: key })};\n`);
 const ajv = new Ajv({ allErrors: true, strict: true, strictRequired: false, strictTypes: false, strictNumbers: true, code: { source: true } });
-for (const name of ['shelf-v1', 'home-v2', 'api-v3', 'vps-v1']) ajv.addSchema(JSON.parse(await readFile(path.join(root, `shared/schema/${name}.json`), 'utf8')));
+for (const name of ['shelf-v1', 'shelf-document-v2', 'home-v2', 'api-v3', 'api-v4', 'vps-v1']) ajv.addSchema(JSON.parse(await readFile(path.join(root, `shared/schema/${name}.json`), 'utf8')));
 const base = 'https://schemas.homeplanner.invalid/';
-const names = { shelf: 'shelf-v1', home: 'home-v2', writeDesign: 'api-v3#/definitions/writeDesign',
+const names = { shelf: 'shelf-v1', shelfDocument: 'shelf-document-v2', home: 'home-v2', writeDesignV4: 'api-v4#/definitions/writeDesign', localV4: 'api-v4#/definitions/local', writeDesign: 'api-v3#/definitions/writeDesign',
   local: 'api-v3#/definitions/local', proposalRequest: 'api-v3#/definitions/proposalRequest',
   proposal: 'api-v3#/definitions/proposal', photoRequest: 'api-v3#/definitions/photoRequest',
   modelConfig: 'api-v3#/definitions/modelConfig', error: 'api-v3#/definitions/error', session: 'vps-v1#/definitions/session', uploadReservation: 'vps-v1#/definitions/uploadReservation' };

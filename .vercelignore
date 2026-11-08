@@ -1,6 +1,8 @@
 # Fail closed at the project root. Do not use Git deployment with this private checkout.
 /*
 !/index.html
+!/bookshelf.html
+!/standalone.js
 !/styles.css
 !/app.js
 !/models3d.js
@@ -34,8 +36,10 @@
 !/shared/schema/
 /shared/schema/*
 !/shared/schema/shelf-v1.json
+!/shared/schema/shelf-document-v2.json
 !/shared/schema/home-v2.json
 !/shared/schema/api-v3.json
+!/shared/schema/api-v4.json
 !/shared/schema/vps-v1.json
 # Reserved exact module names; endpoint paths are frozen in the stage A handoff.
 !/server/

@@ -20,17 +20,17 @@ async page => {
     }
     return json(404,{});
   });
-  await page.goto(origin+'/');await page.evaluate(()=>window.HomePlannerContractsReady);await page.getByRole('button',{name:'Private designs'}).click();await page.getByRole('button',{name:'New shelf'}).waitFor();
+  await page.goto(origin+'/bookshelf');await page.evaluate(()=>window.HomePlannerContractsReady);await page.getByRole('button',{name:'Private designs'}).click();await page.getByRole('button',{name:'New shelf'}).waitFor();
   page.once('dialog',d=>d.accept('Fixture shelf'));await page.getByRole('button',{name:'New shelf'}).click();await page.getByText('Saved to cloud · revision 1').waitFor();await page.locator('#cloudClose').click();
   const depth=page.getByRole('spinbutton',{name:'Depth, cm'});const before=await depth.inputValue();
   page.once('dialog',d=>d.accept('Make the shelf a little deeper'));await page.getByRole('button',{name:'Request AI preview'}).click();await page.getByText('A fixture preview').waitFor();
   check(await depth.inputValue()===before,'request does not mutate shelf');await page.getByRole('button',{name:'Apply preview'}).click();check(await depth.inputValue()==='31','apply changes shelf');
   page.once('dialog',d=>d.accept('Do not send unsaved shelf'));await page.getByRole('button',{name:'Request AI preview'}).click();
-  await page.getByText(/Save this shelf design and then save the cloud design/).waitFor();check(proposalCalls===1,'unsaved standalone shelf is rejected without a provider request');
+  await page.getByText(/Save the current shelf to cloud/).waitFor();check(proposalCalls===1,'unsaved standalone shelf is rejected without a provider request');
   await page.getByRole('button',{name:'Undo',exact:true}).click();check(await depth.inputValue()===before,'undo restores prior geometry');
   page.once('dialog',d=>d.accept('Preview again'));await page.getByRole('button',{name:'Request AI preview'}).click();await page.getByText('A fixture preview').waitFor();await depth.fill('32');await page.getByRole('button',{name:'Apply preview'}).click();
   check((await page.locator('#bsProposalStatus').innerText()).includes('stale'),'an edit after preview blocks stale apply');check(proposalCalls===2,'requests reached only the fake endpoint');
-  await page.getByRole('button',{name:'Private designs'}).click();
+  page.once('dialog',d=>d.accept()); await page.goto(origin+'/home'); await page.waitForFunction(()=>HomePlannerCloud.snapshot().me); await page.getByRole('button',{name:'Private designs'}).click();
   page.on('dialog',async function handle(d){ if(d.type()==='confirm') await d.accept(); else { await d.accept('Home fixture'); page.off('dialog',handle); } });
   await page.getByRole('button',{name:'New home'}).click();await page.getByText('Saved to cloud · revision 1').waitFor();await page.locator('#cloudClose').click();
   await page.getByRole('button',{name:'Add room'}).click();await page.locator('#nrName').fill('Shelf room');await page.getByRole('button',{name:'Create room',exact:true}).click();

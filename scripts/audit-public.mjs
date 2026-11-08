@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const PUBLIC_FILES = Object.freeze([
-  'index.html', 'styles.css', 'app.js', 'models3d.js', 'bookshelf.js', 'bookshelf-builder.js',
+  'index.html', 'bookshelf.html', 'standalone.js', 'styles.css', 'app.js', 'models3d.js', 'bookshelf.js', 'bookshelf-builder.js',
   'starter-data.js', 'shared/contracts.js', 'shared/validators.js', 'shared/canonical.js',
   'admin.html', 'admin.js', 'client/config.js', 'client/contracts-loader.js', 'client/cloud.js', 'client/ui.js',
   'vendor/supabase.js', 'vendor/three.min.js', 'vendor/OrbitControls.js', 'vendor/RoomEnvironment.js', 'vendor/RoundedBoxGeometry.js'
@@ -39,6 +39,8 @@ export async function auditPublic(root, target = 'legacy') {
   }
   if (scripts.indexOf(target === 'vps' ? 'vendor/better-auth.js' : 'vendor/supabase.js') > scripts.indexOf('client/cloud.js')) throw new Error('SDK must load before cloud client.');
   if (target === 'vps' && (index.includes('vendor/supabase.js') || /supabase/i.test(await readFile(path.join(root, 'client/config.js'), 'utf8')))) throw new Error('Legacy provider configuration is forbidden in VPS output.');
+  const shelf = await readFile(path.join(root, 'bookshelf.html'), 'utf8');
+  if (/house-data|starter-data|app\.js|https?:\/\//i.test(shelf) || !shelf.includes('standalone.js') || !shelf.includes(target === 'vps' ? 'vendor/better-auth.js' : 'vendor/supabase.js')) throw Error('Invalid standalone page dependencies.');
   return files;
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

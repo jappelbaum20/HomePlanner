@@ -10,7 +10,7 @@ const publicFiles = new Set(require('../shared/vps-public-files.json'));
 const JSON_LIMIT = 1100000, AUTH_LIMIT = 65536, RAW_LIMIT = 10485760, BODY_TIMEOUT = 30000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const SAFE = new Set(['GET', 'HEAD']);
-const CSP = "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: blob: https://*.googleusercontent.com; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'";
+const CSP = "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: blob: https://*.googleusercontent.com; connect-src 'self' data: blob: https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'";
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 
 function securityHeaders(res) {
@@ -81,7 +81,7 @@ function boundedStream(req, res, max, origin) {
   return { stream, failed: () => failed };
 }
 async function staticFile(req, res, pathname, dist) {
-  const name = pathname === '/' ? 'index.html' : pathname.slice(1);
+  const name = pathname === '/' || pathname === '/home' ? 'index.html' : pathname === '/bookshelf' ? 'bookshelf.html' : pathname.slice(1);
   if (!publicFiles.has(name)) return error(res, 404, 'not_found', 'Resource not found.');
   // The identity widget needs the page origin; paths and queries stay private cross-origin.
   if (name === 'admin.html') res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');

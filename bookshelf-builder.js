@@ -8,28 +8,36 @@ window.BookshelfBuilder = (() => {
   const walls = { n: 'North · top', e: 'East · right', s: 'South · bottom', w: 'West · left' };
   let host, api, draft, visible = false, rig, drag, row = 0, history = [], editing = null, interactionGeneration = 0, proposal = null;
   const room = () => api.rooms().find(r => r.id === draft.target.roomId) || api.rooms()[0];
+  const standalone = () => api.mode === 'standalone';
+  // A wall is a rendering/fit context, independent of room membership.
+  const wallContext = () => {
+    if (standalone()) return { width: draft.wall.widthCm, height: draft.wall.heightCm, color: draft.wall.color, openings: [], flip: false, name: 'Standalone wall' };
+    const r = room(), wall = draft.target.wall;
+    return { width: ['n', 's'].includes(wall) ? r.width : r.length, height: r.height, color: r.walls[wall], openings: r.openings.filter(o => o.wall === wall), flip: ['s', 'e'].includes(wall), name: `${r.name} · ${walls[wall]} wall` };
+  };
   const field = (name, label, value, extra = '') => `<label class="field"><span>${label}</span><input data-bs="${name}" value="${esc(value)}" ${extra}></label>`;
   const numeric = (name, label, value, min = 0, max = 1000) => field(name, label, value, `type="number" step="any" min="${min}" max="${max}" required`);
   function checkpoint() { history.push(JSON.stringify(draft)); if (history.length > 50) history.shift(); }
   function persist(immediate = false) { return api.draft(JSON.parse(JSON.stringify(draft)), immediate); }
   const withoutAlternate = d => { const copy = JSON.parse(JSON.stringify(d)); delete copy.alternate; return copy; };
   function fresh(tab = 'custom') {
-    const r = api.rooms().find(r => r.id === api.activeRoom()) || api.rooms()[0];
+    const r = standalone() ? null : (api.rooms().find(r => r.id === api.activeRoom()) || api.rooms()[0]);
     const saetter = tab === 'saetter';
     return { tab, name: saetter ? 'SÆTTER 3 · walnut' : 'Custom bookshelf', color: saetter ? '#76513D' : '#A46B42',
-      design: saetter ? B.saetter3() : B.preset('staggered', Math.min(240, r.width), Math.min(200, r.height - 8)),
-      target: { roomId: r.id, wall: 'n', offset: 20, gap: saetter ? 0 : 2, elev: saetter ? 120 : 0 }, pieceId: null, itemId: null, itemRoomId: null };
+      design: saetter ? B.saetter3() : B.preset('staggered', Math.min(240, r?.width ?? 500), Math.min(200, (r?.height ?? 500) - 8)),
+      ...(standalone() ? { wall: { widthCm: 500, heightCm: 500, color: '#EEEDE8' } } : {}),
+      target: { roomId: r?.id || null, wall: 'n', offset: standalone() ? 0 : 20, gap: standalone() ? 0 : saetter ? 0 : 2, elev: standalone() ? 0 : saetter ? 120 : 0 }, pieceId: null, itemId: null, itemRoomId: null };
   }
   function prepare() {
     draft.tab = draft.tab === 'saetter' ? 'saetter' : 'custom';
     draft.design = B.normalize(draft.design);
-    if (!api.rooms().some(r => r.id === draft.target.roomId)) draft.target.roomId = api.rooms()[0].id;
+    if (!standalone() && !api.rooms().some(r => r.id === draft.target.roomId)) draft.target.roomId = api.rooms()[0].id;
     if (draft.pieceId && !api.pieces().some(p => p.id === draft.pieceId)) draft.pieceId = null;
     if (draft.itemId && !api.hasPlacement(draft.itemId, draft.itemRoomId)) { draft.itemId = null; draft.itemRoomId = null; }
   }
   function open(piece, placement) {
     interactionGeneration++; proposal = null;
-    if (!api.rooms().length) return api.toast('Office and Living room are unavailable in this plan.');
+    if (!standalone() && !api.rooms().length) return api.toast('Office and Living room are unavailable in this plan.');
     const previous = api.draft();
     if (piece) {
       const tab = piece.shelfDesign?.template === 'saetter3' ? 'saetter' : 'custom';
@@ -55,6 +63,7 @@ window.BookshelfBuilder = (() => {
     if (draft.tab === tab) return;
     const previous = withoutAlternate(draft);
     const next = draft.alternate?.tab === tab ? withoutAlternate(draft.alternate) : fresh(tab);
+    if (standalone()) next.wall = JSON.parse(JSON.stringify(draft.wall));
     draft = next; draft.alternate = previous; prepare();
     row = 0; history = []; editing = null; persist(true); render();
     host.querySelector(`#bs-tab-${tab}`).focus();
@@ -64,18 +73,18 @@ window.BookshelfBuilder = (() => {
     const geometry = B.validate(draft.design);
     const invalid = [...host.querySelectorAll('input[type="number"][data-bs]')].filter(t => !t.disabled && (!t.value.trim() || !t.validity.valid));
     return { ...geometry, errors: [...geometry.errors, ...invalid.map(t => `${t.closest('label').textContent.trim()}: enter a number within the shown range.`)],
-      fit: [...B.fit(draft.design, room(), draft.target), ...api.collisions(draft, room())] };
+      fit: standalone() ? [ ...(draft.target.offset + draft.design.width > draft.wall.widthCm ? ['Bookshelf extends beyond the wall width.'] : []), ...(draft.target.elev + draft.design.height > draft.wall.heightCm ? ['Bookshelf extends beyond the wall height.'] : []) ] : [...B.fit(draft.design, room(), draft.target), ...api.collisions(draft, room())] };
   }
   function drawing(wallContext = true) {
-    const s = draft.design, r = room(), target = draft.target;
-    const W = wallContext ? (['n', 's'].includes(target.wall) ? r.width : r.length) : s.width;
-    const H = wallContext ? r.height : s.height;
-    const flip = wallContext && ['s', 'e'].includes(target.wall);
+    const s = draft.design, wall = getWall(), target = draft.target;
+    const W = wallContext ? wall.width : s.width;
+    const H = wallContext ? wall.height : s.height;
+    const flip = wallContext && wall.flip;
     const dx = wallContext ? (flip ? W - target.offset - s.width : target.offset) : 0;
     const dy = wallContext ? target.elev : 0;
     const fs = Math.max(W, H) / 45, pad = fs * 3;
-    let out = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-pad} ${-pad} ${W + pad * 2} ${H + pad * 2}" role="img" aria-label="Dimensioned front elevation; all dimensions in centimetres"><rect width="${W}" height="${H}" fill="${wallContext ? esc(r.walls[target.wall]) : '#FAF8F3'}" stroke="#B5B8B0"/>`;
-    if (wallContext) r.openings.filter(o => o.wall === target.wall).forEach(o => {
+    let out = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-pad} ${-pad} ${W + pad * 2} ${H + pad * 2}" role="img" aria-label="Dimensioned front elevation; all dimensions in centimetres"><rect width="${W}" height="${H}" fill="${wallContext ? esc(wall.color) : '#FAF8F3'}" stroke="#B5B8B0"/>`;
+    if (wallContext) wall.openings.forEach(o => {
       const x = flip ? W - o.offset - o.width : o.offset;
       out += `<rect x="${x}" y="${H - (o.sill + o.height)}" width="${o.width}" height="${o.height}" fill="${o.type === 'door' ? '#D7C6AE' : '#D5E5EA'}" stroke="#737D7C"/><text x="${x + 3}" y="${H - o.sill - 5}" font-size="${fs}" fill="#293A3D">${o.type}</text>`;
       if (o.radiator) out += `<rect x="${x}" y="${H - o.sill + 10}" width="${o.width}" height="${Math.max(1, o.sill - 22)}" fill="#DBDDDA" stroke="#848D88"/>`;
@@ -92,17 +101,18 @@ window.BookshelfBuilder = (() => {
     out += `<text x="${W / 2}" y="${H + fs * 1.7}" text-anchor="middle" font-size="${fs}" fill="#313C37">${fmt(W)} cm${wallContext ? ' wall' : ' overall width'}</text><text transform="translate(${-fs * 1.3} ${H / 2}) rotate(-90)" text-anchor="middle" font-size="${fs}" fill="#313C37">${fmt(H)} cm</text></svg>`;
     return out;
   }
+  const getWall = wallContext;
   function render() {
-    const s = draft.design, r = room();
+    const s = draft.design, r = standalone() ? null : room();
     row = Math.max(0, Math.min(row, s.levels.length - 1));
-    host.innerHTML = `<div class="bs-heading"><div><p class="bs-eyebrow">DESIGN FOR YOUR HOME</p><h1 tabindex="-1">Bookshelf builder</h1><p class="note">Choose a wall. Shape each shelf. Keep a plan to build from.</p></div><button class="btn light" data-bs-action="close">Back to room</button></div>
+    host.innerHTML = `<div class="bs-heading"><div><p class="bs-eyebrow">DESIGN FOR YOUR HOME</p><h1 tabindex="-1">Bookshelf builder</h1><p class="note">Choose a wall. Shape each shelf. Keep a plan to build from.</p></div>${standalone() ? '<a class="btn light" href="/home">Home planner</a>' : '<button class="btn light" data-bs-action="close">Back to room</button>'}</div>
       <div class="bs-tabs" role="tablist" aria-label="Bookshelf designs">${[['custom', 'Custom bookshelf'], ['saetter', 'SÆTTER 3']].map(([id, label]) => `<button type="button" id="bs-tab-${id}" role="tab" aria-selected="${draft.tab === id}" aria-controls="bs-tabpanel" tabindex="${draft.tab === id ? 0 : -1}" data-bs-tab="${id}">${label}</button>`).join('')}</div>
       <div class="bs-layout" id="bs-tabpanel" role="tabpanel" aria-labelledby="bs-tab-${draft.tab}"><aside class="bs-controls">
         ${draft.tab === 'saetter' ? `<p class="note bs-reference"><a href="https://saetter.dk/en/products/saetter-3-valnod" target="_blank" rel="noopener noreferrer">SÆTTER 3 · walnut reference</a><br>Reference: 45.5 × 40.6 × 10.5 cm overall; compartments 10 × 12 × 10 cm. This editable approximation uses an inferred 1.1 cm board, 0.5 cm back and 3 cm separators; initial clear height is about 12.07 cm. Joinery and hardware are not specified.</p>` : ''}
-        <h2>1. Choose your wall</h2><label class="field"><span>Room</span><select data-bs="roomId">${api.rooms().map(x => `<option value="${esc(x.id)}" ${x.id === r.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
+        <h2>1. Choose your wall</h2>${standalone() ? `<div class="row2">${numeric('wallWidth', 'Wall width, cm', draft.wall.widthCm, 10, 2000)}${numeric('wallHeight', 'Wall height, cm', draft.wall.heightCm, 10, 2000)}</div>${field('wallColor', 'Wall color', draft.wall.color, 'type="color"')}<p class="note" id="bsWallNote">This wall belongs to this standalone design.</p>` : `<label class="field"><span>Room</span><select data-bs="roomId">${api.rooms().map(x => `<option value="${esc(x.id)}" ${x.id === r.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
         <label class="field"><span>Wall</span><select data-bs="wall">${Object.entries(walls).map(([k, label]) => `<option value="${k}" ${k === draft.target.wall ? 'selected' : ''}>${label} · ${['n', 's'].includes(k) ? r.width : r.length} cm</option>`).join('')}</select></label>
-        <p class="note" id="bsWallNote">Ceiling ${r.height} cm. Wall sides match the floor plan. Offset is from its left corner (north/south) or top corner (east/west).</p>
-        <div class="row3">${numeric('offset', 'Wall offset, cm', draft.target.offset)}${numeric('gap', 'Wall gap, cm', draft.target.gap)}${numeric('elev', 'Above floor, cm', draft.target.elev)}</div>
+        <p class="note" id="bsWallNote">Ceiling ${r.height} cm. Wall sides match the floor plan. Offset is from its left corner (north/south) or top corner (east/west).</p>`}
+        <div class="row3">${numeric('offset', 'Wall offset, cm', draft.target.offset, 0, standalone() ? 2000 : 1000)}${numeric('gap', 'Wall gap, cm', draft.target.gap, 0, standalone() ? 100 : 1000)}${numeric('elev', 'Above floor, cm', draft.target.elev, 0, standalone() ? 2000 : 1000)}</div>
         <h2>2. Shape the bookshelf</h2>${field('name', 'Design name', draft.name, 'maxlength="100"')}
         <div class="row3">${numeric('width', 'Width, cm', s.width, 20)}${numeric('height', 'Height, cm', s.height, 20, 800)}${numeric('depth', 'Depth, cm', s.depth, 10, 100)}</div>
         <div class="row2">${numeric('thickness', 'Board thickness, cm', s.thickness, .9, 6)}${field('color', 'Wood / finish color', draft.color, 'type="color"')}</div>
@@ -115,13 +125,13 @@ window.BookshelfBuilder = (() => {
       </aside><div class="bs-preview"><div class="bs-preview-head"><h2 id="bsPreviewTitle"></h2><div class="btnrow"><button class="btn light small" data-bs-action="undo" ${history.length ? '' : 'disabled'}>Undo</button><button class="btn light small" data-bs-action="resetCamera">Reset 3D view</button></div></div>
         <div id="bs3d" aria-label="Orbitable 3D bookshelf against the selected wall"></div><p class="note">Drag to orbit · scroll to zoom · click a board to edit its level</p>
         <div id="bsDrawing" class="bs-drawing"></div><div id="bsProblems" aria-live="polite"></div>
-      </div><aside class="bs-output"><h2>3. Save & place</h2><label class="field"><span>Saved bookshelf designs</span><select data-bs="saved"><option value="">Select a design…</option>${api.pieces().filter(p => p.shelfDesign).map(p => `<option value="${esc(p.id)}" ${p.id === draft.pieceId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
-        <p class="note" id="bsSaveNote"></p><div class="bs-save-actions"><button class="btn" data-bs-action="save">Save design</button><button class="btn mark" data-bs-action="place">Save & ${draft.itemId ? 'move placement' : 'place on wall'}</button><button class="btn light" data-bs-action="copy">Make a copy</button><button class="btn light" data-bs-action="new">New design</button></div>
+      </div><aside class="bs-output"><h2>3. ${standalone() ? 'Save design' : 'Save & place'}</h2>${standalone() ? '' : `<label class="field"><span>Saved bookshelf designs</span><select data-bs="saved"><option value="">Select a design…</option>${api.pieces().filter(p => p.shelfDesign).map(p => `<option value="${esc(p.id)}" ${p.id === draft.pieceId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>`}
+        <p class="note" id="bsSaveNote"></p><div class="bs-save-actions"><button class="btn" data-bs-action="save">Save design</button>${standalone() ? '' : `<button class="btn mark" data-bs-action="place">Save & ${draft.itemId ? 'move placement' : 'place on wall'}</button><button class="btn light" data-bs-action="standaloneCopy">Copy to standalone bookshelf</button>`}<button class="btn light" data-bs-action="copy">Make a copy</button><button class="btn light" data-bs-action="new">New design</button></div>
         <h3>AI shelf edit</h3><p class="note">Only the current shelf geometry and your prompt are sent for a proposal. Nothing changes until you apply it.</p><button class="btn light" data-bs-action="propose" ${api.canPropose?.() ? '' : 'disabled'}>Request AI preview</button><p class="note" id="bsProposalStatus" role="status">${api.canPropose?.() ? '' : 'AI edits are unavailable until sign-in, model configuration and shared validation are ready.'}</p><div id="bsProposal"></div>
         <h3>Workshop plan</h3><p class="note">${s.template === 'saetter3' ? 'Inferred square-cut shelves, back and paired short separators. The drawing and list use the same approximate geometry as 3D.' : 'Square-cut boards, full depth. Dividers fit between horizontal shelves with butt joints. The drawing and list use the same geometry as 3D.'}</p>
         <div id="bsCutSummary"></div><div class="bs-table-wrap"><table class="bs-cut"><thead><tr><th>Board</th><th>Length × depth × thickness, mm</th></tr></thead><tbody id="bsCutList"></tbody></table></div>
         <div class="bs-save-actions"><button class="btn light" data-bs-action="csv">Download cut list</button><button class="btn light" data-bs-action="plan">Download build plan</button><button class="btn light" data-bs-action="print">Print / save PDF</button><button class="btn light" data-bs-action="json">Export design JSON</button></div>
-        <p class="note">${api.cloudWorkspace?.() ? 'Cloud edits stay in this tab until saved through Private designs. Export a backup before leaving.' : 'Drafts autosave in this browser. Saved designs are in My pieces, versions, and full-plan backups.'}</p>
+        <p class="note">${api.cloudWorkspace?.() ? 'Cloud edits stay in this tab until saved through Private designs. Export a backup before leaving.' : standalone() ? 'Drafts autosave in this browser. Use Open local design to reopen saved shelves, or export JSON as a backup.' : 'Drafts autosave in this browser. Saved designs are in My pieces, versions, and full-plan backups.'}</p>
         <p class="note">Measure the actual wall and timber before cutting. Cut sizes exclude saw kerf, machining allowances, fasteners and joinery. Check sag, stability and wall anchoring for your chosen wood and loads.</p>
       </aside></div>`;
     refresh();
@@ -151,29 +161,34 @@ window.BookshelfBuilder = (() => {
       if (next) editor.querySelector('#bsBayHeading').textContent = `Dividers in bay ${row + 1} · ${fmt(next.y - l.y - s.thickness)} cm clear height`;
       if (next) editor.querySelector('[data-bs-action="addDivider"]').disabled = B.dividerPosition(s, row) === null;
     }
-    const r = room();
-    host.querySelector('[data-bs="wall"]').innerHTML = Object.entries(walls).map(([k, label]) => `<option value="${k}" ${k === draft.target.wall ? 'selected' : ''}>${label} · ${['n', 's'].includes(k) ? r.width : r.length} cm</option>`).join('');
-    host.querySelector('#bsWallNote').textContent = `Ceiling ${r.height} cm. Wall sides match the floor plan. Offset is from its left corner (north/south) or top corner (east/west).`;
-    const values = { ...draft.target, name: draft.name, color: draft.color, width: s.width, height: s.height, depth: s.depth, thickness: s.thickness, separatorHeight: s.separatorHeight, backThickness: s.backThickness };
+    if (!standalone()) {
+      const r = room();
+      host.querySelector('[data-bs="wall"]').innerHTML = Object.entries(walls).map(([k, label]) => `<option value="${k}" ${k === draft.target.wall ? 'selected' : ''}>${label} · ${['n', 's'].includes(k) ? r.width : r.length} cm</option>`).join('');
+      host.querySelector('#bsWallNote').textContent = `Ceiling ${r.height} cm. Wall sides match the floor plan. Offset is from its left corner (north/south) or top corner (east/west).`;
+    }
+    const values = { ...draft.target, wallWidth: draft.wall?.widthCm, wallHeight: draft.wall?.heightCm, wallColor: draft.wall?.color, name: draft.name, color: draft.color, width: s.width, height: s.height, depth: s.depth, thickness: s.thickness, separatorHeight: s.separatorHeight, backThickness: s.backThickness };
     host.querySelector('.bs-controls').querySelectorAll('[data-bs]').forEach(t => {
       if (Object.hasOwn(values, t.dataset.bs) && t !== document.activeElement) t.value = values[t.dataset.bs];
     });
     host.querySelector('[data-bs-action="addLevel"]').disabled = s.levels.length < 2 || s.levels.length >= 25;
     host.querySelector('#bsEditFeedback').textContent = p.errors[0] || '';
     host.querySelector('#bsDrawing').innerHTML = drawing();
-    host.querySelector('#bsPreviewTitle').textContent = `${room().name} · ${walls[draft.target.wall]} wall`;
+    host.querySelector('#bsPreviewTitle').textContent = getWall().name;
     host.querySelector('#bsProblems').innerHTML = `${p.errors.length ? `<div class="bs-error"><b>Fix the board layout before saving</b><ul>${p.errors.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
-      ${p.fit.length ? `<div class="bs-error"><b>Choose a clear placement before placing</b><ul>${p.fit.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '<p class="bs-ok">Fits the wall dimensions and clears the checked openings and furniture.</p>'}
+      ${p.fit.length ? `<div class="bs-error"><b>${standalone() ? 'Wall overflow' : 'Choose a clear placement before placing'}</b><ul>${p.fit.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : `<p class="bs-ok">${standalone() ? 'Fits the wall dimensions.' : 'Fits the wall dimensions and clears the checked openings and furniture.'}</p>`}
       ${p.warnings.length ? `<div class="bs-warning"><b>Construction checks</b><ul>${p.warnings.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}`;
     const parts = B.boards(s);
     host.querySelector('#bsCutList').innerHTML = valid ? parts.map(b => `<tr><td>${b.id}</td><td>${mm(b.length)} × ${mm(b.depth)} × ${mm(b.thickness)}</td></tr>`).join('') : '<tr><td colspan="2">Fix the layout to calculate a usable cut list.</td></tr>';
     host.querySelector('#bsCutSummary').textContent = valid ? `${parts.length} boards · ${fmt(parts.reduce((sum, b) => sum + b.length * b.depth, 0) / 10000)} m² of board face (before waste)` : '';
     host.querySelector('#bsSaveNote').textContent = draft.pieceId ? 'Saving updates this design and all its existing placements. Make a copy for a different version.' : 'Save as a reusable piece; place it now or later in either room.';
-    if (api.cloudWorkspace?.()) host.querySelector('#bsSaveNote').textContent = 'Use Private designs to save changes to cloud.';
+    if (standalone()) host.querySelector('#bsSaveNote').textContent = api.legacyDefault?.() ? 'Legacy shelf: default 500 × 500 cm neutral wall and zero placement. Save explicitly to retain wall settings.' : 'Save locally or use Private designs to save to your account.';
+    if (!standalone() && api.cloudWorkspace?.()) host.querySelector('#bsSaveNote').textContent = 'Use Private designs to save changes to cloud.';
     if (!api.storageAvailable()) host.querySelector('#bsSaveNote').textContent = 'Browser storage is unavailable: changes only last for this session. Download a design or export a full-plan backup now.';
     for (const action of ['save', 'csv', 'plan', 'print', 'json']) host.querySelector(`[data-bs-action="${action}"]`).disabled = !valid;
-    host.querySelector('[data-bs-action="place"]').disabled = !valid || !!p.fit.length;
+    if (!standalone()) host.querySelector('[data-bs-action="place"]').disabled = !valid || !!p.fit.length;
     host.querySelector('[data-bs-action="undo"]').disabled = !history.length;
+    host.querySelector('[data-bs-action="propose"]').disabled = !api.canPropose?.();
+    if (api.canPropose?.() && host.querySelector('#bsProposalStatus').textContent.startsWith('AI edits are unavailable')) host.querySelector('#bsProposalStatus').textContent = '';
   }
   function update3D(reset = false) {
     const el = host.querySelector('#bs3d');
@@ -210,13 +225,13 @@ window.BookshelfBuilder = (() => {
         ['map', 'bumpMap'].forEach(k => { if (m[k] && !m[k].keep && o.geometry?.type !== 'PlaneGeometry') m[k].dispose(); }); m.dispose();
       }); });
     }
-    const s = draft.design, r = room(), target = draft.target, W = ['n', 's'].includes(target.wall) ? r.width : r.length;
-    const flip = ['s', 'e'].includes(target.wall), offset = flip ? W - target.offset - s.width : target.offset;
+    const s = draft.design, wall = getWall(), target = draft.target, W = wall.width;
+    const flip = wall.flip, offset = flip ? W - target.offset - s.width : target.offset;
     const g = rig.group = new THREE.Group(); rig.scene.add(g);
     const addBox = (w, h, d, x, y, z, color) => { const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color })); mesh.position.set(x, y, z); g.add(mesh); return mesh; };
-    addBox(W, r.height, 3, W / 2, r.height / 2, -1.5, r.walls[target.wall]);
+    addBox(W, wall.height, 3, W / 2, wall.height / 2, -1.5, wall.color);
     addBox(W + 50, 2, 150, W / 2, -1, 60, '#C9B497');
-    r.openings.filter(o => o.wall === target.wall).forEach(o => {
+    wall.openings.forEach(o => {
       const x = flip ? W - o.offset - o.width : o.offset;
       addBox(o.width, o.height, 1, x + o.width / 2, o.sill + o.height / 2, .6, o.type === 'door' ? '#BFA98C' : '#C3DBE5');
       if (o.radiator) addBox(o.width * .9, Math.max(1, o.sill - 22), 12, x + o.width / 2, 10 + (o.sill - 22) / 2, 6, '#E8E9E5');
@@ -243,7 +258,8 @@ window.BookshelfBuilder = (() => {
   function changed(full = false, reframe = false) { persist(true); if (full) render(); else { refresh(); update3D(reframe); } }
   function applyField(t, baseline) {
     const key = t.dataset.bs, s = draft.design, l = s.levels[row];
-    if (['roomId', 'wall', 'offset', 'gap', 'elev'].includes(key)) draft.target[key] = t.type === 'number' ? Number(t.value) : t.value;
+    if (standalone() && ['wallWidth', 'wallHeight', 'wallColor'].includes(key)) draft.wall[{ wallWidth: 'widthCm', wallHeight: 'heightCm', wallColor: 'color' }[key]] = t.type === 'number' ? Number(t.value) : t.value;
+    else if (['roomId', 'wall', 'offset', 'gap', 'elev'].includes(key)) draft.target[key] = t.type === 'number' ? Number(t.value) : t.value;
     else if (key === 'width' || key === 'height') draft.design = B.resize(baseline.design, key === 'width' ? +t.value : s.width, key === 'height' ? +t.value : s.height);
     else if (key === 'thickness') {
       const source = baseline.design; draft.design = JSON.parse(JSON.stringify(source)); draft.design.thickness = +t.value;
@@ -263,8 +279,8 @@ window.BookshelfBuilder = (() => {
     a.href = url; a.download = (draft.name.replace(/[^a-z0-9_-]+/gi, '-').replace(/^-|-$/g, '') || 'bookshelf') + '.' + ext; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   function buildPlan() {
-    const s = draft.design, r = room();
-    return `<!doctype html><html lang="en"><meta charset="utf-8"><title>${esc(draft.name)} · build plan</title><style>body{font:14px system-ui;color:#222;max-width:900px;margin:30px auto;padding:0 20px}svg{width:100%;max-height:480px}table{border-collapse:collapse;width:100%;font-size:12px}td,th{border:1px solid #ccc;padding:6px;text-align:left}tr{break-inside:avoid}p{line-height:1.5}@media print{button{display:none}body{margin:0}thead{display:table-header-group}}</style><button onclick="window.print()">Print / save PDF</button><h1>${esc(draft.name)}</h1><p>${mm(s.width)} × ${mm(s.height)} × ${mm(s.depth)} mm overall · ${mm(s.thickness)} mm timber<br>${esc(r.name)}, ${esc(walls[draft.target.wall])} wall; offset ${mm(draft.target.offset)} mm, wall gap ${mm(draft.target.gap)} mm, base ${mm(draft.target.elev)} mm above floor.</p>${drawing(false)}<p>Front elevation. Drawing labels are board IDs; dimensions on the drawing are cm. Table dimensions are mm. X = board left edge from bookshelf left; Y = underside from bookshelf base. Shelf lengths run horizontally; divider lengths run vertically.</p><table><thead><tr><th>Board</th><th>Part</th><th>Length × depth × thickness, mm</th><th>X, mm</th><th>Y, mm</th></tr></thead><tbody>${B.boards(s).map(b => `<tr><td>${b.id}</td><td>${b.kind}</td><td>${mm(b.length)} × ${mm(b.depth)} × ${mm(b.thickness)}</td><td>${mm(b.x)}</td><td>${mm(b.y)}</td></tr>`).join('')}</tbody></table><p>${s.template === 'saetter3' ? `SÆTTER 3-inspired approximation: board thickness, ${mm(s.backThickness)} mm back and ${mm(s.separatorHeight)} mm short separators are inferred; this is not the manufacturer's construction plan. Board depth excludes the back. Back dimensions are height × width × thickness. The initial reference dimensions are 455 × 406 × 105 mm with nominal 100 × 120 × 100 mm compartments.` : 'Assembly assumption: square-cut full-depth boards, with dividers butt-jointed between horizontal shelves. No back panel.'} Joint hardware and fastening locations must be chosen separately. Sizes exclude saw kerf and machining allowances. Measure actual wall and board thickness before cutting; review sag, stability and wall anchoring for the selected wood and loads.</p>${B.validate(s).warnings.map(w => `<p>${esc(w)}</p>`).join('')}</html>`;
+    const s = draft.design, wall = getWall();
+    return `<!doctype html><html lang="en"><meta charset="utf-8"><title>${esc(draft.name)} · build plan</title><style>body{font:14px system-ui;color:#222;max-width:900px;margin:30px auto;padding:0 20px}svg{width:100%;max-height:480px}table{border-collapse:collapse;width:100%;font-size:12px}td,th{border:1px solid #ccc;padding:6px;text-align:left}tr{break-inside:avoid}p{line-height:1.5}@media print{button{display:none}body{margin:0}thead{display:table-header-group}}</style><button onclick="window.print()">Print / save PDF</button><h1>${esc(draft.name)}</h1><p>${mm(s.width)} × ${mm(s.height)} × ${mm(s.depth)} mm overall · ${mm(s.thickness)} mm timber<br>${esc(wall.name)}; wall ${mm(wall.width)} × ${mm(wall.height)} mm, color ${esc(wall.color)}; offset ${mm(draft.target.offset)} mm, wall gap ${mm(draft.target.gap)} mm, base ${mm(draft.target.elev)} mm above floor.</p>${drawing(false)}<p>Front elevation. Drawing labels are board IDs; dimensions on the drawing are cm. Table dimensions are mm. X = board left edge from bookshelf left; Y = underside from bookshelf base. Shelf lengths run horizontally; divider lengths run vertically.</p><table><thead><tr><th>Board</th><th>Part</th><th>Length × depth × thickness, mm</th><th>X, mm</th><th>Y, mm</th></tr></thead><tbody>${B.boards(s).map(b => `<tr><td>${b.id}</td><td>${b.kind}</td><td>${mm(b.length)} × ${mm(b.depth)} × ${mm(b.thickness)}</td><td>${mm(b.x)}</td><td>${mm(b.y)}</td></tr>`).join('')}</tbody></table><p>${s.template === 'saetter3' ? `SÆTTER 3-inspired approximation: board thickness, ${mm(s.backThickness)} mm back and ${mm(s.separatorHeight)} mm short separators are inferred; this is not the manufacturer's construction plan. Board depth excludes the back. Back dimensions are height × width × thickness. The initial reference dimensions are 455 × 406 × 105 mm with nominal 100 × 120 × 100 mm compartments.` : 'Assembly assumption: square-cut full-depth boards, with dividers butt-jointed between horizontal shelves. No back panel.'} Joint hardware and fastening locations must be chosen separately. Sizes exclude saw kerf and machining allowances. Measure actual wall and board thickness before cutting; review sag, stability and wall anchoring for the selected wood and loads.</p>${B.validate(s).warnings.map(w => `<p>${esc(w)}</p>`).join('')}</html>`;
   }
   function init(element, bridge) {
     host = element; api = bridge;
@@ -290,7 +306,7 @@ window.BookshelfBuilder = (() => {
       if (key === 'saved') { const p = api.pieces().find(p => p.id === t.value); if (p) open(p, api.findPlacement(p.id)); return; }
       if (t.matches('input[data-bs]')) {
         if (t.type === 'number' && (!t.value.trim() || !t.validity.valid)) {
-          const values = { ...draft.design, ...draft.target, levelY: draft.design.levels[row]?.y, left: draft.design.levels[row]?.left, right: draft.design.levels[row]?.right };
+          const values = { ...draft.design, ...draft.target, wallWidth: draft.wall?.widthCm, wallHeight: draft.wall?.heightCm, levelY: draft.design.levels[row]?.y, left: draft.design.levels[row]?.left, right: draft.design.levels[row]?.right };
           t.value = key.startsWith('divider:') ? draft.design.levels[row]?.dividers[+key.split(':')[1]] : values[key];
           api.toast('Enter a number within the shown range. The last valid value has been kept.'); refresh();
         }
@@ -335,10 +351,11 @@ window.BookshelfBuilder = (() => {
         checkpoint(); draft.design = JSON.parse(JSON.stringify(proposal.result.shelf)); proposal = null; changed(true); return;
       }
       if (act === 'close') return close();
+      if (act === 'standaloneCopy') return api.copyStandalone(JSON.parse(JSON.stringify(draft)), getWall());
       if (act === 'resetCamera') return update3D(true);
       if (act === 'undo') { if (history.length) { draft = JSON.parse(history.pop()); changed(true); } return; }
-      if (act === 'new') { checkpoint(); const other = draft.alternate; draft = fresh(draft.tab); if (other) draft.alternate = other; row = 0; changed(true); host.querySelector('[data-bs="name"]').focus(); return; }
-      if (act === 'copy') { checkpoint(); draft.pieceId = null; draft.itemId = null; draft.itemRoomId = null; draft.name += ' copy'; changed(true); host.querySelector('[data-bs="name"]').focus(); return; }
+      if (act === 'new') { if (standalone() && api.detach && !api.detach()) return; checkpoint(); const other = draft.alternate, wall = draft.wall; draft = fresh(draft.tab); if (standalone()) draft.wall = wall; if (other) draft.alternate = other; row = 0; changed(true); host.querySelector('[data-bs="name"]').focus(); return; }
+      if (act === 'copy') { if (standalone() && api.detach && !api.detach()) return; checkpoint(); draft.pieceId = null; draft.itemId = null; draft.itemRoomId = null; draft.name += ' copy'; changed(true); host.querySelector('[data-bs="name"]').focus(); return; }
       if (act === 'addLevel') {
         if (s.levels.length >= 25) return api.toast('Maximum 25 shelves per design.');
         checkpoint(); const index = Math.min(row, s.levels.length - 2), l = s.levels[index], next = s.levels[index + 1];
@@ -351,10 +368,10 @@ window.BookshelfBuilder = (() => {
       }
       if (act === 'save' || act === 'place') {
         draft.design = B.normalize(draft.design);
-        draft.pieceId = api.saveDesign(draft, act === 'place', room()); persist(true); render();
+        draft.pieceId = api.saveDesign(draft, act === 'place', standalone() ? null : room()); persist(true); render();
         host.querySelector(`[data-bs-action="${act}"]`).focus({ preventScroll: true }); return;
       }
-      if (act === 'json') download(JSON.stringify({ format: 'homeplanner-bookshelf', version: 1, units: 'cm', ...withoutAlternate(draft) }, null, 2), 'json', 'application/json');
+      if (act === 'json') download(JSON.stringify(standalone() ? api.document(draft) : { format: 'homeplanner-bookshelf', version: 1, units: 'cm', ...withoutAlternate(draft) }, null, 2), 'json', 'application/json');
       if (act === 'csv') download('Board,Part,Length mm,Depth mm,Thickness mm,X mm,Y mm\r\n' + B.boards(s).map(b => [b.id, b.kind, mm(b.length), mm(b.depth), mm(b.thickness), mm(b.x), mm(b.y)].join(',')).join('\r\n'), 'csv', 'text/csv');
       if (act === 'plan') download(buildPlan(), 'html', 'text/html');
       if (act === 'print') { const tab = window.open('', '_blank'); if (!tab) return api.toast('Allow a new tab to print, or download the build plan.'); tab.opener = null; tab.document.write(buildPlan()); tab.document.close(); }
@@ -366,9 +383,9 @@ window.BookshelfBuilder = (() => {
       const move = ev => {
         if (interaction !== interactionGeneration) return;
         const currentSvg = host.querySelector('#bsDrawing svg'), p = currentSvg.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY;
-        const x = p.matrixTransform(currentSvg.getScreenCTM().inverse()).x, s = draft.design, r = room();
-        const W = ['n', 's'].includes(draft.target.wall) ? r.width : r.length;
-        const origin = ['s', 'e'].includes(draft.target.wall) ? W - draft.target.offset - s.width : draft.target.offset;
+        const x = p.matrixTransform(currentSvg.getScreenCTM().inverse()).x, s = draft.design, wall = getWall();
+        const W = wall.width;
+        const origin = wall.flip ? W - draft.target.offset - s.width : draft.target.offset;
         s.levels[row].dividers[index - 1] = Math.round((x - origin) * 10) / 10;
         host.querySelector('#bsDrawing').innerHTML = drawing(); update3D();
       };
@@ -378,7 +395,9 @@ window.BookshelfBuilder = (() => {
     return { open, close, isOpen: () => visible, updateStorage: () => { if (visible) refresh(); },
       reset: () => { interactionGeneration++; proposal = null; history = []; editing = null; draft = null; visible = false; host.hidden = true; host.replaceChildren(); },
       openShelf: (design, name) => { open(); if (!visible) return; draft.design = JSON.parse(JSON.stringify(design)); draft.name = name || 'Bookshelf'; draft.tab = design.template === 'saetter3' ? 'saetter' : 'custom'; history = []; persist(true); render(); },
-      shelf: () => draft ? JSON.parse(JSON.stringify(draft.design)) : null
+      shelf: () => draft ? JSON.parse(JSON.stringify(draft.design)) : null,
+      currentDraft: () => draft ? JSON.parse(JSON.stringify(draft)) : null,
+      openDocument: (doc, name) => { open(); if (!visible) return; const tab = doc.activeTab; draft = { ...fresh(tab), name: name || 'Bookshelf', design: JSON.parse(JSON.stringify(doc.shelf)), wall: JSON.parse(JSON.stringify(doc.wall)), target: { roomId: null, wall: 'n', offset: doc.placement.offsetCm, elev: doc.placement.elevationCm, gap: doc.placement.gapCm }, tab }; history = []; render(); }
     };
   }
   return { init };

@@ -48,6 +48,9 @@ test('unconfigured host serves only audited files and fails closed', async t => 
   assert.equal((await request(port, '/health/live')).status, 200);
   assert.equal((await request(port, '/health/ready')).status, 503);
   const index = await request(port, '/'); assert.equal(index.status, 200); assert.match(index.headers['content-security-policy'], /frame-ancestors 'none'/);
+  assert.equal((await request(port, '/home')).text, index.text);
+  const shelf = await request(port, '/bookshelf'); assert.equal(shelf.status, 200); assert.match(shelf.text, /standalone\.js/);
+  assert.equal((await request(port, '/bookshelf/unknown')).status, 404);
   assert.equal(index.headers['x-content-type-options'], 'nosniff');
   for (const url of ['/house-data.js', '/package.json', '/server/auth.js', '/photos/private.jpg', '/.git/config', '/%2e%2e/house-data.js', '/vendor/supabase.js', '/api/unknown']) assert.equal((await request(port, url)).status, 404, url);
   assert.equal((await request(port, '/api/auth/sign-in/social', { method: 'POST', headers: { origin, 'content-type': 'application/json' }, chunks: ['{}'] })).status, 503);

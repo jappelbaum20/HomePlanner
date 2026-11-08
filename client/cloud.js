@@ -6,7 +6,7 @@ window.HomePlannerCloud = (() => {
   const signalKey = 'homeplanner.session.changed';
   const snapshot = () => ({ generation, epoch, userId: session?.userId || null, sessionId: session?.sessionId || null, me, current: current && { ...current } });
   function cancelPending() { for (const controller of pending) controller.abort(); pending.clear(); }
-  function notify(error) { listeners.forEach(fn => fn(error ? { ...snapshot(), error } : snapshot())); }
+  function notify(error, revalidating = false) { listeners.forEach(fn => fn({ ...snapshot(), ...(error ? { error } : {}), revalidating })); }
   function broadcast() { try { localStorage.setItem(signalKey, crypto.randomUUID()); } catch (_) { /* Focus/pageshow still revalidate if storage is unavailable. */ } }
   function invalidate() {
     generation++; epoch++; cancelPending();
@@ -115,6 +115,8 @@ window.HomePlannerCloud = (() => {
   function refreshSession(announce = true) {
     const ticket = ++serial; epoch++; cancelPending();
     const task = (async () => {
+      // Publish the verification barrier before notifying subscribers.
+      await Promise.resolve();
       try {
         const response = await fetch('/api/session', { credentials: 'same-origin', mode: 'same-origin', cache: 'no-store' });
         if (ticket !== serial) return;
@@ -139,6 +141,7 @@ window.HomePlannerCloud = (() => {
       }
     })();
     verification = task;
+    notify(undefined, true);
     task.finally(() => { if (verification === task) verification = null; });
     return task;
   }
@@ -158,7 +161,9 @@ window.HomePlannerCloud = (() => {
   }
   async function signIn() {
     if (!auth) throw Error('Cloud sign-in is not configured.');
-    const result = await auth.signIn.social({ provider: 'google', callbackURL: `${location.origin}/` });
+    const page = ['/home', '/bookshelf', '/admin.html'].includes(location.pathname) ? location.pathname : '/';
+    const query = page === '/bookshelf' && /^\?design=[0-9a-f-]{36}$/i.test(location.search) ? location.search : '';
+    const result = await auth.signIn.social({ provider: 'google', callbackURL: `${location.origin}${page}${query}` });
     if (result?.error) throw Error(result.error.message || 'Sign-in is unavailable.');
   }
   async function signOut() {

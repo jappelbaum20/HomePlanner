@@ -44,6 +44,13 @@ async function call(s,body,extra={}) {
   const res={statusCode:200,setHeader(){},status(n){this.statusCode=n;return this;},json(v){this.data=v;this.writableEnded=true;return this;},end(){this.writableEnded=true;return this;}};
   await api.createHandler(s.deps)(req,res); return res;
 }
+test('standalone proposal matches saved v2 geometry without sending wall metadata', async () => {
+  const s = fixture(), shelf = B.saetter3();
+  s.design.payload = { version:2, shelf, wall:{widthCm:300,heightCm:240,color:'#EEEEEE'}, placement:{offsetCm:5,elevationCm:10,gapCm:0}, activeTab:'saetter' };
+  s.deps.provider = { async generateShelfProposal(input) { assert.deepEqual(input.shelf, shelf); assert.equal(input.wall, undefined); return {candidate:{shelf:structuredClone(shelf),summary:'Fixture'},usage}; } };
+  const result = await call(s, {requestId:randomUUID(),designId:DESIGN,baseRevision:1,baseHash:hash(shelf),shelf,prompt:'Adjust'});
+  assert.equal(result.statusCode, 200);
+});
 test('proposals reserve full worst case, account usage, replay once and reject mismatched duplicates', async () => {
   const s=fixture(), body=s.body(), one=await call(s,body);
   assert.equal(one.statusCode,200); assert.equal(s.calls,1); assert.equal(one.data.baseHash,body.baseHash);
