@@ -20,6 +20,11 @@ async page => {
   check(await page.locator('[data-bs="wallWidth"]').inputValue() === '315', 'draft survives reload');
   page.once('dialog', dialog => dialog.accept('1')); await page.locator('#localOpen').click();
   check(await page.locator('[data-bs="wallHeight"]').inputValue() === '220', 'saved wall reopens locally');
+  const localBefore = await page.evaluate(() => JSON.parse(localStorage.getItem('homeplanner.standalone.v2.designs')));
+  await page.reload(); await page.locator('[data-bs="wallHeight"]').waitFor();
+  await page.locator('[data-bs="wallHeight"]').fill('225'); await page.locator('[data-bs-action="save"]').click();
+  const localAfter = await page.evaluate(() => JSON.parse(localStorage.getItem('homeplanner.standalone.v2.designs')));
+  check(localAfter.length === localBefore.length && localAfter[0].id === localBefore[0].id && localAfter[0].document.wall.heightCm === 225, 'reload and save update the same local ID without duplication');
   const oldWidth = await page.locator('[data-bs="width"]').inputValue(); await page.locator('[data-bs="wallWidth"]').fill('30');
   check(await page.getByText('Wall overflow').isVisible() && await page.locator('[data-bs="width"]').inputValue() === oldWidth, 'smaller wall reports overflow without scaling');
   await page.locator('#bs-tab-saetter').focus(); await page.keyboard.press('Enter');
@@ -28,6 +33,12 @@ async page => {
   check(await page.locator('#bs-tab-custom').getAttribute('aria-selected') === 'true' && await page.locator('[data-bs="width"]').inputValue() === oldWidth, 'tabs retain separate geometry');
   await page.setViewportSize({width: 800, height: 700});
   check(await page.locator('h1').isVisible() && await page.locator('[data-bs="wallWidth"]').isVisible(), 'narrow desktop controls remain available');
+  await page.locator('[data-bs-action="copy"]').click(); await page.locator('[data-bs-action="save"]').click();
+  const copied = await page.evaluate(() => JSON.parse(localStorage.getItem('homeplanner.standalone.v2.designs')));
+  check(copied.length === localAfter.length + 1 && copied.at(-1).id !== localAfter[0].id, 'explicit copy gets a separate local ID');
+  await page.locator('[data-bs-action="new"]').click(); await page.locator('[data-bs-action="save"]').click();
+  const fresh = await page.evaluate(() => JSON.parse(localStorage.getItem('homeplanner.standalone.v2.designs')));
+  check(fresh.length === copied.length + 1 && fresh.at(-1).id !== copied.at(-1).id, 'explicit new design clears local identity');
   await page.locator('#shelfFile').setInputFiles({name:'legacy.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(payload.shelf))});
   await page.waitForFunction(() => document.querySelector('#toast').textContent.includes('Legacy geometry imported'));
   check(await page.locator('[data-bs="wallWidth"]').inputValue()==='500', 'geometry-only import uses disclosed default wall');
