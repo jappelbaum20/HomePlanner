@@ -5,7 +5,7 @@ async page => {
   await page.route('**/api/**',async route=>{
     const req=route.request(), path=new URL(req.url()).pathname, h=await req.allHeaders(), signed=h.cookie?.includes('fixture_session=a');
     const json=(status,body)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)}).catch(()=>{});
-    if(path==='/api/session') { if(first){first=false;started();await new Promise(resolve=>{release=resolve;});} return signed?json(200,{userId,sessionId,displayName:'Fixture',csrfToken:csrf}):json(401,{error:{code:'unauthenticated'}}); }
+    if(path==='/api/session') { if(first){first=false;started();await new Promise(resolve=>{release=resolve;});} return signed?json(200,{userId,sessionId,displayName:'Fixture',csrfToken:csrf,access:{status:'approved',role:'user'}}):json(401,{error:{code:'unauthenticated'}}); }
     if(path==='/api/auth/sign-in/social') { loginRequest={method:req.method(),headers:h,body:req.postDataJSON()};return json(200,{redirect:false}); }
     if(path==='/api/me' && signed)return json(200,{userId,displayName:'Fixture',isAdmin:false,capabilities:{cloud:true,ai:false}});
     if(path==='/api/auth/sign-out' && signed)return route.fulfill({status:200,contentType:'application/json',headers:{'set-cookie':'fixture_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax'},body:'{}'});

@@ -3,7 +3,7 @@
 const { readFile } = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
-const FILES = Object.freeze(['001_auth.sql','002_business.sql','003_photos.sql','004_photo_maintenance.sql','005_shelf_documents.sql']);
+const FILES = Object.freeze(['001_auth.sql','002_business.sql','003_photos.sql','004_photo_maintenance.sql','005_shelf_documents.sql','006_access_requests.sql']);
 async function expectedMigrations() {
   return Promise.all(FILES.map(async name => {
     const sql = await readFile(path.join(__dirname,'migrations',name),'utf8');

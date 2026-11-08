@@ -11,7 +11,7 @@ async page => {
     if(h.authorization) errors.push('unexpected Authorization');
     if(!active || !h.cookie?.includes('fixture_session=a')) return json(401,{error:{code:'unauthenticated'}});
     if(!['GET','HEAD'].includes(req.method()) && (h.origin!==origin || h['x-homeplanner-session']!==sessionId || h['x-homeplanner-csrf']!==csrf)) { errors.push('incorrect mutation headers');return json(403,{error:{code:'csrf_denied'}}); }
-    if(path==='/api/session') return json(200,{userId,sessionId,displayName:'Fixture',csrfToken:csrf});
+    if(path==='/api/session') return json(200,{userId,sessionId,displayName:'Fixture',csrfToken:csrf,access:{status:'approved',role:'user'}});
     if(path==='/api/me') return json(200,{userId,displayName:'Fixture',isAdmin:false,capabilities:{cloud:true,ai:false}});
     if(path==='/api/designs' && req.method()==='GET')return json(200,{items:[],nextCursor:null});
     if(path.endsWith('/photos')) return json(201,{photoId:'22222222-2222-4222-8222-222222222222',uploadUrl:invalidExpiry?path+'/22222222-2222-4222-8222-222222222222/raw':'https://attacker.invalid/raw',contentType:'image/png',maxBytes:1000,expiresAt:invalidExpiry?'2099-99-99T00:00:00Z':'2099-01-01T00:00:00Z'});

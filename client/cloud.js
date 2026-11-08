@@ -129,6 +129,10 @@ window.HomePlannerCloud = (() => {
         const changed = !session || next.userId !== session.userId || next.sessionId !== session.sessionId;
         if (changed) invalidate();
         session = next;
+        if (next.access.status !== 'approved') {
+          me = { userId: next.userId, displayName: next.displayName, isAdmin: false, capabilities: { cloud: false, ai: false }, access: next.access };
+          notify(); if (changed && announce) broadcast(); return;
+        }
         const identityResponse = await fetch('/api/me', { credentials: 'same-origin', mode: 'same-origin', cache: 'no-store' });
         if (!identityResponse.ok) throw await responseError(identityResponse);
         const result = await identityResponse.json();
@@ -161,8 +165,9 @@ window.HomePlannerCloud = (() => {
   }
   async function signIn() {
     if (!auth) throw Error('Cloud sign-in is not configured.');
-    const page = ['/home', '/bookshelf', '/admin.html'].includes(location.pathname) ? location.pathname : '/';
-    const query = page === '/bookshelf' && /^\?design=[0-9a-f-]{36}$/i.test(location.search) ? location.search : '';
+    const page = ['/home', '/bookshelf', '/admin.html', '/access'].includes(location.pathname) ? location.pathname : '/';
+    const query = page === '/bookshelf' && /^\?design=[0-9a-f-]{36}$/i.test(location.search) ? location.search :
+      page === '/admin.html' && /^\?accessRequest=[0-9a-f-]{36}$/.test(location.search) ? location.search : '';
     const result = await auth.signIn.social({ provider: 'google', callbackURL: `${location.origin}${page}${query}` });
     if (result?.error) throw Error(result.error.message || 'Sign-in is unavailable.');
   }

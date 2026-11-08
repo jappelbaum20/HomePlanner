@@ -9,7 +9,7 @@ async page => {
     const headers=await req.allHeaders();
     if (!headers.cookie?.includes('fixture_session=a') || headers.authorization) protocolErrors.push('cookie/authorization');
     if (!['GET','HEAD'].includes(method) && (headers.origin!==origin || headers['x-homeplanner-session']!==sessionId || headers['x-homeplanner-csrf']!==csrf)) protocolErrors.push('mutation headers');
-    if(path==='/api/session')return json(200,{userId,sessionId,displayName:'Fixture',csrfToken:csrf});
+    if(path==='/api/session')return json(200,{userId,sessionId,displayName:'Fixture',csrfToken:csrf,access:{status:'approved',role:'user'}});
     if(path==='/api/me')return json(200,{userId,displayName:'Fixture',isAdmin:false,capabilities:{cloud:true,ai:true}});
     if(path==='/api/designs'&&method==='GET')return json(200,{items:[],nextCursor:null});
     if(path==='/api/designs'&&method==='POST'){stored={...req.postDataJSON(),id:'11111111-1111-4111-8111-111111111111',revision:1};return json(201,{design:stored,revision:1});}

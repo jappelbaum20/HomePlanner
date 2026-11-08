@@ -1,5 +1,7 @@
 'use strict';
 const { createHash, randomUUID } = require('node:crypto');
+const { Readable } = require('node:stream');
+const { pipeline } = require('node:stream/promises');
 const { validate, LIMITS } = require('../shared/contracts');
 const { authenticate } = require('./auth');
 const { ApiError, fail, id, uuid, jsonBody, wrap, method } = require('./errors');
@@ -131,20 +133,35 @@ function createCompleteHandler(deps) {
   }, deps);
 }
 function createDownloadHandler(deps) {
-  return wrap(async req => {
+  return wrap(async (req, res) => {
     method(req, ['GET']);
     if (deps?.ensurePhotoOperational) await deps.ensurePhotoOperational();
     const ctx = await authenticate(req, deps);
-    const photo = await ctx.backend.photo(ctx, id(req.query?.id), id(req.query?.photoId));
+    const designId = id(req.query?.id), photoId = id(req.query?.photoId);
+    async function read(photo) {
     if (!photo || photo.status !== 'ready' || photo.tombstoned_at) fail(404, 'not_found', 'Resource not found.');
     let bytes;
     if (deps?.photoStore) {
-      const designId = id(req.query?.id), photoId = id(req.query?.photoId);
       assertKey(photo.object_key, ctx.userId, designId, photoId, 'ready');
       bytes = await deps.photoStore.readPart(ctx.userId, designId, photoId, 'ready');
     } else bytes = await ctx.backend.download(photo.object_key);
     if (bytes.length !== Number(photo.bytes) || digest(bytes) !== photo.checksum) fail(503, 'unavailable', 'Photo is temporarily unavailable.');
     return { bytes, mime: photo.mime };
+    }
+    if (typeof ctx.backend.withPhotoRead === 'function') {
+      return ctx.backend.withPhotoRead(designId,photoId,async photo => {
+        const result = await read(photo);
+        res.setHeader('Content-Type', result.mime); res.setHeader('Content-Disposition', 'inline'); res.status(200);
+        // Keep the entitlement transaction until completion or disconnect.
+        // Pipeline respects backpressure and destroys both ends on failure.
+        const chunks = function* () {
+          for (let offset=0; offset<result.bytes.length; offset+=65536)
+            yield result.bytes.subarray(offset,offset+65536);
+        };
+        await pipeline(Readable.from(chunks()), res, { signal: AbortSignal.timeout(30000) });
+      });
+    }
+    return read(await ctx.backend.photo(ctx,designId,photoId));
   }, deps);
 }
 

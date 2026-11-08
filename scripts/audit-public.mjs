@@ -41,6 +41,10 @@ export async function auditPublic(root, target = 'legacy') {
   if (target === 'vps' && (index.includes('vendor/supabase.js') || /supabase/i.test(await readFile(path.join(root, 'client/config.js'), 'utf8')))) throw new Error('Legacy provider configuration is forbidden in VPS output.');
   const shelf = await readFile(path.join(root, 'bookshelf.html'), 'utf8');
   if (/house-data|starter-data|app\.js|https?:\/\//i.test(shelf) || !shelf.includes('standalone.js') || !shelf.includes(target === 'vps' ? 'vendor/better-auth.js' : 'vendor/supabase.js')) throw Error('Invalid standalone page dependencies.');
+  if (target === 'vps') {
+    const landing = await readFile(path.join(root, 'landing.html'), 'utf8');
+    if (/house-data|starter-data|app\.js|standalone\.js|https?:\/\//i.test(landing) || !landing.includes('landing.js') || !landing.includes('vendor/better-auth.js')) throw Error('Invalid landing page dependencies.');
+  }
   return files;
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

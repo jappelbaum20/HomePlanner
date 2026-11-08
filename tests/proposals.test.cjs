@@ -69,6 +69,18 @@ test('concurrent retries and ambiguous provider failure never issue a second cal
   const result=await first; assert.equal(result.statusCode,503); assert.doesNotMatch(JSON.stringify(result.data),/private detail/);
   assert.equal(s.records.get(body.requestId).status,'ambiguous'); assert.equal((await call(s,body)).statusCode,409); assert.equal(s.calls,1);
 });
+test('reservation is durable before the entitlement fence and dispatch never starts after denial', async () => {
+  const s=fixture(), body=s.body(); let fenced=false, settledWhileFenced=false;
+  const rpc=s.backend.rpc.bind(s.backend);
+  s.backend.rpc=async (name,args)=>{ if(name==='hp_finalize_usage') settledWhileFenced=fenced; return rpc(name,args); };
+  s.backend.withApproved=async work=>{ assert.equal(s.records.get(body.requestId).status,'reserved'); fenced=true; try { return await work(s.backend); } finally { fenced=false; } };
+  s.deps.provider={async generateShelfProposal(){assert.equal(fenced,true);return {candidate:{shelf:body.shelf,summary:'Fixture'},usage};}};
+  assert.equal((await call(s,body)).statusCode,200); assert.equal(settledWhileFenced,true);
+  const denied=fixture(), blocked=denied.body();
+  denied.backend.withApproved=async()=>{throw new ApiError(403,'access_revoked','Access revoked');};
+  assert.equal((await call(denied,blocked)).statusCode,403); assert.equal(denied.calls,0);
+  assert.equal(denied.records.get(blocked.requestId).status,'reserved');
+});
 test('stale hash, revision, missing config, unsupported model and quota deny calls', async () => {
   const s=fixture(), b=s.body();
   assert.equal((await call(s,{...b,baseHash:'0'.repeat(64)})).statusCode,409);

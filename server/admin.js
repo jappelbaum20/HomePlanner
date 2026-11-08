@@ -36,6 +36,7 @@ async function bootstrap(req, ctx, deps) {
   const grantId = randomBytes(32).toString('base64url');
   const accepted = await ctx.backend.rpc('hp_admin_verify', { p_nonce_hash: hash(nonce), p_google_subject: claims.sub, p_grant_hash: hash(grantId) });
   if (accepted !== true) denied();
+  if (deps?.accessStore) await deps.accessStore.seedOwner(ctx, hash(grantId));
   return { isAdmin: true, grantId, expiresIn: 600 };
 }
 async function requireAdmin(req, ctx) {

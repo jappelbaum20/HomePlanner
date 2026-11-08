@@ -52,20 +52,24 @@ function createHandler(deps) { return wrap(async req => {
   try { inputBound = inputTokenBound({ model: model.id, shelf: body.shelf, prompt: body.prompt, maxOutputTokens: config.limits.maxOutputTokens }); }
   catch { fail(413, 'too_large', 'The provider request is too large.'); }
   const reserved = maxCost(model, config.limits.maxOutputTokens, inputBound);
+  // Commit the reservation before dispatch so an interrupted provider call can
+  // never lose its durable accounting record or be retried automatically.
   const reservation = await ctx.backend.rpc('hp_reserve_usage', { p_user_id: ctx.userId, p_request_id: body.requestId.toLowerCase(), p_body_hash: bodyHash, p_config_revision: config.revision, p_max_cost_micros: reserved });
   if (!reservation || !reservation.reservationId) fail(503, 'unavailable', 'Proposals are temporarily unavailable.');
   if (reservation.replay) {
     if (reservation.status === 'succeeded') return sendOutcome(reservation.result);
     fail(409, 'request_pending', 'This request cannot be retried automatically.');
   }
-  const finish = (status, cost, result) => ctx.backend.rpc('hp_finalize_usage', { p_user_id: ctx.userId, p_reservation_id: reservation.reservationId, p_status: status, p_actual_micros: cost, p_result: result });
+  // Fence dispatch and settlement in a single transaction after reservation.
+  async function dispatchProtected(backend = ctx.backend) {
+  const finish = (status, cost, result) => backend.rpc('hp_finalize_usage', { p_user_id: ctx.userId, p_reservation_id: reservation.reservationId, p_status: status, p_actual_micros: cost, p_result: result });
   let answer;
   try { answer = await provider.generateShelfProposal({ model: model.id, shelf: body.shelf, prompt: body.prompt, maxOutputTokens: config.limits.maxOutputTokens }); }
-  catch { await finish('ambiguous', null, null); fail(503, 'provider_unavailable', 'The proposal request could not be completed.'); }
+  catch { await finish('ambiguous', null, null); return { failure: 'provider_unavailable' }; }
   const cost = actualCost(model, answer?.usage, config.limits.maxOutputTokens);
-  if (cost === null || cost > reserved) { await finish('ambiguous', null, null); fail(503, 'provider_unavailable', 'The proposal request could not be completed.'); }
+  if (cost === null || cost > reserved) { await finish('ambiguous', null, null); return { failure: 'provider_unavailable' }; }
   let outcome = { kind: 'invalid' };
-  const latest = await ctx.backend.get(ctx, body.designId);
+  const latest = await backend.get(ctx, body.designId);
   if (!matchingShelf(latest, body)) outcome = { kind: 'stale' };
   else if (safeCandidate(answer.candidate, body.shelf)) {
     const proposal = { proposalId: randomUUID(), baseRevision: body.baseRevision, baseHash: body.baseHash, shelf: answer.candidate.shelf,
@@ -73,6 +77,10 @@ function createHandler(deps) { return wrap(async req => {
     if (validate('proposal', proposal).valid && Buffer.byteLength(JSON.stringify({ kind: 'ok', proposal })) < 64000) outcome = { kind: 'ok', proposal };
   }
   const finalized = await finish('succeeded', cost, outcome);
-  return sendOutcome(finalized?.result);
+  return { outcome: finalized?.result };
+  }
+  const completed = await (typeof ctx.backend.withApproved === 'function' ? ctx.backend.withApproved(dispatchProtected) : dispatchProtected());
+  if (completed.failure) fail(503, 'provider_unavailable', 'The proposal request could not be completed.');
+  return sendOutcome(completed.outcome);
 }, deps); }
 module.exports = { createHandler, hash, matchingShelf, safeCandidate };

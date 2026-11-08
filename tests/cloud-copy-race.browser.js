@@ -17,7 +17,7 @@ async page => {
     const headers=await request.allHeaders();
     if (!headers.cookie?.includes('fixture_session=a') || headers.authorization) protocolErrors.push('cookie/authorization');
     if (!['GET','HEAD'].includes(method) && (headers.origin!==origin || headers['x-homeplanner-session']!==sessionId || headers['x-homeplanner-csrf']!==csrf)) protocolErrors.push('mutation headers');
-    if (url.pathname === '/api/session') return json(200,{userId,sessionId,displayName:'Test user',csrfToken:csrf});
+    if (url.pathname === '/api/session') return json(200,{userId,sessionId,displayName:'Test user',csrfToken:csrf,access:{status:'approved',role:'user'}});
     if (url.pathname.endsWith('/raw') && method==='PUT') { uploadCount++; uploadToken = route.request().headers()['x-homeplanner-session']; const path=decodeURIComponent(route.request().url()), id=[secondId,...copyIds].find(x=>path.includes(x)); if(id){const bytes=route.request().postDataBuffer(),mime=route.request().headers()['content-type'];fixtures.set(id,{bytes,meta:{photoId:id,mime,bytes:bytes.length,checksum:require('crypto').createHash('sha256').update(bytes).digest('hex')}});} return route.fulfill({status:200,body:'{}'}); }
 
     if (url.pathname === '/api/me') return json(200, { userId, displayName:'Test user', isAdmin:false, capabilities:{cloud:true,ai:false} });

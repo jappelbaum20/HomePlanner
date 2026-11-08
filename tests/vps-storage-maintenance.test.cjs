@@ -36,7 +36,7 @@ if(process.argv[2]==='--crash-child') {
  await fs.mkdir(root,{recursive:true,mode:0o700});await fs.mkdir(publicRoot,{recursive:true,mode:0o700});
  try {
   admin=new Client({...conn,database:'postgres',user:'hp_fixture_admin'});await admin.connect();
-  for(const [name,spec] of [['hp_auth_owner','NOLOGIN'],['hp_auth_runtime','NOLOGIN'],['hp_app_owner','NOLOGIN'],['hp_app_runtime','NOLOGIN'],['hp_photo_maintenance','NOLOGIN'],['hp_storage_app','LOGIN IN ROLE hp_app_runtime'],['hp_storage_maint','LOGIN IN ROLE hp_photo_maintenance']]) {
+  for(const [name,spec] of [['hp_auth_owner','NOLOGIN'],['hp_auth_runtime','NOLOGIN'],['hp_app_owner','NOLOGIN'],['hp_app_runtime','NOLOGIN'],['hp_photo_maintenance','NOLOGIN'],['hp_access_public','NOLOGIN'],['hp_mail_worker','NOLOGIN'],['hp_storage_app','LOGIN IN ROLE hp_app_runtime'],['hp_storage_maint','LOGIN IN ROLE hp_photo_maintenance']]) {
    if (!(await admin.query('SELECT 1 FROM pg_roles WHERE rolname=$1',[name])).rowCount) await admin.query(`CREATE ROLE ${name} ${spec}`);
   }
   await admin.query(`CREATE DATABASE ${conn.database}`); await admin.end();
@@ -54,6 +54,7 @@ if(process.argv[2]==='--crash-child') {
   await admin.query(`INSERT INTO hp_auth."user"(id,name,email,"emailVerified","updatedAt") VALUES($1,'Fixture','fixture-storage@example.invalid',true,now())`,[owner]);
   await admin.query(`INSERT INTO hp_auth.account(id,"accountId","providerId","userId","createdAt","updatedAt") VALUES(gen_random_uuid(),'fixture-storage','google',$1,now(),now())`,[owner]);
   await admin.query(`INSERT INTO hp_auth.session(id,token,"userId","expiresAt","createdAt","updatedAt") VALUES($1,'synthetic-a',$3,now()+interval '1 day',now(),now()),($2,'synthetic-b',$3,now()+interval '1 day',now(),now())`,[sid,sid2,owner]);
+  await admin.query(`INSERT INTO hp_private.access_entitlements(user_id,google_subject,status,decided_by,provenance) VALUES($1,'fixture-storage','approved',$1,'fixture')`,[owner]);
   const backend=createBackend({appPool}),a=backend.forSession({userId:owner,sessionId:sid}),b=backend.forSession({userId:owner,sessionId:sid2});
   const body={kind:'shelf',title:'Fixture',schemaVersion:3,payload:{},photoIds:[]};
   async function design(){return (await a.rpc('hp_create_design',{p_user_id:owner,p_key:randomUUID(),p_body_hash:'1'.repeat(64),p_body:body})).design.id;}

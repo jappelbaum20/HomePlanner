@@ -9,6 +9,9 @@ const { createIntegrations } = require('./integrations.cjs');
 const { createBackend } = require('../server/db');
 const { createPhotoStore } = require('../server/photo-files.cjs');
 const { createPhotoService } = require('../server/photos');
+const { canonicalIp } = require('../server/access.cjs');
+const { createGmailTransport } = require('../server/gmail-transport.cjs');
+const { createOutboxWorker } = require('../server/mail-outbox.cjs');
 
 async function readSetting(env, name, { optional = false } = {}) {
   const value = env[name], file = env[name + '_FILE'];
@@ -21,6 +24,22 @@ async function readSetting(env, name, { optional = false } = {}) {
   const content = (await fs.readFile(file, 'utf8')).replace(/\r?\n$/, '');
   if (!content || content.includes('\0') || content.includes('\n') || content.includes('\r')) throw Error('Invalid secret file content');
   return content;
+}
+async function privateFileSetting(env, name, optional = false) {
+  if (env[name]) throw Error('Private file required');
+  const file = env[name + '_FILE'];
+  if (file && (process.platform !== 'linux' || !path.resolve(file).startsWith('/run/secrets/'))) throw Error('Private secret mount required');
+  if (file) {
+    const stat = await fs.lstat(file);
+    if (!stat.isFile() || stat.isSymbolicLink() || (stat.mode & 0o077)) throw Error('Invalid private secret permissions');
+  }
+  return readSetting(env, name, { optional });
+}
+function trustedClientIp(req, proxyIp) {
+  if (!proxyIp || canonicalIp(req.socket?.remoteAddress) !== canonicalIp(proxyIp)) throw Error('Untrusted ingress');
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded !== 'string' || forwarded.includes(',') || forwarded.trim() !== forwarded) throw Error('Invalid ingress address');
+  return canonicalIp(forwarded);
 }
 function databasePair(auth, app) {
   const a = new URL(auth), b = new URL(app);
@@ -74,25 +93,31 @@ async function createComposition({ env = process.env, safety, PoolClass = Pool }
   const minFree = Number(env.HOMEPLANNER_MIN_FREE_BYTES);
   if (!Number.isSafeInteger(minFree) || minFree < 20 * 1024 ** 3) throw Error('Invalid free-space floor');
   const lock = holdVolumeLock(root, env);
-  let authUrl, appUrl, maintenanceUrl, authSecret, csrfSecret, googleClientSecret;
-  try { [authUrl, appUrl, maintenanceUrl, authSecret, csrfSecret, googleClientSecret] = await Promise.all([
+  let authUrl, appUrl, maintenanceUrl, publicUrl, mailUrl, rateKey, authSecret, csrfSecret, googleClientSecret;
+  try { [authUrl, appUrl, maintenanceUrl, publicUrl, mailUrl, rateKey, authSecret, csrfSecret, googleClientSecret] = await Promise.all([
     readSetting(env, 'HOMEPLANNER_AUTH_DATABASE_URL'), readSetting(env, 'HOMEPLANNER_APP_DATABASE_URL'),
     readSetting(env, 'HOMEPLANNER_PHOTO_MAINTENANCE_DATABASE_URL'),
+    privateFileSetting(env, 'HOMEPLANNER_ACCESS_PUBLIC_DATABASE_URL'), privateFileSetting(env, 'HOMEPLANNER_MAIL_DATABASE_URL'),
+    privateFileSetting(env, 'HOMEPLANNER_ACCESS_RATE_KEY'),
     readSetting(env, 'HOMEPLANNER_AUTH_SECRET'), readSetting(env, 'HOMEPLANNER_CSRF_SECRET'),
     readSetting(env, 'GOOGLE_OAUTH_CLIENT_SECRET')
   ]); } catch (error) { lock.close(); throw error; }
   try {
     requireDatabaseUrl(authUrl, 'hp_auth_login'); requireDatabaseUrl(appUrl, 'hp_app_login'); requireDatabaseUrl(maintenanceUrl, 'hp_photo_maintenance_login');
+    requireDatabaseUrl(publicUrl, 'hp_access_public_login'); requireDatabaseUrl(mailUrl, 'hp_mail_worker_login');
     databasePair(authUrl, appUrl); databasePair(authUrl, maintenanceUrl); databasePair(appUrl, maintenanceUrl);
+    for (const existing of [authUrl,appUrl,maintenanceUrl]) { databasePair(existing,publicUrl); databasePair(existing,mailUrl); } databasePair(publicUrl,mailUrl);
   }
   catch (error) { lock.close(); throw error; }
-  if (Buffer.byteLength(authSecret) < 32 || Buffer.byteLength(csrfSecret) < 32 || authSecret === csrfSecret ||
+  if (Buffer.byteLength(authSecret) < 32 || Buffer.byteLength(csrfSecret) < 32 || Buffer.byteLength(rateKey) < 32 || new Set([authSecret,csrfSecret,rateKey]).size !== 3 ||
       !env.GOOGLE_OAUTH_CLIENT_ID?.endsWith('.apps.googleusercontent.com')) { lock.close(); throw Error('Invalid authentication configuration'); }
-  let guard, authPool, appPool, maintenancePool;
+  let guard, authPool, appPool, maintenancePool, publicPool, mailPool, transport, timer, mailTask;
   try {
     authPool = new PoolClass({ connectionString: authUrl, max: 5, connectionTimeoutMillis: 5000, options: '-c search_path=hp_auth,pg_catalog' });
     appPool = new PoolClass({ connectionString: appUrl, max: 5, connectionTimeoutMillis: 5000 });
     maintenancePool = new PoolClass({ connectionString: maintenanceUrl, max: 2, connectionTimeoutMillis: 5000 });
+    publicPool = new PoolClass({ connectionString: publicUrl, max: 2, connectionTimeoutMillis: 5000 });
+    mailPool = new PoolClass({ connectionString: mailUrl, max: 2, connectionTimeoutMillis: 5000 });
     const store = createPhotoStore({ root, publicRoot: dist, maxBytes: 5 * 1024 ** 3, minFreeBytes: minFree });
     await store.init();
     if (!await maintenanceRole(maintenancePool)) throw Error('Maintenance role unavailable');
@@ -106,16 +131,29 @@ async function createComposition({ env = process.env, safety, PoolClass = Pool }
     const backend = createBackend({ appPool, photoRecovery: recovery });
     photos = createPhotoService({ backend, store, origin, exclusiveWriter: lock.exclusiveWriter, maintenanceReady: available });
     const photoHandlers = Object.fromEntries(Object.entries(photos.photoHandlers).map(([key, handler]) => [key, async (...args) => { await requireAvailable(); return handler(...args); }]));
-    const close = async () => { try { await guard.close(); } finally { lock.close(); await Promise.allSettled([authPool.end(), appPool.end(), maintenancePool.end()]); } };
+    if (!['0','1'].includes(env.HOMEPLANNER_MAIL_ENABLED || '0')) throw Error('Invalid mail mode');
+    if (env.HOMEPLANNER_MAIL_ENABLED === '1') transport = createGmailTransport(await privateFileSetting(env, 'HOMEPLANNER_GMAIL_APP_PASSWORD'));
+    const worker = createOutboxWorker({ pool: mailPool, transport, origin, from: 'jacob@appelbaums.com' });
+    await worker.verifyRole();
+    const proxyIp = env.HOMEPLANNER_TRUSTED_PROXY_IP;
+    if (proxyIp) canonicalIp(proxyIp);
+    const close = async () => { clearInterval(timer); if (mailTask) await mailTask; transport?.close(); try { await guard.close(); } finally { lock.close(); await Promise.allSettled([authPool.end(), appPool.end(), maintenancePool.end(), publicPool.end(), mailPool.end()]); } };
     // Optional key loads only on configured startup; never baked into the image.
     const providerKey = await readSetting(env, 'OPENAI_API_KEY', { optional: true });
     if (providerKey) process.env.OPENAI_API_KEY = providerKey;
-    return await createIntegrations({ origin, authPool, appPool, authSecret, csrfSecret, googleClientId: env.GOOGLE_OAUTH_CLIENT_ID,
-      googleClientSecret, photoHandlers, photoRecovery: recovery, photoReady: photos.photoReady, close });
+    const integrations = await createIntegrations({ origin, authPool, appPool, publicPool, rateKey, authSecret, csrfSecret, googleClientId: env.GOOGLE_OAUTH_CLIENT_ID,
+      googleClientSecret, photoHandlers, photoRecovery: recovery, photoReady: photos.photoReady, close,
+      requestsAvailable: !!transport && !!proxyIp, getTrustedClientIp: req => trustedClientIp(req, proxyIp) });
+    if (transport) {
+      const tick = () => { if (!mailTask) { mailTask = worker.runOnce().catch(() => {}).finally(() => { mailTask = null; }); } };
+      timer = setInterval(tick, 15000); timer.unref(); tick();
+    }
+    return integrations;
   } catch (error) {
+    clearInterval(timer); if (mailTask) await mailTask; transport?.close();
     if (guard?.close) await guard.close().catch(() => {});
-    lock.close(); await Promise.allSettled([authPool, appPool, maintenancePool].filter(Boolean).map(pool => pool.end()));
+    lock.close(); await Promise.allSettled([authPool, appPool, maintenancePool, publicPool, mailPool].filter(Boolean).map(pool => pool.end()));
     throw error;
   }
 }
-module.exports = { createComposition, readSetting, databasePair, requireDatabaseUrl, assertVolumeLock, maintenanceRole };
+module.exports = { createComposition, readSetting, privateFileSetting, trustedClientIp, databasePair, requireDatabaseUrl, assertVolumeLock, maintenanceRole };

@@ -18,7 +18,7 @@ async page => {
     const req=route.request(), path=new URL(req.url()).pathname, headers=await req.allHeaders(), account=(/fixture_session=([abc])/.exec(headers.cookie||'')||[])[1], token=headers['x-homeplanner-session'];
     const json=(status,body)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)}).catch(()=>{});
     if(headers.authorization) protocolErrors.push('authorization');
-    if(path==='/api/session') { if(deferSession) { deferSession=false; restorationStarted(); await new Promise(resolve=>{releaseRestoration=resolve;}); } return account ? json(200,{userId:userIds[account],sessionId:sessionIds[account],displayName:'Account '+account.toUpperCase(),csrfToken:csrf}) : json(401,{error:{code:'unauthenticated'}}); }
+    if(path==='/api/session') { if(deferSession) { deferSession=false; restorationStarted(); await new Promise(resolve=>{releaseRestoration=resolve;}); } return account ? json(200,{userId:userIds[account],sessionId:sessionIds[account],displayName:'Account '+account.toUpperCase(),csrfToken:csrf,access:{status:'approved',role:'user'}}) : json(401,{error:{code:'unauthenticated'}}); }
     if(!account) return json(401,{error:{code:'unauthenticated'}});
     if(!['GET','HEAD'].includes(req.method()) && (headers.origin!==origin || token!==sessionIds[account] || headers['x-homeplanner-csrf']!==csrf)) { protocolErrors.push('mutation headers'); return json(409,{error:{code:'session_changed'}}); }
     if(path.endsWith('/raw')) { uploadStarted(); await uploadGate; return json(200,{}); }

@@ -21,6 +21,7 @@ async page => {
         if (path === '/api/admin/bootstrap') { if (headers['X-Google-Id-Token'] !== 'synthetic-id-token' || headers['X-Admin-Challenge'] !== 'fixture-nonce') throw Error('invalid bootstrap proof'); return {isAdmin:true,grantId:'synthetic-grant',expiresIn:300}; }
         if (headers['X-Admin-Grant'] !== 'synthetic-grant' || headers['X-Google-Id-Token'] || headers['X-Admin-Challenge']) throw Error('invalid grant');
         if (path === '/api/me') return { userId, isAdmin:true };
+        if (path === '/api/admin/access/requests' || path === '/api/admin/access/entitlements') return [];
         if (options.method === 'PUT') { if (headers['If-Match'] !== `"${revision}"`) { const e=Error('conflict'); e.status=409; throw e; } revision++; if (path.endsWith('/budget')) window.__budget=options.body.globalBudgetMicros; }
         return settings();
       }
