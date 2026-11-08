@@ -83,6 +83,8 @@ function boundedStream(req, res, max, origin) {
 async function staticFile(req, res, pathname, dist) {
   const name = pathname === '/' ? 'index.html' : pathname.slice(1);
   if (!publicFiles.has(name)) return error(res, 404, 'not_found', 'Resource not found.');
+  // The identity widget needs the page origin; paths and queries stay private cross-origin.
+  if (name === 'admin.html') res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   const components = name.split('/'); let current = dist;
   try {
     const root = await fs.lstat(dist); if (!root.isDirectory() || root.isSymbolicLink()) throw Error('invalid root');
