@@ -124,6 +124,7 @@
             if (!cloud.isCurrent(stamp) || !proof || me.userId !== stamp.userId || me.isAdmin !== true) throw Error('Admin access is unavailable for this account.');
             await load(stamp);
           } catch (error) {
+            if (attempt !== sequence) return;
             if (error.status === 401 || error.status === 403) clearProof('Verification failed or expired. Check the Google account, then try again.');
             else { clearProof(); fail(error); }
           }

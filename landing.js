@@ -47,7 +47,7 @@
         if (used || Date.now() >= expires || attempt !== sequence || typeof response?.credential !== 'string') return;
         used = true;
         try { stamp = await cloud.verificationStamp(stamp); if (attempt !== sequence || Date.now() >= expires) return; await cloud.request('/api/access/bind', { method: 'POST', expected: stamp, body: { token: response.credential, nonce: challenge.nonce } }); location.reload(); }
-        catch (error) { fail(error); }
+        catch (error) { if (attempt === sequence) fail(error); }
       } });
       googleButton.replaceChildren(); window.google.accounts.id.renderButton(googleButton, { type: 'standard', size: 'large' });
       status.textContent = 'Select the Google button to verify your account.';
