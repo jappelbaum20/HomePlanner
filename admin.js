@@ -97,10 +97,24 @@
   }
   cloud.subscribe(next => {
     if (next.generation !== generation) { generation = next.generation; clearProof(); form.reset(); budgetForm.reset(); }
-    else if (proof && !cloud.isCurrent(proof.stamp)) clearProof();
+    else if (proof && !cloud.isCurrent(proof.stamp)) {
+      const sameIdentity = next.userId === proof.stamp.userId && next.sessionId === proof.stamp.sessionId && next.generation === proof.stamp.generation;
+      if (!sameIdentity || Date.now() >= proof.expires) clearProof();
+      else if (next.revalidating) { form.hidden = budgetForm.hidden = true; status.textContent = 'Checking the session…'; }
+      else if (next.me && cloud.isCurrent(next)) {
+        // A new epoch also needs a live server check of the existing grant.
+        const candidate = proof;
+        void cloud.request('/api/me', { expected: next, headers: { 'X-Admin-Grant': candidate.grantId } }).then(me => {
+          if (proof !== candidate || !cloud.isCurrent(next)) return;
+          if (Date.now() >= candidate.expires || me.userId !== next.userId || me.isAdmin !== true) return clearProof('Verification failed or expired.');
+          candidate.stamp = next; form.hidden = budgetForm.hidden = false;
+          status.textContent = `Verified. Settings loaded · revision ${revision}. Budget uses a conservative token allowance, which may exceed invoice spend.`;
+        }).catch(() => { if (proof === candidate && cloud.isCurrent(next)) clearProof('Verification failed or expired.'); });
+      } else clearProof();
+    }
     signIn.hidden = !!next.me; signOut.hidden = !next.me; verification.hidden = !next.me;
     if (!next.me) status.textContent = next.error || 'Sign in to request admin access.';
-    else if (!proof) status.textContent = 'Prepare Google verification to access settings.';
+    else if (!proof && !next.revalidating) status.textContent = 'Prepare Google verification to access settings.';
   });
   if (!cloud.init()) { status.textContent = 'Cloud sign-in is not configured.'; signIn.disabled = true; signIn.hidden = false; }
   signIn.addEventListener('click', () => cloud.signIn().catch(fail));

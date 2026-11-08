@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.homeplanner.invalid/shelf-document-v2",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 2
+    },
+    "shelf": {
+      "$ref": "https://schemas.homeplanner.invalid/shelf-v1"
+    },
+    "wall": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "widthCm": {
+          "type": "number",
+          "minimum": 10,
+          "maximum": 2000
+        },
+        "heightCm": {
+          "type": "number",
+          "minimum": 10,
+          "maximum": 2000
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        }
+      },
+      "required": [
+        "widthCm",
+        "heightCm",
+        "color"
+      ]
+    },
+    "placement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "offsetCm": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2000
+        },
+        "elevationCm": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2000
+        },
+        "gapCm": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        }
+      },
+      "required": [
+        "offsetCm",
+        "elevationCm",
+        "gapCm"
+      ]
+    },
+    "activeTab": {
+      "enum": [
+        "custom",
+        "saetter"
+      ]
+    }
+  },
+  "required": [
+    "version",
+    "shelf",
+    "wall",
+    "placement",
+    "activeTab"
+  ]
+}

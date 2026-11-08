@@ -28,7 +28,7 @@ async page => {
     if(path.endsWith('/complete')) {completionCalls++;return json(200,{});}
     if(path.includes('/photos/') && req.method()==='GET') return route.fulfill({status:200,contentType:'image/png',body:photoBytes});
     if(req.method()==='PUT'){saveToken=token;saveStarted();await saveGate;return json(200,{revision:2,design:{revision:2}});}
-    if(path.startsWith('/api/designs/')){if(phase==='load'){started();await delayed;}return json(200,{id:'11111111-1111-4111-8111-111111111111',kind:'home',title:'Private A',revision:1,payload:phase==='photo'?fakePayload:{version:2,name:'Private A',rooms:[],catalog:[]},photoManifest:phase==='photo'?[{photoId:'22222222-2222-4222-8222-222222222222',mime:'image/png',bytes:photoBytes.length,checksum:require('crypto').createHash('sha256').update(photoBytes).digest('hex')}]:[]});}
+    if(path.startsWith('/api/designs/')){if(phase==='load'){started();await delayed;}return json(200,{id:'11111111-1111-4111-8111-111111111111',kind:'home',title:'Private A',schemaVersion:3,revision:1,payload:phase==='photo'?fakePayload:{version:2,name:'Private A',rooms:[],catalog:[]},photoManifest:phase==='photo'?[{photoId:'22222222-2222-4222-8222-222222222222',mime:'image/png',bytes:photoBytes.length,checksum:require('crypto').createHash('sha256').update(photoBytes).digest('hex')}]:[]});}
     return json(404,{});
   });
   await page.goto(origin+'/');await page.evaluate(()=>window.HomePlannerContractsReady);await page.getByRole('button',{name:'Private designs'}).click();

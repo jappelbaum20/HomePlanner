@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en"><head><base href="/"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bookshelf builder</title><link rel="stylesheet" href="styles.css?v=3"></head>
+<body>
+  <header class="topbar"><a class="btn top" href="/home">Home planner</a><strong>Bookshelf builder</strong><span id="standaloneStatus" class="save-state" role="status"></span><button id="localOpen" class="btn top">Open local design</button><button id="importShelf" class="btn top">Import JSON</button><button id="cloudBtn" class="btn top">Private designs</button></header>
+  <main id="bookshelfBuilder" class="bookshelf-builder" hidden aria-label="Bookshelf builder"></main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <input id="shelfFile" type="file" accept="application/json,.json" hidden>
+  <dialog id="cloudDlg" class="save-dlg"><section><div class="sec-head"><h2>Private designs</h2><button class="btn light small" id="cloudClose">Close</button></div><p id="cloudStatus" role="status" aria-live="polite"></p><div class="btnrow"><button id="cloudSignIn" class="btn">Sign in with Google</button><button id="cloudSignOut" class="btn light" hidden>Sign out</button><a href="admin.html">Admin settings</a></div><p class="note">Cloud designs are private to your account. Signing in does not upload local designs.</p><div id="cloudPanel"></div></section></dialog>
+  <script src="vendor/three.min.js"></script><script src="vendor/OrbitControls.js"></script><script src="vendor/RoomEnvironment.js"></script><script src="vendor/RoundedBoxGeometry.js"></script>
+  <script src="bookshelf.js"></script><script src="bookshelf-builder.js"></script><script src="models3d.js"></script><script src="shared/canonical.js"></script><script src="client/config.js"></script><script src="client/contracts-loader.js"></script><script src="client/cloud.js"></script><script src="client/ui.js"></script><script src="standalone.js"></script>
+</body></html>

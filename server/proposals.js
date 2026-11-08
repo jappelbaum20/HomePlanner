@@ -12,7 +12,7 @@ const hash = value => createHash('sha256').update(canonical(value), 'utf8').dige
 
 function matchingShelf(design, body) {
   if (!design || design.revision !== body.baseRevision) return false;
-  if (design.kind === 'shelf') return body.shelfId === undefined && hash(design.payload) === body.baseHash;
+  if (design.kind === 'shelf') return body.shelfId === undefined && hash(design.payload.version === 2 ? design.payload.shelf : design.payload) === body.baseHash;
   if (design.kind !== 'home' || !Array.isArray(design.payload?.catalog)) return false;
   const candidates = design.payload.catalog.filter(p => p.shelfDesign && (body.shelfId === undefined || p.id === body.shelfId));
   // An omitted id is accepted only when the hash uniquely identifies a shelf.

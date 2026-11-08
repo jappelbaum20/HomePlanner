@@ -96,9 +96,14 @@ async page => {
   page.once('dialog',d=>d.accept('Previous plan copy'));await page.getByRole('button',{name:'Copy previous plan'}).click();
   check(await page.evaluate(key=>!!localStorage.getItem(key),legacyKey),'copying a previous anonymous record leaves the source intact');
   await page.getByRole('button',{name:'Save and versions'}).click();page.once('dialog',d=>d.accept('Local shelf fixture'));await page.getByRole('button',{name:'New local shelf'}).click();
-  await page.getByRole('spinbutton',{name:'Width, cm',exact:true}).fill('211');await page.waitForTimeout(450);await page.reload();
-  await page.getByRole('button',{name:'Save and versions'}).click();await page.locator('#localList li').filter({hasText:'Local shelf fixture'}).getByRole('button',{name:'Open',exact:true}).click();
+  await page.waitForURL('**/bookshelf'); await page.getByRole('spinbutton',{name:'Width, cm',exact:true}).fill('211');
+  const sourceId=await page.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('houseplanner.v3.anonymous.')).map(k=>JSON.parse(localStorage.getItem(k))).find(v=>v.title==='Local shelf fixture').localDesignId);
+  await page.getByRole('button',{name:'Save design',exact:true}).click(); await page.reload();
   check(await page.getByRole('spinbutton',{name:'Width, cm',exact:true}).inputValue()==='211','local shelf envelope can be reopened after reload');
+  check(await page.evaluate(id=>{const e=JSON.parse(localStorage.getItem('houseplanner.v3.anonymous.'+id)); return e.localDesignId===id && e.schemaVersion===4 && e.payload.shelf.width===211;},sourceId),'explicit local shelf upgrade preserves its ID');
+  await page.evaluate(id=>{const key='houseplanner.v3.anonymous.'+id,e=JSON.parse(localStorage.getItem(key));e.title='Changed in another tab';localStorage.setItem(key,JSON.stringify(e));},sourceId);
+  await page.getByRole('spinbutton',{name:'Width, cm',exact:true}).fill('212'); await page.getByRole('button',{name:'Save design',exact:true}).click();
+  check((await page.locator('#toast').innerText()).includes('original local design changed') && await page.evaluate(id=>JSON.parse(localStorage.getItem('houseplanner.v3.anonymous.'+id)).title,sourceId)==='Changed in another tab','local upgrade refuses to overwrite a changed source');
   check(protocolErrors.length===0,'requests use same-origin cookies and captured session/CSRF headers: '+protocolErrors.join(','));
   if (checks.some(x=>!x.pass)) throw Error(JSON.stringify(checks)); return { checks:checks.length, failures:[] };
 }

@@ -13,9 +13,11 @@ window.HomePlannerCloudUI = bridge => {
     panel.replaceChildren();
     if (!identity?.me?.capabilities?.cloud) { panel.append(text('p', 'Cloud designs are unavailable. Local editing and backup remain available.')); return; }
     const controls = document.createElement('div'); controls.className = 'btnrow';
-    controls.append(button('New home', () => create('home')), button('New shelf', () => create('shelf')), button('Refresh list', refresh)); panel.append(controls);
+    if (!bridge.onlyKind || bridge.onlyKind === 'home') controls.append(button('New home', () => create('home')));
+    if (!bridge.onlyKind || bridge.onlyKind === 'shelf') controls.append(button('New shelf', () => create('shelf')));
+    controls.append(button('Refresh list', refresh)); panel.append(controls);
     const current = cloud.snapshot().current;
-    if (!current) controls.append(button('Create cloud copy of this home', () => create('home', true)));
+    if (!current) { const kind = bridge.onlyKind || 'home'; controls.append(button(`Create cloud copy of this ${kind}`, () => create(kind, true))); }
     if (current) {
       const label = text('p', `Open: ${current.title} · revision ${current.revision}`); panel.append(label);
       const actions = document.createElement('div'); actions.className = 'btnrow';
@@ -23,7 +25,7 @@ window.HomePlannerCloudUI = bridge => {
     }
     const ul = document.createElement('ul'), items = [], seen = new Set(); let cursor = null; ul.className = 'cloud-list';
     do { const list = await cloud.list(cursor); if (!Array.isArray(list.items)) throw Error('Invalid design list.'); items.push(...list.items); cursor = list.nextCursor; if (cursor && (seen.has(cursor) || items.length >= 100)) throw Error('Design list pagination is invalid.'); if (cursor) seen.add(cursor); } while (cursor);
-    for (const item of items) {
+    for (const item of items.filter(item => !bridge.onlyKind || item.kind === bridge.onlyKind)) {
       const li = document.createElement('li'); li.append(text('span', `${item.title} (${item.kind})`), button('Open', () => open(item.id))); ul.append(li);
     }
     if (!items.length) panel.append(text('p', 'No cloud designs yet.'));

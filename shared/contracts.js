@@ -3,11 +3,11 @@
   if (typeof module === 'object' && module.exports) {
     const Ajv = require('ajv');
     const ajv = new Ajv({ allErrors: true, strict: true, strictRequired: false, strictTypes: false, strictNumbers: true });
-    for (const schema of [require('./schema/shelf-v1.json'), require('./schema/home-v2.json'), require('./schema/api-v3.json'), require('./schema/vps-v1.json')]) ajv.addSchema(schema);
+    for (const schema of [require('./schema/shelf-v1.json'), require('./schema/shelf-document-v2.json'), require('./schema/home-v2.json'), require('./schema/api-v3.json'), require('./schema/api-v4.json'), require('./schema/vps-v1.json')]) ajv.addSchema(schema);
     const base = 'https://schemas.homeplanner.invalid/';
     const validators = {};
     for (const [name, schema] of Object.entries({
-      shelf: 'shelf-v1', home: 'home-v2', writeDesign: 'api-v3#/definitions/writeDesign',
+      shelf: 'shelf-v1', shelfDocument: 'shelf-document-v2', home: 'home-v2', writeDesignV4: 'api-v4#/definitions/writeDesign', localV4: 'api-v4#/definitions/local', writeDesign: 'api-v3#/definitions/writeDesign',
       local: 'api-v3#/definitions/local', proposalRequest: 'api-v3#/definitions/proposalRequest',
       proposal: 'api-v3#/definitions/proposal', photoRequest: 'api-v3#/definitions/photoRequest',
       modelConfig: 'api-v3#/definitions/modelConfig', error: 'api-v3#/definitions/error',
@@ -46,7 +46,7 @@
     return found.flatMap(shelfErrors);
   }
   function validate(name, value) {
-    const fn = validators[name];
+    const fn = validators[(name === 'writeDesign' || name === 'local') && value?.schemaVersion === 4 ? name + 'V4' : name];
     if (!fn) throw new Error('Unknown contract: ' + name);
     let size;
     try { size = bytes(value); } catch (_) { return { valid: false, errors: ['Input must be JSON serializable.'] }; }
@@ -56,12 +56,13 @@
       for (const error of fn.errors || []) errors.push((error.instancePath || '/') + ': ' + error.keyword);
       return { valid: false, errors };
     }
-    if (['home', 'shelf'].includes(name) && size > LIMITS.payloadBytes) errors.push('Design payload exceeds 1 MiB.');
+    if (['home', 'shelf', 'shelfDocument'].includes(name) && size > LIMITS.payloadBytes) errors.push('Design payload exceeds 1 MiB.');
     if (name === 'shelf') errors.push(...shelfErrors(value));
+    if (name === 'shelfDocument') errors.push(...shelfErrors(value.shelf));
     if (name === 'home') errors.push(...homeShelfErrors(value));
     if (['local', 'writeDesign'].includes(name)) {
       if (bytes(value.payload) > LIMITS.payloadBytes) errors.push('Design payload exceeds 1 MiB.');
-      errors.push(...(value.kind === 'shelf' ? shelfErrors(value.payload) : homeShelfErrors(value.payload)));
+      errors.push(...(value.kind === 'shelf' ? shelfErrors(value.payload.version === 2 ? value.payload.shelf : value.payload) : homeShelfErrors(value.payload)));
       const ids = (name === 'local' ? value.photoManifest.map(p => p.photoId) : value.photoIds).map(id => id.toLowerCase());
       const allowed = new Set(ids), referenced = new Set();
       if (allowed.size !== ids.length) errors.push('Duplicate photo IDs are not allowed.');
