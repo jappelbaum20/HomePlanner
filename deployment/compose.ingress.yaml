@@ -1,0 +1,11 @@
+# Existing dedicated external ingress; Caddy owns its separate attachment.
+services:
+  web:
+    ports: !reset []
+    networks:
+      ingress:
+        aliases: [homeplanner-web]
+networks:
+  ingress:
+    external: true
+    name: ${HOMEPLANNER_INGRESS_NETWORK:-homeplanner_ingress}

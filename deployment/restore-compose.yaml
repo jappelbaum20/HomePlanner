@@ -20,7 +20,7 @@ services:
     security_opt: [no-new-privileges:true]
     logging: {driver: json-file, options: {max-size: 10m, max-file: '3'}}
   maintenance:
-    image: homeplanner-web:local
+    image: ${HOMEPLANNER_WEB_IMAGE:-homeplanner-web:local}
     entrypoint: [/bin/sh, /app/deployment/operations-lock.sh]
     volumes:
       - type: bind
@@ -33,7 +33,9 @@ services:
       HOMEPLANNER_AUTH_DB_PASSWORD_FILE: /run/secrets/auth_password
       HOMEPLANNER_APP_DB_PASSWORD_FILE: /run/secrets/app_password
       HOMEPLANNER_PHOTO_MAINTENANCE_DB_PASSWORD_FILE: /run/secrets/photo_maintenance_password
-    secrets: [migration_url, auth_password, app_password, photo_maintenance_password]
+      HOMEPLANNER_ACCESS_PUBLIC_DB_PASSWORD_FILE: /run/secrets/access_public_password
+      HOMEPLANNER_MAIL_DB_PASSWORD_FILE: /run/secrets/mail_password
+    secrets: [migration_url, auth_password, app_password, photo_maintenance_password, access_public_password, mail_password]
     networks: [isolated]
     read_only: true
     cap_drop: [ALL]
@@ -42,7 +44,7 @@ services:
     cpus: 0.5
     pids_limit: 64
   photo-verify:
-    image: homeplanner-web:local
+    image: ${HOMEPLANNER_WEB_IMAGE:-homeplanner-web:local}
     user: "1000:1000"
     entrypoint: [node, /app/deployment/verify-restored-access.cjs]
     network_mode: none
@@ -67,3 +69,5 @@ secrets:
   auth_password: {file: '${HOMEPLANNER_RESTORE_AUTH_PASSWORD_FILE:?Set isolated auth password file}'}
   app_password: {file: '${HOMEPLANNER_RESTORE_APP_PASSWORD_FILE:?Set isolated app password file}'}
   photo_maintenance_password: {file: '${HOMEPLANNER_RESTORE_PHOTO_MAINTENANCE_PASSWORD_FILE:?Set isolated maintenance password file}'}
+  access_public_password: {file: '${HOMEPLANNER_RESTORE_ACCESS_PUBLIC_PASSWORD_FILE:?Set isolated access password file}'}
+  mail_password: {file: '${HOMEPLANNER_RESTORE_MAIL_PASSWORD_FILE:?Set isolated mail password file}'}

@@ -1,0 +1,11 @@
+# Optional only after mailbox credential, ingress and delivery gates are satisfied.
+services:
+  web:
+    environment:
+      HOMEPLANNER_MAIL_ENABLED: '1'
+      HOMEPLANNER_TRUSTED_PROXY_IP: ${HOMEPLANNER_TRUSTED_PROXY_IP:?Set the verified exact ingress peer IP}
+      HOMEPLANNER_GMAIL_APP_PASSWORD_FILE: /run/secrets/gmail_app_password
+    secrets: [gmail_app_password]
+secrets:
+  gmail_app_password:
+    file: ${HOMEPLANNER_GMAIL_APP_PASSWORD_FILE:?Set private mailbox password file}

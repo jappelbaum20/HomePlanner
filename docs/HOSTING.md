@@ -1,5 +1,7 @@
 # HomePlanner VPS operations (implementation hold)
 
+**Stage 2 update:** [STAGE2-OPERATIONS.md](STAGE2-OPERATIONS.md) supersedes the configuration, ingress, release and recovery instructions below wherever they differ. The Stage 2 backup and restore automation is **not ready**: the existing scripts handle only the three original runtime logins. Do not use those scripts against a 006 database until the missing access/mail fencing and restore steps have been fixed and tested. The instructions below describe the earlier configuration and are retained for its recovery context.
+
 Deployment is authorized. HomePlanner retains a 20 GiB host free-space reserve, separate from its 5 GiB photo-capacity limit. Verify current capacity before staging or startup. Existing Energy services and data remain outside this deployment scope.
 
 The intended stack is an isolated Node service, Better Auth with Google, dedicated PostgreSQL and a private filesystem. The application starts with empty public starter data; local data is never automatically uploaded. It does not require a managed database or hosting platform.
