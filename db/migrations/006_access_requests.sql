@@ -367,4 +367,15 @@ BEGIN
  PERFORM hp_app.hp_access_assert_approved();
 END $$;
 REVOKE ALL ON FUNCTION hp_private.assert_session_actor(uuid) FROM PUBLIC;
+CREATE OR REPLACE FUNCTION hp_app.hp_model_config_get() RETURNS jsonb
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path='' AS $$
+BEGIN
+ PERFORM hp_private.assert_actor(nullif(current_setting('hp.user_id',true),'')::uuid);
+ RETURN (SELECT jsonb_build_object('revision',revision,'enabled',enabled,'adapterId',adapter_id,'modelId',model_id,
+   'connectionRef',connection_ref,'limits',limits,'globalBudgetMicros',global_budget_micros)
+   FROM hp_private.model_config WHERE singleton);
+END $$;
+-- Runtime SQL is a trusted backend boundary: identity/bootstrap functions accept
+-- identity claims only after the HTTP service verifies the external token.
+-- Approval guards on business RPCs do not sandbox a compromised backend role.
 RESET ROLE;

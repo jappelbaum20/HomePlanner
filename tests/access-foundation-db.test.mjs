@@ -179,3 +179,15 @@ test('direct business RPCs deny pending actors while identity lookup remains ava
   assert.equal(Number((await d.query('SELECT count(*) n FROM hp_app.designs')).rows[0].n),0);
  }finally{await d.close();}
 });
+
+test('direct model config read requires approved entitlement in every access state',async()=>{
+ const d=await setup();try{
+  await assert.rejects(app(d,user,us,'SELECT hp_app.hp_model_config_get() x'),/HP_ACCESS_PENDING/);
+  await d.query("INSERT INTO hp_private.access_entitlements(user_id,google_subject,status,decided_by,provenance) VALUES($1,'user-sub','denied',$2,'fixture')",[user,owner]);
+  await assert.rejects(app(d,user,us,'SELECT hp_app.hp_model_config_get() x'),/HP_ACCESS_DENIED/);
+  await d.query("UPDATE hp_private.access_entitlements SET status='revoked' WHERE user_id=$1",[user]);
+  await assert.rejects(app(d,user,us,'SELECT hp_app.hp_model_config_get() x'),/HP_ACCESS_REVOKED/);
+  await d.query("UPDATE hp_private.access_entitlements SET status='approved' WHERE user_id=$1",[user]);
+  assert.equal((await app(d,user,us,'SELECT hp_app.hp_model_config_get() x')).globalBudgetMicros,25000000);
+ }finally{await d.close();}
+});
