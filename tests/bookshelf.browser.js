@@ -5,9 +5,9 @@ async page => {
   const button = name=>page.getByRole('button',{name,exact:true});
   const field = name=>page.getByRole('spinbutton',{name,exact:true});
   const edit = async(name,value,blur=true)=>{await field(name).fill(String(value));if(blur)await field(name).press('Tab');};
-  const data = ()=>page.evaluate(()=>JSON.parse(localStorage.getItem('houseplanner.project.v1')));
+  const data = ()=>page.evaluate(()=>JSON.parse(localStorage.getItem('houseplanner.anonymous.v3')));
   await page.goto('http://127.0.0.1:8765/');
-  await page.evaluate(()=>localStorage.removeItem('houseplanner.project.v1')); await page.reload();
+  await page.evaluate(() => localStorage.setItem('houseplanner.anonymous.v3', JSON.stringify({version:2,name:'Synthetic fixture',rooms:[{id:'office',seedId:'office',name:'Office',width:600,length:400,height:250,items:[],openings:[{id:'fixture-door',type:'door',wall:'n',offset:340,width:90},{id:'fixture-window',type:'window',wall:'s',offset:20,width:140,sill:90,radiator:true}],photos:[],photoLabels:{}},{id:'living',seedId:'living',name:'Living room',width:600,length:400,height:250,items:[],openings:[],photos:[],photoLabels:{}}],catalog:[]}))); await page.reload();
   await button('Bookshelf builder').click();
   await page.getByRole('textbox',{name:'Design name',exact:true}).fill('No blur saved');
   await page.reload(); await button('Bookshelf builder').click();
@@ -80,7 +80,7 @@ async page => {
   await page.screenshot({path:'output/playwright/acceptance-desktop.png',fullPage:true});
   check(await page.locator('#bs3d canvas').count()===1,'orbitable 3D preview is present');
   const geometry=await page.evaluate(()=>{
-    const d=JSON.parse(localStorage.getItem('houseplanner.project.v1')).bookshelfDraft.design,parts=Bookshelf.boards(d);
+    const d=JSON.parse(localStorage.getItem('houseplanner.anonymous.v3')).bookshelfDraft.design,parts=Bookshelf.boards(d);
     const g=HouseModels.buildItem({type:'shelf',w:d.width,d:d.depth,h:d.height,color:'#A46B42',shelfDesign:d,elev:1},{evening:false});g.updateMatrixWorld(true);
     return parts.every((b,i)=>{const size=new THREE.Box3().setFromObject(g.children[i]).getSize(new THREE.Vector3());return Math.abs(size.x-b.w)<1e-4&&Math.abs(size.y-b.h)<1e-4&&Math.abs(size.z-d.depth)<1e-4;});
   });check(geometry,'every measured 3D board matches cut dimensions');
@@ -89,7 +89,7 @@ async page => {
   check(await button('Edit bookshelf').isVisible(),'placed bookshelf has a clear way back to the builder');
   await button('Edit bookshelf').click();
   await button('Save and versions').click();
-  await page.getByRole('textbox',{name:'Version name',exact:true}).fill('Bookshelf acceptance snapshot');await button('Save version').click();
+  check(await button('Save version').isDisabled(), 'hosted mode offers local designs and backups instead of legacy versions');
   await button('Close').click();
   const backupEvent=page.waitForEvent('download');await button('Save and versions').click();await button('Export backup').click();const backup=await backupEvent;
   await backup.saveAs('output/playwright/acceptance-backup.json');await button('Close').click();

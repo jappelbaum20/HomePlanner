@@ -1,0 +1,124 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.homeplanner.invalid/shelf-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "width": {
+      "type": "number",
+      "minimum": 10,
+      "maximum": 500
+    },
+    "height": {
+      "type": "number",
+      "minimum": 10,
+      "maximum": 500
+    },
+    "depth": {
+      "type": "number",
+      "minimum": 5,
+      "maximum": 100
+    },
+    "thickness": {
+      "type": "number",
+      "minimum": 0.5,
+      "maximum": 10
+    },
+    "levels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 500
+          },
+          "left": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 500
+          },
+          "right": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 500
+          },
+          "dividers": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 500
+            },
+            "maxItems": 30
+          }
+        },
+        "required": [
+          "y",
+          "left",
+          "right",
+          "dividers"
+        ]
+      },
+      "maxItems": 25,
+      "minItems": 2
+    },
+    "template": {
+      "const": "saetter3"
+    },
+    "separatorHeight": {
+      "type": "number",
+      "minimum": 0.001,
+      "maximum": 500
+    },
+    "backThickness": {
+      "type": "number",
+      "minimum": 0.5,
+      "maximum": 10
+    }
+  },
+  "required": [
+    "version",
+    "width",
+    "height",
+    "depth",
+    "thickness",
+    "levels"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "template"
+        ]
+      },
+      "then": {
+        "required": [
+          "separatorHeight",
+          "backThickness"
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "separatorHeight"
+              ]
+            },
+            {
+              "required": [
+                "backThickness"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

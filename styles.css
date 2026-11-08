@@ -122,6 +122,11 @@ input[type="color"]::-moz-color-swatch { border: 0; border-radius: 3px; }
 .bs-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 20px; }
 .bs-heading h1 { font-size: 28px; margin: 3px 0; letter-spacing: -.04em; }
 .bs-eyebrow { margin: 0; font-size: 10px; letter-spacing: .14em; color: var(--muted); font-weight: 600; }
+.bs-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 18px; border-bottom: 1px solid var(--line); }
+.bs-tabs [role="tab"] { padding: 10px 16px; border: 1px solid var(--line); border-bottom: 0; border-radius: 8px 8px 0 0; background: var(--panel); color: var(--ink); cursor: pointer; font: inherit; }
+.bs-tabs [aria-selected="true"] { background: #FFF3C8; box-shadow: inset 0 -3px var(--mark); font-weight: 700; }
+.bs-tabs [role="tab"]:focus-visible { outline: 3px solid #80610b; outline-offset: 2px; }
+.bs-reference { line-height: 1.5; }
 .bs-layout { display: grid; grid-template-columns: 300px minmax(320px, 1fr) 270px; gap: 18px; align-items: start; }
 .bs-controls, .bs-output { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
 .bs-controls h2:not(:first-child), .bs-output h3 { margin-top: 24px; }
@@ -300,3 +305,14 @@ dialog::backdrop { background: rgba(29,33,36,.55); }
 .favs h3 { color: #8A6A1E; }
 .picwrap { position: relative; }
 .picwrap .fav { position: absolute; top: -6px; left: -6px; font-size: 15px; padding: 2px 3px; background: rgba(255,255,255,.9); box-shadow: 0 0 0 1px rgba(0,0,0,.08); }
+
+/* Private design dialog */
+.cloud-list { list-style: none; margin: 12px 0; padding: 0; }
+.cloud-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #d6dad5; }
+#cloudStatus { min-height: 1.4em; }
+
+.proposal-comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.proposal-comparison figure { margin: 0; min-width: 0; }
+.proposal-comparison svg { display: block; width: 100%; max-height: 180px; color: #76513d; border: 1px solid #d6dad5; }
+.admin-shell { max-width: 680px; margin: 40px auto; padding: 0 20px; }
+.admin-shell form { display: grid; gap: 12px; }

@@ -2,3 +2,13 @@
 *.log
 .playwright-cli/
 output/
+node_modules/
+dist/
+dist-vps/
+.vercel/
+.env
+.env.*
+/supabase/.temp/
+
+__pycache__/
+*.pyc

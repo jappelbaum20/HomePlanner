@@ -79,3 +79,33 @@ test('malformed imported levels are recoverable as an invalid design instead of 
   assert.ok(B.validate(s).errors.length);
   assert.doesNotThrow(() => B.boards(s));
 });
+
+test('SÆTTER reference has a backed four-by-three layout with paired short separators', () => {
+  const s = B.saetter3(), parts = B.boards(s);
+  assert.deepEqual([s.width, s.height, s.depth], [45.5, 40.6, 10.5]);
+  assert.deepEqual(B.validate(s).errors, []);
+  assert.equal(s.levels.length, 4);
+  assert.equal(parts.filter(p => p.kind === 'Back').length, 1);
+  assert.equal(parts.filter(p => p.kind === 'Separator').length, 18);
+  assert.deepEqual([parts[0].length, parts[0].depth, parts[0].thickness], [40.6, 45.5, .5]);
+  assert.equal(parts.find(p => p.id === 'S1').depth, 10);
+  assert.equal(parts.find(p => p.id === 'D1.2').h, 3);
+  assert.equal(parts.find(p => p.id === 'D1.2T').x, parts.find(p => p.id === 'D1.2').x);
+  const widths = s.levels[0].dividers.slice(1).map((x, i) => B.round(x - s.levels[0].dividers[i] - s.thickness));
+  assert.deepEqual(widths, [10, 10, 10, 10]);
+  assert.ok(Math.abs(s.levels[1].y - s.thickness - 12) < .07);
+  assert.deepEqual(B.normalize(JSON.parse(JSON.stringify(s))), s);
+  const resized = B.resize(s, 50, 44);
+  assert.deepEqual(B.validate(resized).errors, []);
+  assert.equal(resized.backThickness, .5);
+  assert.equal(resized.separatorHeight, 3);
+});
+
+test('SÆTTER invalid back and overlapping separator lengths are rejected', () => {
+  const s = B.saetter3();
+  s.backThickness = s.depth;
+  s.separatorHeight = 7;
+  assert.match(B.validate(s).errors.join(' '), /Back thickness/);
+  assert.match(B.validate(s).errors.join(' '), /separators must not overlap/);
+  assert.equal(B.normalize(B.preset()).template, undefined);
+});

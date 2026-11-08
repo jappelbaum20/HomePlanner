@@ -1,0 +1,858 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.homeplanner.invalid/home-v2",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 2
+    },
+    "name": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "catalog": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "type": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "w": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 3000
+          },
+          "d": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 3000
+          },
+          "h": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 800
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          },
+          "side": {
+            "enum": [
+              "left",
+              "right"
+            ]
+          },
+          "doors": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "books": {
+            "type": "boolean"
+          },
+          "style": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "shelfDesign": {
+            "$ref": "https://schemas.homeplanner.invalid/shelf-v1"
+          },
+          "frame": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "mat": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string",
+                "maxLength": 100
+              }
+            ]
+          },
+          "image": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+          },
+          "kelvin": {
+            "type": "number"
+          },
+          "power": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "status": {
+            "enum": [
+              "own",
+              "considering",
+              "ordered"
+            ]
+          },
+          "link": {
+            "type": "string",
+            "maxLength": 2048
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 10000
+          },
+          "photos": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+            },
+            "maxItems": 100
+          },
+          "shelfTarget": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "roomId": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "wall": {
+                "enum": [
+                  "n",
+                  "e",
+                  "s",
+                  "w"
+                ]
+              },
+              "offset": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3000
+              },
+              "gap": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3000
+              },
+              "elev": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 800
+              }
+            },
+            "required": [
+              "roomId",
+              "wall",
+              "offset",
+              "gap",
+              "elev"
+            ]
+          },
+          "seedRev": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "name",
+          "w",
+          "d",
+          "h",
+          "color",
+          "status",
+          "link",
+          "notes",
+          "photos"
+        ]
+      },
+      "maxItems": 2000
+    },
+    "rooms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "level": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "width": {
+            "type": "number",
+            "minimum": 50,
+            "maximum": 3000
+          },
+          "length": {
+            "type": "number",
+            "minimum": 50,
+            "maximum": 3000
+          },
+          "height": {
+            "type": "number",
+            "minimum": 150,
+            "maximum": 800
+          },
+          "floor": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          },
+          "floorFinish": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "walls": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "n": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              },
+              "e": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              },
+              "s": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              },
+              "w": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              }
+            },
+            "required": [
+              "n",
+              "e",
+              "s",
+              "w"
+            ]
+          },
+          "wallFinish": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "n": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "e": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "s": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "w": {
+                "type": "string",
+                "maxLength": 80
+              }
+            },
+            "required": [
+              "n",
+              "e",
+              "s",
+              "w"
+            ]
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 10000
+          },
+          "photos": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+            },
+            "maxItems": 100
+          },
+          "photoLabels": {
+            "type": "object",
+            "maxProperties": 100,
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 1000
+            }
+          },
+          "openings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "type": {
+                  "enum": [
+                    "window",
+                    "door"
+                  ]
+                },
+                "wall": {
+                  "enum": [
+                    "n",
+                    "e",
+                    "s",
+                    "w"
+                  ]
+                },
+                "offset": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 3000
+                },
+                "width": {
+                  "type": "number",
+                  "minimum": 20,
+                  "maximum": 1000
+                },
+                "height": {
+                  "type": "number",
+                  "minimum": 20,
+                  "maximum": 800
+                },
+                "sill": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 800
+                },
+                "color": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                },
+                "radiator": {
+                  "type": "boolean"
+                },
+                "leaf": {
+                  "type": "boolean"
+                },
+                "swing": {
+                  "enum": [
+                    "in",
+                    "out"
+                  ]
+                },
+                "hinge": {
+                  "enum": [
+                    "start",
+                    "end"
+                  ]
+                },
+                "niche": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "nicheShelf": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "type",
+                "wall",
+                "offset",
+                "width",
+                "height",
+                "sill",
+                "color",
+                "radiator",
+                "leaf",
+                "swing",
+                "hinge",
+                "niche",
+                "nicheShelf"
+              ]
+            },
+            "maxItems": 500
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "type": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "name": {
+                  "type": "string",
+                  "maxLength": 300
+                },
+                "w": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 3000
+                },
+                "d": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 3000
+                },
+                "h": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 800
+                },
+                "color": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                },
+                "side": {
+                  "enum": [
+                    "left",
+                    "right"
+                  ]
+                },
+                "doors": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "books": {
+                  "type": "boolean"
+                },
+                "style": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "shelfDesign": {
+                  "$ref": "https://schemas.homeplanner.invalid/shelf-v1"
+                },
+                "frame": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "mat": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "maxLength": 100
+                    }
+                  ]
+                },
+                "image": {
+                  "type": "string",
+                  "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+                },
+                "kelvin": {
+                  "type": "number"
+                },
+                "power": {
+                  "type": "string",
+                  "maxLength": 40
+                },
+                "x": {
+                  "type": "number",
+                  "minimum": -1000,
+                  "maximum": 5000
+                },
+                "y": {
+                  "type": "number",
+                  "minimum": -1000,
+                  "maximum": 5000
+                },
+                "rot": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 360
+                },
+                "elev": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 800
+                },
+                "catalogId": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "fixed": {
+                  "type": "boolean"
+                },
+                "seedPl": {
+                  "type": "string",
+                  "maxLength": 200
+                }
+              },
+              "required": [
+                "id",
+                "type",
+                "name",
+                "w",
+                "d",
+                "h",
+                "x",
+                "y",
+                "rot",
+                "elev",
+                "color"
+              ]
+            },
+            "maxItems": 2000
+          },
+          "seedId": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "seedRev": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "level",
+          "width",
+          "length",
+          "height",
+          "floor",
+          "floorFinish",
+          "walls",
+          "wallFinish",
+          "notes",
+          "photos",
+          "photoLabels",
+          "openings",
+          "items"
+        ]
+      },
+      "maxItems": 500
+    },
+    "removedPieces": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 200
+      },
+      "maxItems": 5000
+    },
+    "placedSeeds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 200
+      },
+      "maxItems": 5000
+    },
+    "removedRooms": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 200
+      },
+      "maxItems": 5000
+    },
+    "removedPhotos": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 200
+      },
+      "maxItems": 5000
+    },
+    "favorites": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 200
+      },
+      "maxItems": 5000
+    },
+    "paints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "hex": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "hex"
+        ]
+      },
+      "maxItems": 1000
+    },
+    "activeRoomId": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 200
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "bookshelfDraft": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "color": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "design": {
+              "$ref": "https://schemas.homeplanner.invalid/shelf-v1"
+            },
+            "pieceId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "itemId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "itemRoomId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "tab": {
+              "enum": [
+                "custom",
+                "saetter"
+              ]
+            },
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "roomId": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "wall": {
+                  "enum": [
+                    "n",
+                    "e",
+                    "s",
+                    "w"
+                  ]
+                },
+                "offset": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 3000
+                },
+                "gap": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 3000
+                },
+                "elev": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 800
+                }
+              },
+              "required": [
+                "roomId",
+                "wall",
+                "offset",
+                "gap",
+                "elev"
+              ]
+            },
+            "alternate": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "color": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                },
+                "design": {
+                  "$ref": "https://schemas.homeplanner.invalid/shelf-v1"
+                },
+                "pieceId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "itemId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "itemRoomId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "tab": {
+                  "enum": [
+                    "custom",
+                    "saetter"
+                  ]
+                },
+                "target": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "roomId": {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    "wall": {
+                      "enum": [
+                        "n",
+                        "e",
+                        "s",
+                        "w"
+                      ]
+                    },
+                    "offset": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 3000
+                    },
+                    "gap": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 3000
+                    },
+                    "elev": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 800
+                    }
+                  },
+                  "required": [
+                    "roomId",
+                    "wall",
+                    "offset",
+                    "gap",
+                    "elev"
+                  ]
+                }
+              },
+              "required": [
+                "name",
+                "color",
+                "design",
+                "pieceId",
+                "itemId",
+                "itemRoomId",
+                "tab",
+                "target"
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "color",
+            "design",
+            "pieceId",
+            "itemId",
+            "itemRoomId",
+            "tab",
+            "target"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "version",
+    "name",
+    "catalog",
+    "rooms"
+  ]
+}
