@@ -9,7 +9,7 @@ const { Readable } = require('node:stream');
 const { uuid } = require('./errors');
 
 const MAX_PHOTO = 10485760;
-const defaultMax = 5 * 1024 ** 3, defaultFree = 60 * 1024 ** 3;
+const defaultMax = 5 * 1024 ** 3, defaultFree = 20 * 1024 ** 3;
 const nofollow = constants.O_NOFOLLOW || 0;
 const validId = x => uuid(x) && x === x.toLowerCase();
 const sha = b => createHash('sha256').update(b).digest('hex');
@@ -30,7 +30,7 @@ function createPhotoStore({ root, publicRoot, maxBytes = defaultMax, minFreeByte
   if (!path.isAbsolute(root || '') || !path.isAbsolute(publicRoot || '') || within(path.resolve(root), path.resolve(publicRoot)) || within(path.resolve(publicRoot), path.resolve(root))) throw TypeError('Separate absolute private and public roots required');
   if (!Number.isSafeInteger(maxBytes) || maxBytes < MAX_PHOTO || !Number.isSafeInteger(minFreeBytes) || minFreeBytes < 0) throw TypeError('Invalid storage limits');
   if (testOnly && (process.env.NODE_ENV !== 'test' || testOnly.allowUnsafeDirectorySync !== true)) throw TypeError('Test filesystem options forbidden');
-  if (!testOnly && minFreeBytes < defaultFree) throw TypeError('The minimum free-space floor is 60 GiB');
+  if (!testOnly && minFreeBytes < defaultFree) throw TypeError('The minimum free-space floor is 20 GiB');
   root = path.resolve(root); publicRoot = path.resolve(publicRoot);
   const syncDir = testOnly?.syncDir || realDirSync;
   const diskFree = testOnly?.diskFree || (async dir => { const s = await fs.statfs(dir); return Number(s.bavail) * Number(s.bsize); });

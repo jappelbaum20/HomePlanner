@@ -15,7 +15,7 @@ command -v gpg >/dev/null
 gpg --batch --list-keys "$HOMEPLANNER_BACKUP_RECIPIENT" >/dev/null
 [[ -d "$HOMEPLANNER_BACKUP_ROOT" && ! -L "$HOMEPLANNER_BACKUP_ROOT" ]] || exit 1
 free_bytes=$(df -B1 --output=avail "$HOMEPLANNER_BACKUP_ROOT" | tail -n 1 | tr -d ' ')
-[[ "$free_bytes" =~ ^[0-9]+$ && "$free_bytes" -gt 64424509440 ]] || { echo 'Backup filesystem is below the 60 GiB floor.' >&2; exit 1; }
+[[ "$free_bytes" =~ ^[0-9]+$ && "$free_bytes" -gt 21474836480 ]] || { echo 'Backup filesystem is below the 20 GiB floor.' >&2; exit 1; }
 backup="$HOMEPLANNER_BACKUP_ROOT/$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -m 700 "$backup"
 on_error() { echo "Backup incomplete at $backup. Do not resume HomePlanner until its state and database logins have been checked." >&2; }

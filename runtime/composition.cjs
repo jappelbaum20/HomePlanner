@@ -72,7 +72,7 @@ async function createComposition({ env = process.env, safety, PoolClass = Pool }
   const root = env.HOMEPLANNER_PHOTO_ROOT;
   if (!root || !path.isAbsolute(root)) throw Error('Invalid photo root');
   const minFree = Number(env.HOMEPLANNER_MIN_FREE_BYTES);
-  if (!Number.isSafeInteger(minFree) || minFree < 60 * 1024 ** 3) throw Error('Invalid free-space floor');
+  if (!Number.isSafeInteger(minFree) || minFree < 20 * 1024 ** 3) throw Error('Invalid free-space floor');
   const lock = holdVolumeLock(root, env);
   let authUrl, appUrl, maintenanceUrl, authSecret, csrfSecret, googleClientSecret;
   try { [authUrl, appUrl, maintenanceUrl, authSecret, csrfSecret, googleClientSecret] = await Promise.all([
@@ -107,6 +107,9 @@ async function createComposition({ env = process.env, safety, PoolClass = Pool }
     photos = createPhotoService({ backend, store, origin, exclusiveWriter: lock.exclusiveWriter, maintenanceReady: available });
     const photoHandlers = Object.fromEntries(Object.entries(photos.photoHandlers).map(([key, handler]) => [key, async (...args) => { await requireAvailable(); return handler(...args); }]));
     const close = async () => { try { await guard.close(); } finally { lock.close(); await Promise.allSettled([authPool.end(), appPool.end(), maintenancePool.end()]); } };
+    // Optional key loads only on configured startup; never baked into the image.
+    const providerKey = await readSetting(env, 'OPENAI_API_KEY', { optional: true });
+    if (providerKey) process.env.OPENAI_API_KEY = providerKey;
     return await createIntegrations({ origin, authPool, appPool, authSecret, csrfSecret, googleClientId: env.GOOGLE_OAUTH_CLIENT_ID,
       googleClientSecret, photoHandlers, photoRecovery: recovery, photoReady: photos.photoReady, close });
   } catch (error) {
