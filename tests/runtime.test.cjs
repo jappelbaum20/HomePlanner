@@ -215,26 +215,50 @@ test('public request is disabled without a trusted ingress address (mail is opti
   assert.equal((await request(on,'/api/access/requests',{...input,chunks:['{"x":"','a'.repeat(4096),'"}']})).status,413); assert.equal(calls,1);
 });
 
-test('router composes access request, verified binding and revision-checked owner decisions', async t => {
-  const nonce='N'.repeat(43), grant='G'.repeat(43), events=[];
-  const store={request:async(body,ip)=>events.push(['request',body,ip]),status:async()=>({status:'pending',role:'user'}),
-    issueChallenge:async()=>({nonce,expiresIn:300}),bindVerified:async(_ctx,n,email,subject)=>{events.push(['bind',n,email,subject]);return {status:'approved',role:'user'};},
+test('router composes the handoff-gated access request and revision-checked owner decisions', async t => {
+  const grant='G'.repeat(43), events=[]; let limited=false;
+  const store={requestVerified:async(claims,ip)=>{events.push(['request',claims.sub,ip]);return limited?{limited:true,retryAfter:42}:{status:'pending'};},
+    handoffStatus:async claims=>({status:'none',retryAfter:0}),status:async()=>({status:'pending',role:'user'}),
     review:async(_ctx,_g,id)=>{events.push(['review',id]);return {id,revision:1,status:'pending'};},
     decide:async(_ctx,_g,id,revision,decision)=>{events.push(['decision',id,revision,decision]);return {id,revision:2,status:decision};}};
-  const now=Math.floor(Date.now()/1000);
-  const deps={origin,accessStore:store,googleClientId:'fixture.apps.googleusercontent.com',getTrustedClientIp:async()=> '203.0.113.1',
-    verifyCsrf:async(req,ctx)=>req.headers['x-homeplanner-csrf']===require('../runtime/router.cjs').csrfFor(secret,ctx.sessionId),
-    verifyGoogleToken:async()=>({iss:'https://accounts.google.com',aud:'fixture.apps.googleusercontent.com',nonce,email:'user@example.invalid',email_verified:true,sub:'subject-1',iat:now,exp:now+120})};
+  const claim={sub:'subject-1',email:'user@example.invalid',csrf:'C'.repeat(43),expiresAt:Date.now()+60000};
+  const deps={origin,accessStore:store,getTrustedClientIp:async()=> '203.0.113.1',
+    handoffFromRequest:req=>req.headers['x-test-handoff']==='yes'?claim:null,
+    verifyCsrf:async(req,ctx)=>req.headers['x-homeplanner-csrf']===require('../runtime/router.cjs').csrfFor(secret,ctx.sessionId)};
   const port=await fixture(t,integrations({handlers:existingHandlers(deps),requestsAvailable:true}));
-  const requestBody={method:'POST',headers:{origin,'content-type':'application/json'},chunks:['{"name":"Person","email":"user@example.invalid"}']};
-  assert.equal((await request(port,'/api/access/requests',requestBody)).status,202);
+  const post={method:'POST',headers:{origin,'content-type':'application/json','x-test-handoff':'yes','x-homeplanner-handoff-csrf':claim.csrf},chunks:['{}']};
+  assert.equal((await request(port,'/api/access/requests',{...post,headers:{origin,'content-type':'application/json'}})).status,401);
+  assert.equal((await request(port,'/api/access/requests',{...post,headers:{...post.headers,'x-homeplanner-handoff-csrf':'bad'}})).status,403);
+  assert.equal((await request(port,'/api/access/requests',{...post,headers:{...post.headers,origin:'https://foreign.example'}})).status,403);
+  assert.equal((await request(port,'/api/access/requests',{...post,chunks:['{"name":"x"}']})).status,422);
+  assert.equal(events.length,0);
+  assert.equal((await request(port,'/api/access/requests',post)).status,202);
+  limited=true; const slow=await request(port,'/api/access/requests',post); assert.equal(slow.status,429); assert.equal(slow.headers['retry-after'],'42');
+  const hs=await request(port,'/api/access/handoff',{headers:{'x-test-handoff':'yes'}}); assert.equal(hs.status,200); assert.equal(JSON.parse(hs.text).email,'user@example.invalid');
+  assert.equal((await request(port,'/api/access/handoff')).status,401);
+  assert.equal((await request(port,'/api/access/challenge')).status,404); assert.equal((await request(port,'/api/access/bind',{method:'POST',headers:post.headers,chunks:['{}']})).status,404);
   const h=await headers(port), jsonHeaders={...h,'content-type':'application/json'};
-  assert.equal((await request(port,'/api/access/bind',{method:'POST',headers:jsonHeaders,chunks:[JSON.stringify({token:'fixture',nonce})]})).status,200);
   const url='/api/admin/access/requests/'+designId, adminHeaders={...jsonHeaders,'x-admin-grant':grant};
   assert.equal((await request(port,url,{headers:{'x-admin-grant':grant}})).status,200);
   assert.equal(events.filter(x=>x[0]==='decision').length,0);
   assert.equal((await request(port,url+'/approve',{method:'POST',headers:adminHeaders,chunks:['{}']})).status,400);
   assert.equal((await request(port,url+'/approve',{method:'POST',headers:{...adminHeaders,'if-match':'"1"'},chunks:['{}']})).status,200);
-  assert.deepEqual(events.find(x=>x[0]==='bind').slice(1),[nonce,'user@example.invalid','subject-1']);
   assert.deepEqual(events.find(x=>x[0]==='decision').slice(1),[designId,1,'approved']);
+});
+
+test('auth error and request-access pages require the handoff, are uncached, and never reflect input', async t => {
+  const claim = { sub: 's', email: 'user@example.invalid', csrf: 'C'.repeat(43), expiresAt: 0 };
+  const port = await fixture(t, integrations({ handlers: {}, handoffFromRequest: req => req.headers['x-test-handoff'] === 'yes' ? claim : null }));
+  const withHandoff = { 'x-test-handoff': 'yes' };
+  const a = await request(port, '/auth/error?error=access_not_approved&error_description=x', { headers: withHandoff });
+  assert.equal(a.status, 302); assert.equal(a.headers.location, '/auth/request-access'); assert.equal(a.headers['cache-control'], 'no-store');
+  assert.equal((await request(port, '/auth/error?error=access_not_approved')).headers.location, '/?signin_error=access_not_approved');
+  assert.equal((await request(port, '/auth/error?error=%3Cscript%3E', { headers: withHandoff })).headers.location, '/?signin_error=unknown');
+  assert.equal((await request(port, '/auth/error')).headers.location, '/?signin_error=unknown');
+  const none = await request(port, '/auth/request-access'); assert.equal(none.status, 401); assert.doesNotMatch(none.text, /form|request-access\.js/);
+  const page = await request(port, '/auth/request-access', { headers: withHandoff });
+  assert.equal(page.status, 200); assert.match(page.text, /request-access\.js/); assert.equal(page.headers['cache-control'], 'no-store');
+  assert.equal((await request(port, '/request-access.html', { headers: withHandoff })).status, 404);
+  assert.equal((await request(port, '/request-access.js')).status, 200);
+  assert.equal((await request(port, '/login.css')).status, 200);
 });

@@ -29,6 +29,14 @@ For public requests, set `HOMEPLANNER_TRUSTED_PROXY_IP` to the exact address see
 
 Container IPs can change after Caddy or network recreation. Establish a reserved, stable peer address in the reviewed network configuration or reverify the address and update the web setting before enabling requests after every relevant recreation. A mismatch must leave requests unavailable or rejected; never widen trust to a network or accept arbitrary forwarded headers. Current topology and header behavior have not been verified by this local work.
 
+## Shared Google sign-in (migration 007)
+
+Every new Google account needs owner approval. A sign-in by an account without an approved entitlement creates no user, account or session; it only sets a 10-minute signed `__Host-hp-request` cookie that lets that browser view its status and submit one request on `/auth/request-access`. Approve or deny in `/admin.html`. Limits: one open request per Google subject, 60 s between submissions, 24 h after a denial. Mail stays off; the login card links to a mailto address for the owner.
+
+Migration 007 is additive (nullable columns and new functions) and is recorded in `hp_migration.applied_additive`, hashed over LF-normalised text. The previous image reads only `hp_migration.applied`, so rollback is an image swap. `tests/rollback-compat.test.mjs` proves it.
+
+Proxy trust can be set as `HOMEPLANNER_TRUSTED_PROXY_CIDR` (default `172.20.0.0/16`, private, /16 to /30) in place of one exact address. The gateway (first host), network and broadcast addresses and every address of the web container itself are always excluded; add more with `HOMEPLANNER_TRUSTED_PROXY_EXCLUDE`. `deployment/check-web-ports.sh <web container>` must pass before opening ingress: the host must not be able to reach the web container directly, because the host is inside the trusted range. Caddy must still send one validated `X-Forwarded-For` value.
+
 ## Release sequence
 
 1. Obtain review and a maintenance window. Check available capacity against the 20 GiB reserve plus staging/recovery needs, capture current non-secret configuration, exact app image and database ledger, and secure a verified recoverable pre-upgrade database/photo snapshot. The Stage 1 receipt describes the prior same-host drill, not an offsite backup. Complete the Stage 2 backup/restore remediation below before accepting a 006 rollout.

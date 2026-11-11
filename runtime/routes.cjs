@@ -4,8 +4,7 @@
 const routes = [
   { path: /^\/api\/access\/requests$/, methods: ['POST'], name: 'accessRequest', public: true },
   { path: /^\/api\/access\/status$/, methods: ['GET'], name: 'accessStatus', escape: true },
-  { path: /^\/api\/access\/challenge$/, methods: ['GET'], name: 'accessChallenge', escape: true },
-  { path: /^\/api\/access\/bind$/, methods: ['POST'], name: 'accessBind', escape: true },
+  { path: /^\/api\/access\/handoff$/, methods: ['GET'], name: 'accessHandoff', anonymous: true },
   { path: /^\/api\/admin\/access\/requests$/, methods: ['GET'], name: 'accessReviews' },
   { path: /^\/api\/admin\/access\/requests\/([^/]+)$/, methods: ['GET'], name: 'accessReview', params: ['id'] },
   { path: /^\/api\/admin\/access\/requests\/([^/]+)\/approve$/, methods: ['POST'], name: 'accessApprove', params: ['id'] },
@@ -34,7 +33,7 @@ function existingHandlers(deps) {
     photoReserve: '../api/designs/[id]/photos', photoDownload: '../api/designs/[id]/photos/[photoId]',
     photoComplete: '../api/designs/[id]/photos/[photoId]/complete', proposals: '../api/shelf-proposals',
     adminChallenge: '../api/admin/challenge', adminBootstrap: '../api/admin/bootstrap',
-    accessRequest: '../api/access/requests', accessStatus: '../api/access/status', accessChallenge: '../api/access/challenge', accessBind: '../api/access/bind',
+    accessRequest: '../api/access/requests', accessHandoff: '../api/access/handoff', accessStatus: '../api/access/status',
     accessReviews: '../api/admin/access/requests', accessReview: '../api/admin/access/requests/[id]', accessApprove: '../api/admin/access/requests/[id]/approve', accessDeny: '../api/admin/access/requests/[id]/deny',
     accessEntitlements: '../api/admin/access/entitlements', accessRevoke: '../api/admin/access/entitlements/[userId]/revoke', accessRetry: '../api/admin/access/mail/[id]/retry',
     adminModelConfig: '../api/admin/model-config', adminBudget: '../api/admin/budget'

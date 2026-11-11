@@ -1,19 +1,17 @@
 <!doctype html>
-<html lang="en"><head><base href="/"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HomePlanner access</title><link rel="stylesheet" href="styles.css"></head>
-<body><main class="admin-shell"><h1>HomePlanner</h1>
-<p>Plan rooms and build a bookshelf. Access is granted individually, including for Google accounts.</p>
-<p id="accessStatus" role="status" aria-live="polite">Checking access…</p>
-<button class="btn" id="accessSignIn" type="button" hidden>Continue with Google</button>
-<button class="btn light" id="accessSignOut" type="button" hidden>Sign out</button>
-<nav id="workspaces" hidden><p><a href="/home">Open room planner</a> · <a href="/bookshelf">Open bookshelf builder</a></p></nav>
-<section id="binding" hidden><h2>Connect an approved request</h2><p>After your request is approved, verify the same Google account and email address to connect it.</p>
-<button class="btn" id="prepareBinding" type="button">Prepare Google verification</button><div id="bindingGoogle"></div></section>
-<section><h2>Request access</h2><p>Requests are reviewed by the owner. Submitting a request does not grant access.</p>
-<p id="requestAvailability" role="status">Checking availability…</p>
-<form id="requestForm" hidden><label class="field"><span>Name</span><input name="name" maxlength="120" required autocomplete="name"></label>
-<label class="field"><span>Email</span><input name="email" type="email" maxlength="254" required autocomplete="email"></label>
-<label class="field"><span>Note (optional)</span><input name="note" maxlength="1000"></label>
-<button class="btn" type="submit">Request access</button></form></section>
-<p><a href="/admin.html">Administrator</a></p></main>
+<html lang="en" translate="no"><head><base href="/"><meta name="google" content="notranslate"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in to HomePlanner</title><link rel="stylesheet" href="login.css"></head>
+<body><main class="login-card">
+<div class="login-brand"><span class="login-brand-name"><svg class="login-mark" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2 1.5 11.5h3V22h6v-6h3v6h6V11.5h3z"/></svg>HomePlanner</span>
+<div class="login-language" role="group" aria-label="Language"><button type="button" data-lang="de" aria-pressed="false">DE</button><button type="button" data-lang="en" aria-pressed="true">EN</button></div></div>
+<h1 data-i18n="heading">Sign in to HomePlanner</h1>
+<p data-i18n="intro">Sign in with your approved Google account.</p>
+<p id="accessStatus" class="login-status" role="status" aria-live="polite"></p>
+<div class="login-actions">
+<button class="google-signin" id="accessSignIn" type="button"><img src="google-g.svg" width="20" height="20" alt=""><span data-i18n="google">Sign in with Google</span></button>
+<button class="google-signin" id="accessSignOut" type="button" hidden><span data-i18n="signout">Sign out</span></button>
+</div>
+<nav id="workspaces" hidden><p><a href="/home" data-i18n="home">Open room planner</a> · <a href="/bookshelf" data-i18n="shelf">Open bookshelf builder</a></p></nav>
+<a class="login-request" id="requestAccess" href="mailto:jacob@appelbaums.com?subject=HomePlanner%20access%20request" data-i18n="request">Request access</a>
+</main>
 <script src="client/config.js"></script><script src="vendor/better-auth.js"></script><script src="bookshelf.js"></script><script src="client/contracts-loader.js"></script><script src="client/cloud.js"></script><script src="landing.js"></script></body></html>

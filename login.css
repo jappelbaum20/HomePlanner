@@ -1,0 +1,23 @@
+/* Sign-in and request-access card, laid out like the Energy apps: 440 px card, brand row with a DE/EN
+   toggle, Google-branded button, request link. System font only. */
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px 20px;background:#f5f7f9;color:#20252b;font:16px/1.5 'Segoe UI',Arial,sans-serif}
+.login-card{width:min(440px,100%);padding:36px;background:#fff;border:1px solid #e0e4e8;border-radius:14px;box-shadow:0 18px 50px #0f1b2d17}
+.login-brand{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;font-size:18px;font-weight:700;color:#1d2124}
+.login-brand-name{display:flex;align-items:center;gap:10px}
+.login-mark{flex:none;color:#b98a00}
+h1{font-size:30px;line-height:1.2;margin:0 0 8px}
+p{margin:0 0 20px}
+.login-language{display:flex;gap:4px}
+.login-language button{padding:4px 8px;border:1px solid #c9ced3;border-radius:6px;background:#fff;color:#20252b;font:600 13px/20px 'Segoe UI',Arial,sans-serif;cursor:pointer}
+.login-language button[aria-pressed=true]{background:#1d2124;border-color:#1d2124;color:#fff}
+.google-signin{display:flex;align-items:center;justify-content:center;gap:8px;width:190px;max-width:100%;height:40px;padding:0 8px;border:1px solid #747775;border-radius:4px;background:#fff;color:#1f1f1f;text-decoration:none;white-space:nowrap;font:500 14px/20px 'Segoe UI',Arial,sans-serif;cursor:pointer}
+.google-signin:hover{background:#f5f7f9}
+.google-signin:disabled{opacity:.5;cursor:not-allowed}
+.pending-action{width:auto;min-width:180px;max-width:100%;height:auto;min-height:40px;padding:8px 12px;white-space:normal}
+.login-request{display:inline-block;margin-top:18px;color:#1a5fa8}
+.login-status{min-height:1.5em;color:#4a5258}
+.login-actions{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+a:focus-visible,button:focus-visible{outline:3px solid #1d2124;outline-offset:3px}
+@media (max-width:420px){.login-card{padding:24px}h1{font-size:26px}}

@@ -62,12 +62,15 @@ test('more concurrent slow photo downloads than pooled connections all succeed',
  for(const r of runs) assert.equal(r.res.statusCode,200);
 });
 
-test('ingress uses a single client address only from the exact configured peer',()=>{
+const {parseTrustedProxies}=require('../server/trusted-proxy.cjs');
+test('ingress uses a single client address only from the configured peer',()=>{
+ const proxy=parseTrustedProxies({ip:'172.22.0.2',local:[]}), range=parseTrustedProxies({cidr:'172.22.0.0/16',local:['172.22.0.2']});
  const req=(peer,ip)=>({socket:{remoteAddress:peer},headers:{'x-forwarded-for':ip}});
- assert.equal(trustedClientIp(req('::ffff:172.22.0.2','203.0.113.4'),'172.22.0.2'),'203.0.113.4');
- assert.throws(()=>trustedClientIp(req('172.22.0.3','203.0.113.4'),'172.22.0.2'));
- assert.throws(()=>trustedClientIp(req('172.22.0.2','203.0.113.4, 203.0.113.5'),'172.22.0.2'));
- assert.throws(()=>trustedClientIp(req('172.22.0.2','bogus'),'172.22.0.2'));
+ assert.equal(trustedClientIp(req('::ffff:172.22.0.2','203.0.113.4'),proxy),'203.0.113.4');
+ assert.equal(trustedClientIp(req('172.22.0.3','203.0.113.4'),range),'203.0.113.4'); assert.throws(()=>trustedClientIp(req('172.22.0.2','203.0.113.4'),range)); assert.throws(()=>trustedClientIp(req('172.22.0.3','203.0.113.4'),undefined));
+ assert.throws(()=>trustedClientIp(req('172.22.0.3','203.0.113.4'),proxy));
+ assert.throws(()=>trustedClientIp(req('172.22.0.2','203.0.113.4, 203.0.113.5'),proxy));
+ assert.throws(()=>trustedClientIp(req('172.22.0.2','bogus'),proxy));
 });
 
 test('protected transaction checks entitlement before work; identity challenge is an explicit escape',async()=>{
@@ -85,8 +88,8 @@ test('protected transaction checks entitlement before work; identity challenge i
 });
 
 test('access requests are accepted with mail disabled as long as a trusted ingress address exists',()=>{
- assert.equal(accessRequestsAvailable({proxyIp:'192.0.2.10'}),true); // No mail transport is part of the decision.
- assert.equal(accessRequestsAvailable({proxyIp:''}),false);
+ assert.equal(accessRequestsAvailable({proxies:parseTrustedProxies({ip:'192.0.2.10',local:[]})}),true); // No mail transport is part of the decision.
+ assert.equal(accessRequestsAvailable({proxies:parseTrustedProxies({local:[]})}),false);
  assert.equal(accessRequestsAvailable({}),false);
  assert.equal(accessRequestsAvailable(),false);
 });

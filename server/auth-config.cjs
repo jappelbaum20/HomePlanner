@@ -1,4 +1,5 @@
 'use strict';
+const { createSigninGate } = require('./signin-gate.cjs');
 
 // All configuration is supplied by the caller; no dotenv loading or request-derived hosts.
 function authOptions({ origin, authPool, secret, googleClientId, googleClientSecret }) {
@@ -7,6 +8,7 @@ function authOptions({ origin, authPool, secret, googleClientId, googleClientSec
   if (!authPool || typeof authPool.query !== 'function' || typeof secret !== 'string' || Buffer.byteLength(secret) < 32 || typeof googleClientId !== 'string' || !googleClientId.endsWith('.apps.googleusercontent.com') || typeof googleClientSecret !== 'string' || !googleClientSecret) throw TypeError('Incomplete auth configuration');
   // OAuth credentials are needed only during the callback, not after account linking.
   const strip = async data => ({ data: { ...data, accessToken: null, refreshToken: null, idToken: null, accessTokenExpiresAt: null, refreshTokenExpiresAt: null } });
+  const gate = createSigninGate({ authPool, secret, googleClientId });
   return {
     baseURL: origin, secret, database: authPool, trustedOrigins: [origin],
     emailAndPassword: { enabled: false },
@@ -14,7 +16,10 @@ function authOptions({ origin, authPool, secret, googleClientId, googleClientSec
     session: { expiresIn: 604800, disableSessionRefresh: true, cookieCache: { enabled: false } },
     account: { accountLinking: { enabled: false, disableImplicitLinking: true }, storeAccountCookie: false, updateAccountOnSignIn: false },
     advanced: { database: { generateId: 'uuid' }, useSecureCookies: true, crossSubDomainCookies: { enabled: false }, defaultCookieAttributes: { httpOnly: true, secure: true, sameSite: 'lax', path: '/' }, ipAddress: { disableIpTracking: true } },
-    databaseHooks: { account: { create: { before: strip }, update: { before: strip } } },
+    // Admission is decided before any user, account or session row is created. Failures redirect to /auth/error.
+    user: { validateUserInfo: gate.validateUserInfo },
+    onAPIError: { errorURL: origin + '/auth/error' },
+    databaseHooks: { account: { create: { before: strip }, update: { before: strip } }, session: { create: { before: gate.sessionBefore } } },
     logger: { disabled: true }, telemetry: { enabled: false }
   };
 }
