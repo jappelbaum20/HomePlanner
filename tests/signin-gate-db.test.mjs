@@ -194,3 +194,24 @@ test('the owner cannot be denied or revoked through the new flow',async()=>{
   assert.equal((await gate(d,'owner-sub','anything@example.invalid')).state,'approved');
  }finally{await d.close();}
 });
+test('an approval belongs to its Google subject: the same email with another subject is gated, also after a revoke',async()=>{
+ const d=await base(true);try{
+  const email='new@example.invalid';
+  await askS(d,'g-a',email);
+  const [r]=await list(d); await decide(d,r.id,r.revision,'approved');
+  // The approved invitation row exists (006 writes it for every decision) but belongs to the request.
+  assert.equal(Number((await d.query("SELECT count(*) n FROM hp_private.access_invitations WHERE email=$1 AND status='approved'",[email])).rows[0].n),1);
+  assert.equal((await gate(d,'g-a',email)).state,'approved');
+  assert.equal((await gate(d,'g-b',email)).state,'none','another subject with the same email is not approved by the invitation');
+  assert.equal((await status(d,'g-b',email)).status,'none');
+  await createFresh(d,'g-a',email); assert.equal((await bind(d,fresh,email)).state,'approved');
+  assert.equal(Number((await d.query("SELECT count(*) n FROM hp_private.access_invitations WHERE email=$1 AND claimed_user=$2",[email,fresh])).rows[0].n),1,'bind claims the invitation of its own request');
+  const ents=await admin(d,'SELECT hp_app.hp_access_entitlements($1) x',['owner-sub']); const e=ents.find(x=>x.userId===fresh);
+  await admin(d,'SELECT hp_app.hp_access_revoke($1,$2,$3) x',['owner-sub',fresh,e.revision]);
+  assert.equal((await gate(d,'g-a',email)).state,'revoked');
+  assert.equal((await gate(d,'g-b',email)).state,'none','a revoked user cannot be replaced by a new subject through the invitation');
+  assert.equal((await status(d,'g-b',email)).status,'none');
+  // A new subject with that email can only ask again; the owner decides.
+  assert.equal((await askS(d,'g-b',email)).status,'pending');
+ }finally{await d.close();}
+});

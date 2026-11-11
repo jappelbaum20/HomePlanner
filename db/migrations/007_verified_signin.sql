@@ -12,7 +12,8 @@ CREATE UNIQUE INDEX access_one_open_subject ON hp_private.access_requests(google
 CREATE INDEX access_subject_latest ON hp_private.access_requests(google_subject,created_at DESC) WHERE google_subject IS NOT NULL;
 
 -- Internal: the state of a verified Google subject. Entitlement first, then the newest subject-bound
--- request, then an unclaimed email invitation approved by the owner before this flow existed.
+-- request, then an unclaimed email invitation approved by the owner before this flow existed. Invitations
+-- written by approving a subject-bound request are not usable by email: that approval belongs to its subject.
 CREATE FUNCTION hp_private.access_subject_state(p_subject text,p_email text) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE ent hp_private.access_entitlements; req hp_private.access_requests; inv hp_private.access_invitations;
 BEGIN
@@ -20,7 +21,8 @@ BEGIN
  IF FOUND THEN RETURN jsonb_build_object('state',ent.status,'source','entitlement','decidedAt',ent.decision_at); END IF;
  SELECT * INTO req FROM hp_private.access_requests WHERE google_subject=p_subject ORDER BY created_at DESC,id DESC LIMIT 1;
  IF FOUND THEN RETURN jsonb_build_object('state',req.status,'source','request','requestId',req.id,'decidedAt',req.decided_at,'lastSubmitAt',coalesce(req.last_submit_at,req.created_at)); END IF;
- SELECT * INTO inv FROM hp_private.access_invitations WHERE email=p_email AND claimed_user IS NULL;
+ SELECT i.* INTO inv FROM hp_private.access_invitations i WHERE i.email=p_email AND i.claimed_user IS NULL
+  AND NOT EXISTS(SELECT 1 FROM hp_private.access_requests q WHERE q.id=i.request_id AND q.google_subject IS NOT NULL);
  IF FOUND THEN RETURN jsonb_build_object('state',inv.status,'source','invitation','requestId',inv.request_id,'decidedAt',inv.updated_at); END IF;
  RETURN jsonb_build_object('state','none','source','none');
 END $$;
@@ -52,7 +54,7 @@ BEGIN
  SELECT * INTO STRICT r FROM hp_private.access_requests WHERE id=(st->>'requestId')::uuid;
  INSERT INTO hp_private.access_entitlements(user_id,google_subject,status,decided_by,decision_at,provenance)
   VALUES(p_user,sub,'approved',r.decided_by,r.decided_at,CASE WHEN st->>'source'='request' THEN 'verified-request' ELSE 'verified-invitation' END);
- IF st->>'source'='invitation' THEN UPDATE hp_private.access_invitations SET claimed_user=p_user,claimed_subject=sub WHERE email=p_email AND claimed_user IS NULL; END IF;
+ UPDATE hp_private.access_invitations SET claimed_user=p_user,claimed_subject=sub WHERE email=p_email AND claimed_user IS NULL AND request_id=r.id;
  INSERT INTO hp_private.access_audit(actor_id,subject_user,request_id,action,revision) VALUES(r.decided_by,p_user,r.id,'signin_bound',1);
  RETURN jsonb_build_object('state','approved');
 END $$;
