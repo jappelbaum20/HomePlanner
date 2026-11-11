@@ -7,7 +7,9 @@ import { auditPublic, enumerate, PUBLIC_FILES, VPS_PUBLIC_FILES } from './audit-
 
 const root = process.cwd();
 const vps = process.argv.includes('--vps');
-const dist = path.join(root, vps ? 'dist-vps' : 'dist');
+const override = process.env.HOMEPLANNER_BUILD_DIR;
+if (override && !path.isAbsolute(override)) throw new Error('Build directory must be absolute.');
+const dist = override || path.join(root, vps ? 'dist-vps' : 'dist');
 const basePath = process.env.HOMEPLANNER_BASE_PATH || '/';
 if (!/^\/(?:[a-zA-Z0-9_-]+\/)*$/.test(basePath)) throw new Error('Invalid application base path');
 if (vps && basePath !== '/') throw new Error('The VPS contract requires the root base path.');
@@ -17,6 +19,7 @@ const unexpected = current.filter(file => !(vps ? VPS_PUBLIC_FILES : PUBLIC_FILE
 if (unexpected.length) throw new Error('Refusing to build over unexpected output; inspect the dist directory.');
 const sources = ['styles.css', 'app.js', 'standalone.js', 'bookshelf.html', 'models3d.js', 'bookshelf.js', 'bookshelf-builder.js', 'starter-data.js', 'shared/contracts.js', 'shared/canonical.js',
   'admin.html', 'admin.js', 'client/contracts-loader.js', 'client/cloud.js', 'client/ui.js'];
+if (vps) sources.push('landing.html', 'landing.js');
 for (const source of sources) {
   await mkdir(path.dirname(path.join(dist, source)), { recursive: true });
   await copyFile(path.join(root, source), path.join(dist, source));

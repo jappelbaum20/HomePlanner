@@ -34,6 +34,16 @@ window.HomePlannerCloud = (() => {
     if (verification) await verification;
     if (!isCurrent(stamp)) throw Error('Account changed; the operation was cancelled.');
   }
+  async function verificationStamp(original) {
+    // Only identity verification callbacks may adopt a freshly checked epoch.
+    // Ordinary writes retain strict epoch cancellation.
+    while (verification) await verification;
+    const next = snapshot();
+    if (!original || !next.me || !isCurrent(next) || original.generation !== next.generation ||
+        original.userId !== next.userId || original.sessionId !== next.sessionId)
+      throw Error('Account changed; verification was cancelled.');
+    return next;
+  }
   async function request(path, options = {}) {
     checkedPath(path);
     const stamp = options.expected || snapshot(); await ensureVerified(stamp);
@@ -70,6 +80,19 @@ window.HomePlannerCloud = (() => {
       return blob;
     } finally { pending.delete(controller); }
   }
+  /* Promise.all semantics with at most `limit` tasks in flight; results keep input order, the first failure rejects and stops new starts. */
+  function mapLimit(items, limit, fn) {
+    const list = Array.from(items), results = new Array(list.length), width = Math.max(1, Math.min(limit | 0 || 1, list.length));
+    let next = 0, failed = false;
+    const worker = async () => {
+      while (!failed && next < list.length) {
+        const i = next++;
+        try { results[i] = await fn(list[i], i); } catch (error) { failed = true; throw error; }
+      }
+    };
+    return Promise.all(Array.from({ length: width }, worker)).then(() => results);
+  }
+  const photos = (designId, ids) => mapLimit(ids, 4, id => photo(designId, id));
   async function uploadPhoto(designId, sourceId, blob, guard) {
     const stamp = snapshot();
     const check = () => { if (!isCurrent(stamp) || !guard()) throw Error('Account, design or edits changed; upload cancelled.'); };
@@ -129,6 +152,10 @@ window.HomePlannerCloud = (() => {
         const changed = !session || next.userId !== session.userId || next.sessionId !== session.sessionId;
         if (changed) invalidate();
         session = next;
+        if (next.access.status !== 'approved') {
+          me = { userId: next.userId, displayName: next.displayName, isAdmin: false, capabilities: { cloud: false, ai: false }, access: next.access };
+          notify(); if (changed && announce) broadcast(); return;
+        }
         const identityResponse = await fetch('/api/me', { credentials: 'same-origin', mode: 'same-origin', cache: 'no-store' });
         if (!identityResponse.ok) throw await responseError(identityResponse);
         const result = await identityResponse.json();
@@ -161,8 +188,9 @@ window.HomePlannerCloud = (() => {
   }
   async function signIn() {
     if (!auth) throw Error('Cloud sign-in is not configured.');
-    const page = ['/home', '/bookshelf', '/admin.html'].includes(location.pathname) ? location.pathname : '/';
-    const query = page === '/bookshelf' && /^\?design=[0-9a-f-]{36}$/i.test(location.search) ? location.search : '';
+    const page = ['/home', '/bookshelf', '/admin.html', '/access'].includes(location.pathname) ? location.pathname : '/';
+    const query = page === '/bookshelf' && /^\?design=[0-9a-f-]{36}$/i.test(location.search) ? location.search :
+      page === '/admin.html' && /^\?accessRequest=[0-9a-f-]{36}$/.test(location.search) ? location.search : '';
     const result = await auth.signIn.social({ provider: 'google', callbackURL: `${location.origin}${page}${query}` });
     if (result?.error) throw Error(result.error.message || 'Sign-in is unavailable.');
   }
@@ -225,6 +253,6 @@ window.HomePlannerCloud = (() => {
     current = { id: design.id, kind: design.kind, title: design.title, revision: design.revision };
   }
   function clearCurrent() { cancelPending(); current = null; }
-  return { init, signIn, signOut, list, open, create, save, remove, request, photo, uploadPhoto, snapshot, isCurrent, select, clearCurrent,
+  return { init, signIn, signOut, list, open, create, save, remove, request, photo, photos, mapLimit, uploadPhoto, snapshot, isCurrent, verificationStamp, select, clearCurrent,
     subscribe: fn => { listeners.add(fn); return () => listeners.delete(fn); } };
 })();

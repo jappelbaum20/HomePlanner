@@ -5,6 +5,7 @@ const path = require('node:path');
 const { Transform } = require('node:stream');
 const { createHmac, timingSafeEqual, randomUUID } = require('node:crypto');
 const { routes } = require('./routes.cjs');
+const { ApiError } = require('../server/errors');
 const publicFiles = new Set(require('../shared/vps-public-files.json'));
 
 const JSON_LIMIT = 1100000, AUTH_LIMIT = 65536, RAW_LIMIT = 10485760, BODY_TIMEOUT = 30000;
@@ -81,10 +82,10 @@ function boundedStream(req, res, max, origin) {
   return { stream, failed: () => failed };
 }
 async function staticFile(req, res, pathname, dist) {
-  const name = pathname === '/' || pathname === '/home' ? 'index.html' : pathname === '/bookshelf' ? 'bookshelf.html' : pathname.slice(1);
+  const name = pathname === '/' || pathname === '/access' ? 'landing.html' : pathname === '/home' ? 'index.html' : pathname === '/bookshelf' ? 'bookshelf.html' : pathname.slice(1);
   if (!publicFiles.has(name)) return error(res, 404, 'not_found', 'Resource not found.');
   // The identity widget needs the page origin; paths and queries stay private cross-origin.
-  if (name === 'admin.html') res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  if (name === 'admin.html' || name === 'landing.html') res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   const components = name.split('/'); let current = dist;
   try {
     const root = await fs.lstat(dist); if (!root.isDirectory() || root.isSymbolicLink()) throw Error('invalid root');
@@ -135,7 +136,12 @@ function createRuntime({ origin = 'https://home.appelbaums.com', dist = path.res
       if (pathname === '/api/session') {
         if (req.method !== 'GET') return json(res, 405, { error: { code: 'method_not_allowed', message: 'Method not allowed.', requestId: randomUUID() } }, { Allow: 'GET' });
         const s = await session(req, res); if (!s) return;
-        return json(res, 200, { userId: s.userId, sessionId: s.sessionId, displayName: s.displayName, csrfToken: csrfFor(secret, s.sessionId) });
+        let access; try { access = await integrations.accessStatus(s); } catch { return error(res, 503, 'unavailable', 'Service is temporarily unavailable.'); }
+        return json(res, 200, { userId: s.userId, sessionId: s.sessionId, displayName: s.displayName, csrfToken: csrfFor(secret, s.sessionId), access });
+      }
+      if (pathname === '/api/access/availability') {
+        if (req.method !== 'GET') return error(res, 405, 'method_not_allowed', 'Method not allowed.');
+        return json(res, 200, { requestsAvailable: integrations.requestsAvailable === true });
       }
       if (pathname === '/api/auth' || pathname.startsWith('/api/auth/')) {
         const allowed = { '/api/auth/sign-in/social': 'POST', '/api/auth/callback/google': 'GET', '/api/auth/sign-out': 'POST' };
@@ -166,9 +172,18 @@ function createRuntime({ origin = 'https://home.appelbaums.com', dist = path.res
       if (!route) return error(res, 404, 'not_found', 'Resource not found.');
       if (!route.methods.includes(req.method)) return json(res, 405, { error: { code: 'method_not_allowed', message: 'Method not allowed.', requestId: randomUUID() } }, { Allow: route.methods.join(', ') });
       const match = route.path.exec(pathname), query = Object.create(null);
-      for (const [key, value] of parsed.searchParams) { if (Object.hasOwn(query, key) || ['id', 'photoId', '__proto__', 'constructor', 'prototype'].includes(key)) return error(res, 400, 'invalid_query', 'Invalid query.'); query[key] = value; }
+      for (const [key, value] of parsed.searchParams) { if (Object.hasOwn(query, key) || ['id', 'userId', 'photoId', '__proto__', 'constructor', 'prototype'].includes(key)) return error(res, 400, 'invalid_query', 'Invalid query.'); query[key] = value; }
       for (let i = 0; i < (route.params || []).length; i++) { if (!UUID.test(match[i + 1])) return error(res, 404, 'not_found', 'Resource not found.'); query[route.params[i]] = match[i + 1]; }
-      const s = await guard(req, res); if (!s) return;
+      let s = null;
+      if (route.public) {
+        if (integrations.requestsAvailable !== true) return error(res, 503, 'unavailable', 'Access requests are temporarily unavailable.');
+      } else {
+        s = await guard(req, res); if (!s) return;
+        if (!route.escape) {
+          try { await integrations.assertApproved(s); }
+          catch (e) { return error(res, e.status || 503, e.code || 'unavailable', e.status ? e.message : 'Service is temporarily unavailable.'); }
+        }
+      }
       const handler = integrations.handlers && integrations.handlers[route.name];
       if (typeof handler !== 'function') return error(res, 503, 'unavailable', 'Service is temporarily unavailable.');
       req.query = query; req.homeplannerSession = s;
@@ -183,16 +198,25 @@ function createRuntime({ origin = 'https://home.appelbaums.com', dist = path.res
         } catch { req.unpipe(input.stream); input.stream.destroy(); if (!input.failed()) abortBody(req, res, 503, 'unavailable', 'Service is temporarily unavailable.'); return; }
       }
       if (!SAFE.has(req.method)) {
-        const max = route.name === 'proposals' ? 65536 : ['photoReserve', 'photoComplete', 'adminBootstrap', 'adminModelConfig', 'adminBudget'].includes(route.name) ? 4096 : JSON_LIMIT;
+        const max = route.name === 'accessBind' ? 20000 : route.name.startsWith('access') ? 4096 : route.name === 'proposals' ? 65536 : ['photoReserve', 'photoComplete', 'adminBootstrap', 'adminModelConfig', 'adminBudget'].includes(route.name) ? 4096 : JSON_LIMIT;
         try { req.body = await readJson(req, res, max); } catch { return; }
       }
       res.status = status => { res.statusCode = status; return res; };
       res.json = body => json(res, res.statusCode || 200, body);
       try { await handler(req, res); if (!res.writableEnded) error(res, 503, 'unavailable', 'Service is temporarily unavailable.'); }
-      catch { error(res, 503, 'unavailable', 'Service is temporarily unavailable.'); }
+      catch (e) { if (e instanceof ApiError) error(res, e.status, e.code, e.message); else error(res, 503, 'unavailable', 'Service is temporarily unavailable.'); }
       return;
     }
     if (!['GET', 'HEAD'].includes(req.method)) return error(res, 405, 'method_not_allowed', 'Method not allowed.');
+    if (pathname === '/index.html' || pathname === '/landing.html') { res.statusCode = 302; res.setHeader('Location', '/'); return res.end(); }
+    if (['/home','/bookshelf','/bookshelf.html'].includes(pathname)) {
+      let s; try { s = configured() && await integrations.resolveSession(req); } catch { return error(res, 503, 'unavailable', 'Service is temporarily unavailable.'); }
+      if (!validSession(s)) { res.statusCode = 302; res.setHeader('Location', '/'); return res.end(); }
+      try { await integrations.assertApproved(s); } catch (e) {
+        if (e.status === 403 || e.status === 401) { res.statusCode = 302; res.setHeader('Location', '/access'); return res.end(); }
+        return error(res, 503, 'unavailable', 'Service is temporarily unavailable.');
+      }
+    }
     return staticFile(req, res, pathname, dist);
   }
   const active = new Set();

@@ -24,7 +24,7 @@ services:
       driver: json-file
       options: {max-size: 10m, max-file: '3'}
   web:
-    image: homeplanner-web:local
+    image: ${HOMEPLANNER_WEB_IMAGE:-homeplanner-web:local}
     build:
       context: ${HOMEPLANNER_BUILD_CONTEXT:?Set sanitized context path}
       dockerfile: deployment/Dockerfile
@@ -41,11 +41,16 @@ services:
       HOMEPLANNER_AUTH_DATABASE_URL_FILE: /run/secrets/auth_database_url
       HOMEPLANNER_APP_DATABASE_URL_FILE: /run/secrets/app_database_url
       HOMEPLANNER_PHOTO_MAINTENANCE_DATABASE_URL_FILE: /run/secrets/photo_maintenance_database_url
+      HOMEPLANNER_ACCESS_PUBLIC_DATABASE_URL_FILE: /run/secrets/access_public_database_url
+      HOMEPLANNER_MAIL_DATABASE_URL_FILE: /run/secrets/mail_database_url
+      HOMEPLANNER_ACCESS_RATE_KEY_FILE: /run/secrets/access_rate_key
+      HOMEPLANNER_TRUSTED_PROXY_IP: ${HOMEPLANNER_TRUSTED_PROXY_IP:-}
+      HOMEPLANNER_MAIL_ENABLED: '0'
       HOMEPLANNER_AUTH_SECRET_FILE: /run/secrets/auth_secret
       HOMEPLANNER_CSRF_SECRET_FILE: /run/secrets/csrf_secret
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:?Set Google client ID}
       GOOGLE_OAUTH_CLIENT_SECRET_FILE: /run/secrets/google_client_secret
-    secrets: [auth_database_url, app_database_url, photo_maintenance_database_url, auth_secret, csrf_secret, google_client_secret]
+    secrets: [auth_database_url, app_database_url, photo_maintenance_database_url, access_public_database_url, mail_database_url, access_rate_key, auth_secret, csrf_secret, google_client_secret]
     volumes:
       - type: bind
         source: ${HOMEPLANNER_PHOTO_DIR:?Set private photo directory}
@@ -69,7 +74,7 @@ services:
       start_period: 20s
     logging: *logs
   maintenance:
-    image: homeplanner-web:local
+    image: ${HOMEPLANNER_WEB_IMAGE:-homeplanner-web:local}
     profiles: [operations]
     depends_on:
       db: {condition: service_healthy}
@@ -85,7 +90,9 @@ services:
       HOMEPLANNER_AUTH_DB_PASSWORD_FILE: /run/secrets/auth_db_password
       HOMEPLANNER_APP_DB_PASSWORD_FILE: /run/secrets/app_db_password
       HOMEPLANNER_PHOTO_MAINTENANCE_DB_PASSWORD_FILE: /run/secrets/photo_maintenance_db_password
-    secrets: [migration_database_url, auth_db_password, app_db_password, photo_maintenance_db_password]
+      HOMEPLANNER_ACCESS_PUBLIC_DB_PASSWORD_FILE: /run/secrets/access_public_db_password
+      HOMEPLANNER_MAIL_DB_PASSWORD_FILE: /run/secrets/mail_db_password
+    secrets: [migration_database_url, auth_db_password, app_db_password, photo_maintenance_db_password, access_public_db_password, mail_db_password]
     networks: [database]
     read_only: true
     cap_drop: [ALL]
@@ -123,9 +130,14 @@ secrets:
   auth_db_password: {file: '${HOMEPLANNER_AUTH_DB_PASSWORD_FILE:?Set secret path}'}
   app_db_password: {file: '${HOMEPLANNER_APP_DB_PASSWORD_FILE:?Set secret path}'}
   photo_maintenance_db_password: {file: '${HOMEPLANNER_PHOTO_MAINTENANCE_DB_PASSWORD_FILE:?Set secret path}'}
+  access_public_db_password: {file: '${HOMEPLANNER_ACCESS_PUBLIC_DB_PASSWORD_FILE:?Set secret path}'}
+  mail_db_password: {file: '${HOMEPLANNER_MAIL_DB_PASSWORD_FILE:?Set secret path}'}
   auth_database_url: {file: '${HOMEPLANNER_AUTH_DATABASE_URL_FILE:?Set secret path}'}
   app_database_url: {file: '${HOMEPLANNER_APP_DATABASE_URL_FILE:?Set secret path}'}
   photo_maintenance_database_url: {file: '${HOMEPLANNER_PHOTO_MAINTENANCE_DATABASE_URL_FILE:?Set secret path}'}
+  access_public_database_url: {file: '${HOMEPLANNER_ACCESS_PUBLIC_DATABASE_URL_FILE:?Set secret path}'}
+  mail_database_url: {file: '${HOMEPLANNER_MAIL_DATABASE_URL_FILE:?Set secret path}'}
+  access_rate_key: {file: '${HOMEPLANNER_ACCESS_RATE_KEY_FILE:?Set persistent secret path}'}
   auth_secret: {file: '${HOMEPLANNER_AUTH_SECRET_FILE:?Set secret path}'}
   csrf_secret: {file: '${HOMEPLANNER_CSRF_SECRET_FILE:?Set secret path}'}
   google_client_secret: {file: '${GOOGLE_OAUTH_CLIENT_SECRET_FILE:?Set secret path}'}

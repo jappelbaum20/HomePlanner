@@ -13,6 +13,7 @@ async page => {
     window.HomePlannerCloud = {
       init() { setTimeout(() => listener(snapshot()), 0); return true; }, subscribe(fn) { listener = fn; }, snapshot,
       isCurrent(s) { return !!userId && s.generation === generation && s.userId === userId; },
+      async verificationStamp(original) { if (!this.isCurrent(original)) throw Error('Account changed; verification was cancelled.'); return snapshot(); },
       async signIn() {}, async signOut() { generation++; userId = null; listener(snapshot()); },
       async request(path, options = {}) {
         if (path === '/api/admin/challenge') return { clientId:'fixture.apps.googleusercontent.com', nonce:'fixture-nonce', expiresIn:300 };
@@ -21,6 +22,7 @@ async page => {
         if (path === '/api/admin/bootstrap') { if (headers['X-Google-Id-Token'] !== 'synthetic-id-token' || headers['X-Admin-Challenge'] !== 'fixture-nonce') throw Error('invalid bootstrap proof'); return {isAdmin:true,grantId:'synthetic-grant',expiresIn:300}; }
         if (headers['X-Admin-Grant'] !== 'synthetic-grant' || headers['X-Google-Id-Token'] || headers['X-Admin-Challenge']) throw Error('invalid grant');
         if (path === '/api/me') return { userId, isAdmin:true };
+        if (path === '/api/admin/access/requests' || path === '/api/admin/access/entitlements') return [];
         if (options.method === 'PUT') { if (headers['If-Match'] !== `"${revision}"`) { const e=Error('conflict'); e.status=409; throw e; } revision++; if (path.endsWith('/budget')) window.__budget=options.body.globalBudgetMicros; }
         return settings();
       }

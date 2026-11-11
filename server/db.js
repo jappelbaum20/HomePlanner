@@ -17,6 +17,10 @@ const RPC = Object.freeze({
 });
 function mapDatabaseError(error) {
   const code = String(error?.message || '');
+  if (code.includes('HP_ACCESS_SESSION')) fail(401, 'unauthenticated', 'A valid session is required.');
+  if (code.includes('HP_ACCESS_PENDING')) fail(403, 'access_pending', 'Access approval is required.');
+  if (code.includes('HP_ACCESS_DENIED')) fail(403, 'access_denied', 'Access was not approved.');
+  if (code.includes('HP_ACCESS_REVOKED')) fail(403, 'access_revoked', 'Access was revoked.');
   if (code.includes('HP_NOT_FOUND')) fail(404, 'not_found', 'Resource not found.');
   if (code.includes('HP_CONFLICT')) fail(409, 'conflict', 'The design or request has changed.');
   if (code.includes('HP_QUOTA')) fail(429, 'quota', 'The account limit has been reached.', { 'Retry-After': '60' });
@@ -28,14 +32,14 @@ function createBackend({ appPool, photoRecovery } = {}) {
   function forSession(session) {
     if (!uuid(session?.userId) || !uuid(session?.sessionId) || session.userId !== session.userId.toLowerCase() || session.sessionId !== session.sessionId.toLowerCase()) throw TypeError('Invalid session');
     let grantHash = '';
-    async function transaction(action) {
+    async function transaction(action, sessionOnly = false) {
       const client = await appPool.connect();
       let destroy = false;
       try {
         await client.query('BEGIN');
         await client.query("SELECT pg_catalog.set_config('hp.user_id',$1,true), pg_catalog.set_config('hp.session_id',$2,true), pg_catalog.set_config('hp.admin_grant_hash',$3,true)", [session.userId, session.sessionId, grantHash]);
         // Takes a row lock through the transaction, fencing concurrent revocation.
-        await client.query('SELECT hp_app.assert_actor()');
+        await client.query(sessionOnly ? 'SELECT hp_app.hp_access_assert_session()' : 'SELECT hp_app.hp_access_assert_approved()');
         const result = await action(client);
         await client.query('COMMIT'); return result;
       } catch (error) {
@@ -44,14 +48,26 @@ function createBackend({ appPool, photoRecovery } = {}) {
         mapDatabaseError(error);
       } finally { client.release(destroy); }
     }
+    function rpcSql(name,args) {
+      const fields = RPC[name];
+      if (!fields || Object.keys(args).length !== fields.length || fields.some(k => !Object.hasOwn(args,k))) throw TypeError('Unsupported operation');
+      for (const key of ['p_user_id','p_actor']) if (Object.hasOwn(args,key) && args[key] !== session.userId) fail(404, 'not_found', 'Resource not found.');
+      return { sql: `SELECT hp_app.${name}(${fields.map((_,i)=>'$'+(i+1)).join(',')}) AS result`, values: fields.map(k=>args[k]) };
+    }
+    async function getIn(client,id) {
+      const row=(await client.query('SELECT id,kind,title,schema_version,payload,photo_ids,revision,created_at,updated_at FROM hp_app.designs WHERE id=$1', [id])).rows[0];
+      if (!row) return null;
+      const photos=(await client.query("SELECT id,mime,bytes,checksum FROM hp_app.design_photos WHERE design_id=$1 AND status='ready' AND tombstoned_at IS NULL AND id=ANY($2::uuid[])",[id,row.photo_ids])).rows;
+      if (photos.length !== row.photo_ids.length) fail(503, 'unavailable', 'Design photos are temporarily unavailable.');
+      const byId=new Map(photos.map(p=>[p.id,{photoId:p.id,mime:p.mime,bytes:Number(p.bytes),checksum:p.checksum}]));
+      return {id:row.id,kind:row.kind,title:row.title,schemaVersion:row.schema_version,payload:row.payload,photoManifest:row.photo_ids.map(id=>byId.get(id)),revision:Number(row.revision),createdAt:row.created_at,updatedAt:row.updated_at};
+    }
     const scoped = {
       storageRecoveryAvailable: false,
       async rpc(name,args = {}) {
-        const fields = RPC[name];
-        if (!fields || Object.keys(args).length !== fields.length || fields.some(k => !Object.hasOwn(args,k))) throw TypeError('Unsupported operation');
-        for (const key of ['p_user_id','p_actor']) if (Object.hasOwn(args,key) && args[key] !== session.userId) fail(404, 'not_found', 'Resource not found.');
-        const sql = `SELECT hp_app.${name}(${fields.map((_,i)=>'$'+(i+1)).join(',')}) AS result`;
-        const result = await transaction(async client => (await client.query(sql, fields.map(k=>args[k]))).rows[0]?.result ?? null);
+        const {sql,values} = rpcSql(name,args);
+        const sessionOnly = ['hp_google_subjects','hp_admin_challenge_issue','hp_admin_verify','hp_admin_grant'].includes(name);
+        const result = await transaction(async client => (await client.query(sql, values)).rows[0]?.result ?? null, sessionOnly);
         if (name === 'hp_admin_grant') grantHash = typeof result === 'string' ? args.p_grant_hash : '';
         return result;
       },
@@ -85,6 +101,24 @@ function createBackend({ appPool, photoRecovery } = {}) {
         });
       },
       async googleSubjects() { return this.rpc('hp_google_subjects', {}); },
+      async withApproved(work) {
+        if (typeof work !== 'function') throw TypeError('Invalid protected operation');
+        return transaction(async client => {
+          let active = true;
+          const locked = Object.freeze({
+            async rpc(name,args={}) { if (!active) throw Error('Inactive protected operation'); const {sql,values}=rpcSql(name,args); return (await client.query(sql,values)).rows[0]?.result ?? null; },
+            async get(_ctx,id) { if (!active) throw Error('Inactive protected operation'); return getIn(client,id); }
+          });
+          try { return await work(locked); } finally { active = false; }
+        });
+      },
+      async withPhotoRead(designId,photoId,work) {
+        if (!uuid(designId) || !uuid(photoId) || typeof work !== 'function') throw TypeError('Invalid photo read');
+        return transaction(async client => {
+          const photo=(await client.query('SELECT * FROM hp_app.design_photos WHERE design_id=$1 AND id=$2 AND tombstoned_at IS NULL',[designId,photoId])).rows[0] || null;
+          return work(photo);
+        });
+      },
       async list(_ctx, cursor, limit) {
         return transaction(async client => {
           const r = await client.query('SELECT id,kind,title,revision,updated_at FROM hp_app.designs WHERE ($1::uuid IS NULL OR id>$1::uuid) ORDER BY id LIMIT $2', [cursor,limit+1]);
@@ -92,14 +126,7 @@ function createBackend({ appPool, photoRecovery } = {}) {
         });
       },
       async get(_ctx, id) {
-        return transaction(async client => {
-          const row=(await client.query('SELECT id,kind,title,schema_version,payload,photo_ids,revision,created_at,updated_at FROM hp_app.designs WHERE id=$1', [id])).rows[0];
-          if (!row) return null;
-          const photos=(await client.query("SELECT id,mime,bytes,checksum FROM hp_app.design_photos WHERE design_id=$1 AND status='ready' AND tombstoned_at IS NULL AND id=ANY($2::uuid[])",[id,row.photo_ids])).rows;
-          if (photos.length !== row.photo_ids.length) fail(503, 'unavailable', 'Design photos are temporarily unavailable.');
-          const byId=new Map(photos.map(p=>[p.id,{photoId:p.id,mime:p.mime,bytes:Number(p.bytes),checksum:p.checksum}]));
-          return {id:row.id,kind:row.kind,title:row.title,schemaVersion:row.schema_version,payload:row.payload,photoManifest:row.photo_ids.map(id=>byId.get(id)),revision:Number(row.revision),createdAt:row.created_at,updatedAt:row.updated_at};
-        });
+        return transaction(client => getIn(client,id));
       },
       async photo(_ctx, designId, photoId) {
         return transaction(async client => (await client.query('SELECT * FROM hp_app.design_photos WHERE design_id=$1 AND id=$2 AND tombstoned_at IS NULL', [designId,photoId])).rows[0] || null);

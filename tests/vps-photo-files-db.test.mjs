@@ -20,11 +20,12 @@ async function invoke(handler,method,designId,photoId,body={}) {const res=respon
 test('PGlite migrations, scoped backend and real filesystem complete the receipt and cleanup lifecycle',async()=>{
  const db=await PGlite.create();
  try{
-  await db.exec('CREATE ROLE hp_auth_owner NOLOGIN; CREATE ROLE hp_auth_runtime NOLOGIN; CREATE ROLE hp_app_owner NOLOGIN; CREATE ROLE hp_app_runtime NOLOGIN;');
-  for(const n of ['001_auth.sql','002_business.sql','003_photos.sql'])await db.exec('BEGIN;\n'+await fs.readFile(new URL('../db/migrations/'+n,import.meta.url),'utf8')+'\nCOMMIT;');
+  await db.exec('CREATE ROLE hp_auth_owner NOLOGIN; CREATE ROLE hp_auth_runtime NOLOGIN; CREATE ROLE hp_app_owner NOLOGIN; CREATE ROLE hp_app_runtime NOLOGIN; CREATE ROLE hp_photo_maintenance NOLOGIN; CREATE ROLE hp_access_public NOLOGIN; CREATE ROLE hp_mail_worker NOLOGIN;');
+  for(const n of ['001_auth.sql','002_business.sql','003_photos.sql','004_photo_maintenance.sql','005_shelf_documents.sql','006_access_requests.sql'])await db.exec('BEGIN;\n'+await fs.readFile(new URL('../db/migrations/'+n,import.meta.url),'utf8')+'\nCOMMIT;');
   await db.query(`INSERT INTO hp_auth."user"(id,name,email,"emailVerified","updatedAt") VALUES ($1,'Fixture','fixture@example.invalid',true,now())`,[owner]);
   await db.query(`INSERT INTO hp_auth.account("id","accountId","providerId","userId","createdAt","updatedAt") VALUES (gen_random_uuid(),'fixture','google',$1,now(),now())`,[owner]);
   await db.query(`INSERT INTO hp_auth.session("id","token","userId","expiresAt","createdAt","updatedAt") VALUES ($1,'fixture-only',$2,now()+interval '1 day',now(),now())`,[sessionId,owner]);
+  await db.query(`INSERT INTO hp_private.access_entitlements(user_id,google_subject,status,decided_by,provenance) VALUES($1,'fixture','approved',$1,'fixture')`,[owner]);
   await db.exec('SET ROLE hp_app_runtime');
   const pool={async connect(){return {query:(sql,args)=>db.query(sql,args),release(){}};}};
   let service;const backend=createBackend({appPool:pool,photoRecovery:args=>service.photoRecovery(args)});

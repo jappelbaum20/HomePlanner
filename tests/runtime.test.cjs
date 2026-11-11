@@ -18,7 +18,7 @@ const otherSession = '0b9aa900-1fa8-4b80-bfad-33ed290b7d20';
 const designId = '4c346412-5128-4e63-bfea-6e46e541754c';
 const photoId = '4d346412-5128-4e63-bfea-6e46e541754c';
 const secret = 'test-only-session-bound-secret-at-least-32-bytes';
-const dist = path.resolve(__dirname, '../dist-vps');
+const dist = process.env.HOMEPLANNER_TEST_PUBLIC_DIR || path.resolve(__dirname, '../dist-vps');
 function request(port, pathname, { method = 'GET', headers = {}, chunks = [] } = {}) {
   return new Promise((resolve, reject) => {
     const req = http.request({ host: '127.0.0.1', port, path: pathname, method, headers }, res => {
@@ -36,7 +36,7 @@ async function fixture(t, integrations = {}) {
   return runtime.server.address().port;
 }
 const session = { userId, sessionId, displayName: 'Test user' };
-function integrations(extra = {}) { return { csrfSecret: secret, resolveSession: async () => session, ...extra }; }
+function integrations(extra = {}) { return { csrfSecret: secret, resolveSession: async () => session, accessStatus: async () => ({status:'approved',role:'user'}), assertApproved: async () => true, ...extra }; }
 async function headers(port) {
   const result = await request(port, '/api/session'); assert.equal(result.status, 200);
   const dto = JSON.parse(result.text); assert.equal(C.validate('session', dto).valid, true);
@@ -48,8 +48,8 @@ test('unconfigured host serves only audited files and fails closed', async t => 
   assert.equal((await request(port, '/health/live')).status, 200);
   assert.equal((await request(port, '/health/ready')).status, 503);
   const index = await request(port, '/'); assert.equal(index.status, 200); assert.match(index.headers['content-security-policy'], /frame-ancestors 'none'/);
-  assert.equal((await request(port, '/home')).text, index.text);
-  const shelf = await request(port, '/bookshelf'); assert.equal(shelf.status, 200); assert.match(shelf.text, /standalone\.js/);
+  assert.equal((await request(port, '/home')).status, 302);
+  const shelf = await request(port, '/bookshelf'); assert.equal(shelf.status, 302);
   assert.equal((await request(port, '/bookshelf/unknown')).status, 404);
   assert.equal(index.headers['x-content-type-options'], 'nosniff');
   for (const url of ['/house-data.js', '/package.json', '/server/auth.js', '/photos/private.jpg', '/.git/config', '/%2e%2e/house-data.js', '/vendor/supabase.js', '/api/unknown']) assert.equal((await request(port, url)).status, 404, url);
@@ -185,6 +185,56 @@ test('shutdown keeps integrations alive until disconnected handlers settle', asy
 test('admin identity widget receives origin-only cross-origin referrers', async t => {
  const port=await fixture(t);
  assert.equal((await request(port,'/admin.html')).headers['referrer-policy'],'strict-origin-when-cross-origin');
- assert.equal((await request(port,'/')).headers['referrer-policy'],'no-referrer');
+ assert.equal((await request(port,'/')).headers['referrer-policy'],'strict-origin-when-cross-origin');
  assert.equal((await request(port,'/api/session')).headers['referrer-policy'],'no-referrer');
+});
+
+test('pending sessions reach status and bootstrap, but private pages and APIs fail closed', async t => {
+  let privateCalls = 0, statusCalls = 0;
+  const pending = Object.assign(Error('Access approval is required.'), {status:403,code:'access_pending'});
+  const port = await fixture(t, integrations({ accessStatus: async () => ({status:'pending',role:'user'}), assertApproved: async () => { throw pending; },
+    handlers: { designs: async (_req,res) => { privateCalls++; res.json({}); }, accessStatus: async (_req,res) => { statusCalls++; res.json({status:'pending',role:'user'}); }, adminChallenge: async (_req,res) => res.json({nonce:'fixture'}) } }));
+  assert.equal(JSON.parse((await request(port,'/api/session')).text).access.status,'pending');
+  assert.equal((await request(port,'/api/access/status')).status,200); assert.equal(statusCalls,1);
+  assert.equal((await request(port,'/api/admin/challenge')).status,200);
+  const denied = await request(port,'/api/designs'); assert.equal(denied.status,403); assert.equal(JSON.parse(denied.text).error.code,'access_pending'); assert.equal(privateCalls,0);
+  assert.equal((await request(port,'/home')).headers.location,'/access');
+  assert.equal((await request(port,'/bookshelf.html')).headers.location,'/access');
+  assert.equal((await request(port,'/index.html')).headers.location,'/');
+});
+
+test('public request is disabled without a trusted ingress address (mail is optional) and is bounded before dispatch', async t => {
+  let calls=0;
+  const handler=async (_req,res)=>{calls++;res.status(202).json({status:'recorded'});};
+  const off=await fixture(t, integrations({handlers:{accessRequest:handler},requestsAvailable:false}));
+  const input={method:'POST',headers:{origin,'content-type':'application/json'},chunks:['{}']};
+  assert.equal((await request(off,'/api/access/requests',input)).status,503); assert.equal(calls,0);
+  const on=await fixture(t, integrations({handlers:{accessRequest:handler},requestsAvailable:true,resolveSession:async()=>null}));
+  assert.equal((await request(on,'/api/access/requests',input)).status,202); assert.equal(calls,1);
+  assert.equal((await request(on,'/api/access/requests',{...input,headers:{...input.headers,origin:'https://foreign.example'}})).status,403);
+  assert.equal((await request(on,'/api/access/requests',{...input,chunks:['{"x":"','a'.repeat(4096),'"}']})).status,413); assert.equal(calls,1);
+});
+
+test('router composes access request, verified binding and revision-checked owner decisions', async t => {
+  const nonce='N'.repeat(43), grant='G'.repeat(43), events=[];
+  const store={request:async(body,ip)=>events.push(['request',body,ip]),status:async()=>({status:'pending',role:'user'}),
+    issueChallenge:async()=>({nonce,expiresIn:300}),bindVerified:async(_ctx,n,email,subject)=>{events.push(['bind',n,email,subject]);return {status:'approved',role:'user'};},
+    review:async(_ctx,_g,id)=>{events.push(['review',id]);return {id,revision:1,status:'pending'};},
+    decide:async(_ctx,_g,id,revision,decision)=>{events.push(['decision',id,revision,decision]);return {id,revision:2,status:decision};}};
+  const now=Math.floor(Date.now()/1000);
+  const deps={origin,accessStore:store,googleClientId:'fixture.apps.googleusercontent.com',getTrustedClientIp:async()=> '203.0.113.1',
+    verifyCsrf:async(req,ctx)=>req.headers['x-homeplanner-csrf']===require('../runtime/router.cjs').csrfFor(secret,ctx.sessionId),
+    verifyGoogleToken:async()=>({iss:'https://accounts.google.com',aud:'fixture.apps.googleusercontent.com',nonce,email:'user@example.invalid',email_verified:true,sub:'subject-1',iat:now,exp:now+120})};
+  const port=await fixture(t,integrations({handlers:existingHandlers(deps),requestsAvailable:true}));
+  const requestBody={method:'POST',headers:{origin,'content-type':'application/json'},chunks:['{"name":"Person","email":"user@example.invalid"}']};
+  assert.equal((await request(port,'/api/access/requests',requestBody)).status,202);
+  const h=await headers(port), jsonHeaders={...h,'content-type':'application/json'};
+  assert.equal((await request(port,'/api/access/bind',{method:'POST',headers:jsonHeaders,chunks:[JSON.stringify({token:'fixture',nonce})]})).status,200);
+  const url='/api/admin/access/requests/'+designId, adminHeaders={...jsonHeaders,'x-admin-grant':grant};
+  assert.equal((await request(port,url,{headers:{'x-admin-grant':grant}})).status,200);
+  assert.equal(events.filter(x=>x[0]==='decision').length,0);
+  assert.equal((await request(port,url+'/approve',{method:'POST',headers:adminHeaders,chunks:['{}']})).status,400);
+  assert.equal((await request(port,url+'/approve',{method:'POST',headers:{...adminHeaders,'if-match':'"1"'},chunks:['{}']})).status,200);
+  assert.deepEqual(events.find(x=>x[0]==='bind').slice(1),[nonce,'user@example.invalid','subject-1']);
+  assert.deepEqual(events.find(x=>x[0]==='decision').slice(1),[designId,1,'approved']);
 });

@@ -4,13 +4,14 @@
   const form = document.querySelector('#modelForm'), budgetForm = document.querySelector('#budgetForm');
   const signIn = document.querySelector('#adminSignIn'), signOut = document.querySelector('#adminSignOut');
   const verification = document.querySelector('#verification'), prepare = document.querySelector('#prepareVerification'), googleButton = document.querySelector('#googleButton');
+  const accessAdmin = document.querySelector('#accessAdmin'), requestList = document.querySelector('#requestList'), requestDetail = document.querySelector('#requestDetail'), entitlementList = document.querySelector('#entitlementList');
   let generation = -1, proof = null, revision = null, timer = null, sequence = 0, googleLoading = null;
   function clearProof(message) {
     sequence++; proof = null; revision = null; clearTimeout(timer); timer = null;
-    form.hidden = budgetForm.hidden = true; googleButton.replaceChildren();
+    form.hidden = budgetForm.hidden = accessAdmin.hidden = true; googleButton.replaceChildren(); requestList.replaceChildren(); requestDetail.replaceChildren(); entitlementList.replaceChildren();
     if (message) status.textContent = message;
   }
-  const fail = error => { status.textContent = error?.message || 'Settings are unavailable.'; };
+  const fail = error => { if (error?.obsolete) return; status.textContent = error?.message || 'Settings are unavailable.'; };
   function headers() {
     if (!proof || Date.now() >= proof.expires || !cloud.isCurrent(proof.stamp)) {
       clearProof('Verification expired. Prepare a new Google verification.');
@@ -19,9 +20,14 @@
     return { 'X-Admin-Grant': proof.grantId };
   }
   async function adminRequest(path, options = {}) {
-    try { return await cloud.request(path, { ...options, headers: { ...headers(), ...options.headers } }); }
-    catch (error) {
-      if (error.status === 401 || error.status === 403) clearProof('Verification failed or expired. Check the Google account, then try again.');
+    const attempt = sequence, owner = proof;
+    try {
+      const result = await cloud.request(path, { ...options, expected: owner?.stamp, headers: { ...headers(), ...options.headers } });
+      if (attempt !== sequence || proof !== owner) throw Object.assign(Error('Verification changed; response discarded.'), { obsolete: true });
+      return result;
+    } catch (error) {
+      if (attempt !== sequence || proof !== owner) error.obsolete = true;
+      else if (error.status === 401 || error.status === 403) clearProof('Verification failed or expired. Check the Google account, then try again.');
       throw error;
     }
   }
@@ -47,7 +53,44 @@
     revision = response.revision; form.hidden = budgetForm.hidden = false;
     status.textContent = `Verified. Settings loaded · revision ${revision}. Budget uses a conservative token allowance, which may exceed invoice spend.`;
   }
-  async function load(stamp) { show(await adminRequest('/api/admin/model-config'), stamp); }
+  async function load(stamp) { show(await adminRequest('/api/admin/model-config'), stamp); await loadAccess(); }
+  function line(parent, text) { const p = document.createElement('p'); p.textContent = text; parent.append(p); return p; }
+  function action(parent, label, fn) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn light'; b.textContent = label;
+    b.addEventListener('click', async () => { b.disabled = true; try { await fn(); } catch (error) { fail(error); } finally { b.disabled = false; } }); parent.append(b);
+  }
+  async function review(id) {
+    const item = await adminRequest('/api/admin/access/requests/' + encodeURIComponent(id));
+    requestDetail.replaceChildren();
+    line(requestDetail, `${item.name} · ${item.email} · ${item.status}`); line(requestDetail, item.note || 'No note.');
+    if (item.status === 'pending') for (const [decision,label] of [['approve','Approve'],['deny','Deny']]) action(requestDetail, label, async () => {
+      await adminRequest(`/api/admin/access/requests/${encodeURIComponent(item.id)}/${decision}`, { method: 'POST', headers: { 'If-Match': `"${item.revision}"` }, body: {} });
+      await loadAccess(); await review(item.id);
+    });
+    for (const mail of item.mail || []) {
+      const row = line(requestDetail, `${mail.kind}: ${mail.status} · attempts ${mail.attempts}${mail.errorCategory ? ' · ' + mail.errorCategory : ''}`);
+      if (mail.status === 'failed') action(row, 'Retry notification', async () => {
+        await adminRequest(`/api/admin/access/mail/${encodeURIComponent(mail.id)}/retry`, { method: 'POST', headers: { 'If-Match': `"${mail.revision}"` }, body: {} }); await review(item.id);
+      });
+    }
+  }
+  async function loadAccess() {
+    const [requests, entitlements] = await Promise.all([adminRequest('/api/admin/access/requests'), adminRequest('/api/admin/access/entitlements')]);
+    if (!Array.isArray(requests) || !Array.isArray(entitlements) || !proof) throw Error('Access review is unavailable.');
+    requestList.replaceChildren(); requestDetail.replaceChildren(); entitlementList.replaceChildren(); accessAdmin.hidden = false;
+    if (!requests.length) line(requestList, 'No requests.');
+    for (const item of requests) { const row = line(requestList, `${item.name} · ${item.email} · ${item.status} `); action(row, 'Review', () => review(item.id)); }
+    if (!entitlements.length) line(entitlementList, 'No accounts.');
+    for (const item of entitlements) {
+      const row = line(entitlementList, `${item.userId} · ${item.status} `);
+      if (item.status === 'approved' && item.userId !== cloud.snapshot().userId) action(row, 'Revoke', async () => {
+        await adminRequest(`/api/admin/access/entitlements/${encodeURIComponent(item.userId)}/revoke`, { method: 'POST', headers: { 'If-Match': `"${item.revision}"` }, body: {} }); await loadAccess();
+      });
+    }
+    const requested = new URLSearchParams(location.search).get('accessRequest');
+    if (requested && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(requested)) { history.replaceState(null, '', '/admin.html'); await review(requested); }
+  }
+  document.querySelector('#reloadAccess').addEventListener('click', () => { void loadAccess().catch(fail); });
   function loadGoogle() {
     if (window.google?.accounts?.id) return Promise.resolve();
     if (!googleLoading) googleLoading = new Promise((resolve, reject) => {
@@ -58,7 +101,7 @@
     return googleLoading;
   }
   async function prepareStep() {
-    const stamp = cloud.snapshot(); if (!stamp.me) return;
+    let stamp = cloud.snapshot(); if (!stamp.me) return;
     clearProof(); const attempt = sequence; prepare.disabled = true;
     try {
       const challenge = await cloud.request('/api/admin/challenge');
@@ -69,9 +112,11 @@
       let submitted = false;
       window.google.accounts.id.initialize({ client_id: challenge.clientId, nonce: challenge.nonce, auto_select: false, ux_mode: 'popup',
         callback: async response => {
-          if (submitted || attempt !== sequence || !cloud.isCurrent(stamp) || Date.now() >= expires || typeof response?.credential !== 'string') return;
+          if (submitted || attempt !== sequence || Date.now() >= expires || typeof response?.credential !== 'string') return;
           submitted = true;
           try {
+            stamp = await cloud.verificationStamp(stamp);
+            if (attempt !== sequence || Date.now() >= expires) return;
             const grant = await cloud.request('/api/admin/bootstrap', { method: 'POST', body: {}, expected: stamp,
               headers: { 'X-Google-Id-Token': response.credential, 'X-Admin-Challenge': challenge.nonce } });
             if (attempt !== sequence || !cloud.isCurrent(stamp)) return;
@@ -81,9 +126,11 @@
             clearTimeout(timer);
             timer = setTimeout(() => clearProof('Verification expired. Prepare a new Google verification.'), Math.max(0, grantExpires - Date.now()));
             const me = await adminRequest('/api/me');
+            if (attempt !== sequence) return;
             if (!cloud.isCurrent(stamp) || !proof || me.userId !== stamp.userId || me.isAdmin !== true) throw Error('Admin access is unavailable for this account.');
             await load(stamp);
           } catch (error) {
+            if (attempt !== sequence) return;
             if (error.status === 401 || error.status === 403) clearProof('Verification failed or expired. Check the Google account, then try again.');
             else { clearProof(); fail(error); }
           }
@@ -100,14 +147,14 @@
     else if (proof && !cloud.isCurrent(proof.stamp)) {
       const sameIdentity = next.userId === proof.stamp.userId && next.sessionId === proof.stamp.sessionId && next.generation === proof.stamp.generation;
       if (!sameIdentity || Date.now() >= proof.expires) clearProof();
-      else if (next.revalidating) { form.hidden = budgetForm.hidden = true; status.textContent = 'Checking the session…'; }
+      else if (next.revalidating) { form.hidden = budgetForm.hidden = accessAdmin.hidden = true; status.textContent = 'Checking the session…'; }
       else if (next.me && cloud.isCurrent(next)) {
         // A new epoch also needs a live server check of the existing grant.
         const candidate = proof;
         void cloud.request('/api/me', { expected: next, headers: { 'X-Admin-Grant': candidate.grantId } }).then(me => {
           if (proof !== candidate || !cloud.isCurrent(next)) return;
           if (Date.now() >= candidate.expires || me.userId !== next.userId || me.isAdmin !== true) return clearProof('Verification failed or expired.');
-          candidate.stamp = next; form.hidden = budgetForm.hidden = false;
+          candidate.stamp = next; form.hidden = budgetForm.hidden = false; void loadAccess().catch(fail);
           status.textContent = `Verified. Settings loaded · revision ${revision}. Budget uses a conservative token allowance, which may exceed invoice spend.`;
         }).catch(() => { if (proof === candidate && cloud.isCurrent(next)) clearProof('Verification failed or expired.'); });
       } else clearProof();
@@ -127,7 +174,7 @@
     await window.HomePlannerContractsReady;
     if (!window.HomePlannerContracts?.validate('modelConfig', body).valid) return fail(Error('Settings do not meet the contract.'));
     try { show(await adminRequest('/api/admin/model-config', { method: 'PUT', headers: { 'If-Match': `"${revision}"` }, body }), stamp); }
-    catch (error) { if (error.status === 409) { status.textContent = 'Settings changed elsewhere. Reloading current settings.'; await load(stamp).catch(fail); } else if (error.status !== 401 && error.status !== 403) fail(error); }
+    catch (error) { if (error.obsolete) return; if (error.status === 409) { status.textContent = 'Settings changed elsewhere. Reloading current settings.'; await load(stamp).catch(fail); } else if (error.status !== 401 && error.status !== 403) fail(error); }
   });
   budgetForm.addEventListener('submit', async event => {
     event.preventDefault(); const stamp = cloud.snapshot(); if (!proof || !Number.isSafeInteger(revision)) return;
@@ -135,6 +182,6 @@
     const amount = match && Number(match[1]) * 1000000 + Number((match[2] || '').padEnd(6, '0'));
     if (!Number.isSafeInteger(amount) || amount < 1 || amount > 10000000000) return fail(Error('Enter a cap from $0.000001 to $10000.'));
     try { show(await adminRequest('/api/admin/budget', { method: 'PUT', headers: { 'If-Match': `"${revision}"` }, body: { globalBudgetMicros: amount } }), stamp); }
-    catch (error) { if (error.status === 409) { status.textContent = 'Settings changed elsewhere. Reloading current settings.'; await load(stamp).catch(fail); } else if (error.status !== 401 && error.status !== 403) fail(error); }
+    catch (error) { if (error.obsolete) return; if (error.status === 409) { status.textContent = 'Settings changed elsewhere. Reloading current settings.'; await load(stamp).catch(fail); } else if (error.status !== 401 && error.status !== 403) fail(error); }
   });
 })();

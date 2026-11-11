@@ -4,7 +4,7 @@ async page => {
   let record = null, ifMatch = null, proposalBody = null;
   await page.route('**/api/**', async route => {
     const req=route.request(), url=new URL(req.url()), send=(status,body)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)}).catch(()=>{});
-    if(url.pathname==='/api/session') return send(200,{userId:user,sessionId:sid,displayName:'Fixture',csrfToken:'A'.repeat(43)});
+    if(url.pathname==='/api/session') return send(200,{userId:user,sessionId:sid,displayName:'Fixture',csrfToken:'A'.repeat(43),access:{status:'approved',role:'user'}});
     if(url.pathname==='/api/me') return send(200,{userId:user,displayName:'Fixture',isAdmin:false,capabilities:{cloud:true,ai:true}});
     if(url.pathname==='/api/shelf-proposals') { proposalBody=req.postDataJSON(); return send(200,{proposalId:'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',baseRevision:proposalBody.baseRevision,baseHash:proposalBody.baseHash,shelf:{...proposalBody.shelf,depth:proposalBody.shelf.depth+1},summary:'Fictional depth change',expiresAt:'2099-01-01T00:00:00.000Z'}); }
     if(url.pathname==='/api/designs' && req.method()==='GET') return send(200,{items:record?[{id,kind:'shelf',title:record.title}]:[],nextCursor:null});

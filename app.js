@@ -2042,7 +2042,7 @@
       if (!valid?.valid) throw Error('The server returned a design that does not match the contract.');
       if (!HomePlannerCloud.isCurrent(stamp) || !stillCurrent()) throw Error('Account, design or edits changed while loading.');
       if (design.kind === 'shelf') { location.assign('/bookshelf?design=' + encodeURIComponent(design.id)); return; }
-      const blobs = await Promise.all(ids.map(id => HomePlannerCloud.photo(design.id, id)));
+      const blobs = await HomePlannerCloud.photos(design.id, ids);
       if (!HomePlannerCloud.isCurrent(stamp) || !stillCurrent()) throw Error('Account, design or edits changed while loading.');
       for (let i = 0; i < blobs.length; i++) {
         const actual = await photoMetadata(ids[i], blobs[i]);

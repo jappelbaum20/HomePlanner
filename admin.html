@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
   <base href="/"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Home Planner admin</title><link rel="stylesheet" href="styles.css"></head>
-<body><main class="admin-shell"><h1>Model settings</h1><p><a href="index.html">Back to planner</a></p>
+<body><main class="admin-shell"><h1>Administration</h1><p><a href="/">Home</a></p>
 <p id="adminStatus" role="status" aria-live="polite">Checking access…</p>
 <button class="btn" id="adminSignIn" hidden>Sign in with Google</button><button class="btn light" id="adminSignOut" hidden>Sign out</button>
 <p class="note">After signing in, return to Admin settings from the planner.</p>
@@ -9,6 +9,10 @@
   <p>Verify your identity with the same Google account as your planner session. This is recent identity verification; it does not prove when you last entered your password.</p>
   <button class="btn" id="prepareVerification" type="button">Prepare Google verification</button><div id="googleButton"></div>
 </section>
+<section id="accessAdmin" hidden aria-labelledby="accessAdminHeading"><h2 id="accessAdminHeading">Access requests</h2>
+<p>Review requests after verification. Opening a request does not change access. Delivery status shows transport acceptance, not inbox delivery.</p>
+<button class="btn light" type="button" id="reloadAccess">Refresh requests and access</button>
+<div id="requestList"></div><div id="requestDetail"></div><h3>Approved and revoked accounts</h3><div id="entitlementList"></div></section>
 <form id="modelForm" hidden>
   <p class="note">Choose a model and a connection already registered on the server. Keys are configured separately and are never entered here.</p>
   <label><input type="checkbox" name="enabled"> Enable AI edits</label>

@@ -8,10 +8,11 @@ async page => {
   await page.route('**/api/**', async route => {
     const req = route.request(), url = new URL(req.url()), h = await req.allHeaders();
     const send = (status, body) => route.fulfill({ status, contentType:'application/json', body:JSON.stringify(body) }).catch(() => {});
-    if (url.pathname === '/api/session') { if (holdSession) { sessionSeen?.(); await new Promise(r => { releaseSession = r; }); holdSession = false; } if (sessionRevoked) return send(401,{error:{code:'unauthenticated'}}); return send(200, {userId:user,sessionId:sid,displayName:'Fixture',csrfToken:'A'.repeat(43)}); }
+    if (url.pathname === '/api/session') { if (holdSession) { sessionSeen?.(); await new Promise(r => { releaseSession = r; }); holdSession = false; } if (sessionRevoked) return send(401,{error:{code:'unauthenticated'}}); return send(200, {userId:user,sessionId:sid,displayName:'Fixture',csrfToken:'A'.repeat(43),access:{status:'approved',role:'user'}}); }
     if (url.pathname === '/api/me') { if (h['x-admin-grant']) { grantChecks++; if (revoked) return send(403,{error:{code:'forbidden'}}); } return send(200,{userId:user,displayName:'Fixture',isAdmin:!!h['x-admin-grant'],capabilities:{cloud:true,ai:false}}); }
     if (url.pathname === '/api/admin/challenge') return send(200,{clientId:'fixture.apps.googleusercontent.com',nonce:'fixture-nonce',expiresIn:300});
     if (url.pathname === '/api/admin/bootstrap') return send(200,{isAdmin:true,grantId:'fixture-grant',expiresIn:300});
+    if (url.pathname === '/api/admin/access/requests' || url.pathname === '/api/admin/access/entitlements') return send(200,[]);
     if (url.pathname === '/api/admin/model-config') {
       if (holdWrite && req.method() === 'PUT') { writeSeen?.(); await new Promise(r => { releaseWrite = r; }); holdWrite = false; }
       return send(200,{revision:1,config:{enabled:false,adapterId:'fake',modelId:'fixture',connectionId:'primary',limits:{requestsPerMinute:5,requestsPerDay:20,maxOutputTokens:4000}},globalBudgetMicros:25000000,adapters:[{id:'fake',label:'Fake'}],models:[{id:'fixture',label:'Fixture'}],connections:[{id:'primary',label:'Primary'}]});

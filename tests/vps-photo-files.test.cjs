@@ -190,7 +190,7 @@ function rawCall(service,bytes,headers={}) {return service.photoHandlers.photoRa
  test('the runtime raw PUT seam consumes the stream and returns the handler result',async()=>{
   const f=await fixture(),raw=await png(),b=backendFor(raw),service=makeService({backend:b.factory,store:f.store});b.setRecovery(service.photoRecovery);
   const origin='http://127.0.0.1:54321', secret='fixture-only-csrf-secret-32-bytes-long';
-  const runtime=createRuntime({origin,dist:f.pub,integrations:{csrfSecret:secret,resolveSession:async()=>session,handlers:service.photoHandlers}});
+  const runtime=createRuntime({origin,dist:f.pub,integrations:{csrfSecret:secret,resolveSession:async()=>session,assertApproved:async()=>true,handlers:service.photoHandlers}});
   await new Promise(resolve=>runtime.server.listen(0,'127.0.0.1',resolve));
   try {
     const port=runtime.server.address().port, headers={origin,'content-type':'image/png','x-homeplanner-session':sessionId,'x-homeplanner-csrf':csrfFor(secret,sessionId)};

@@ -5,7 +5,7 @@ const { authOptions }=require('../server/auth-config.cjs');
 const userId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',sessionId='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',design='cccccccc-cccc-4ccc-8ccc-cccccccccccc',photo='dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 function mockPool({fail=false,rollbackFails=false}={}){
  const seen=[];let destroyed;
- const client={async query(sql,args){seen.push({sql,args});if(fail&&sql.includes('hp_app.assert_actor'))throw Error('database failed');if(rollbackFails&&sql==='ROLLBACK')throw Error('broken connection');if(sql.includes('hp_photo_lock'))return {rows:[{result:{readyKey:'derived'}}]};if(sql.includes('hp_photo_record_publication'))return {rows:[{result:true}]};return {rows:[{result:true}]};},release(x){destroyed=x;}};
+ const client={async query(sql,args){seen.push({sql,args});if(fail&&sql.includes('hp_access_assert_'))throw Error('database failed');if(rollbackFails&&sql==='ROLLBACK')throw Error('broken connection');if(sql.includes('hp_photo_lock'))return {rows:[{result:{readyKey:'derived'}}]};if(sql.includes('hp_photo_record_publication'))return {rows:[{result:true}]};return {rows:[{result:true}]};},release(x){destroyed=x;}};
  return {seen,get destroyed(){return destroyed},async connect(){return client;}};
 }
 test('auth configuration is Google-only, uncached and removes provider token material',async()=>{

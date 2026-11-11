@@ -4,12 +4,15 @@
   "definitions": {
     "session": {
       "type": "object", "additionalProperties": false,
-      "required": ["userId", "sessionId", "displayName", "csrfToken"],
+      "required": ["userId", "sessionId", "displayName", "csrfToken", "access"],
       "properties": {
         "userId": { "$ref": "#/definitions/uuid" },
         "sessionId": { "$ref": "#/definitions/uuid" },
         "displayName": { "type": "string", "maxLength": 120 },
-        "csrfToken": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43}$" }
+        "csrfToken": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43}$" },
+        "access": { "type": "object", "additionalProperties": false, "required": ["status", "role"], "properties": {
+          "status": { "enum": ["approved", "pending", "denied", "revoked"] }, "role": { "enum": ["owner", "user"] }
+        } }
       }
     },
     "uploadReservation": {

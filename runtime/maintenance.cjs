@@ -5,7 +5,7 @@ const { readSetting, requireDatabaseUrl } = require('./composition.cjs');
 const { migrate, verifyMigrations } = require('../db/migrate.cjs');
 
 async function run(job, env = process.env) {
-  if (!['provision', 'migrate', 'verify'].includes(job)) throw Error('Unknown maintenance job');
+  if (!['provision', 'provision-access', 'migrate', 'verify'].includes(job)) throw Error('Unknown maintenance job');
   const connectionString = await readSetting(env, 'HOMEPLANNER_MIGRATION_DATABASE_URL');
   requireDatabaseUrl(connectionString, 'homeplanner_bootstrap');
   const client = new Client({ connectionString, connectionTimeoutMillis: 5000 });
@@ -13,6 +13,23 @@ async function run(job, env = process.env) {
   try {
     if (job === 'migrate') { await migrate(client); return; }
     if (job === 'verify') { if (!await verifyMigrations(client)) throw Error('Migration ledger mismatch'); return; }
+    if (job === 'provision-access') {
+      const a = await readSetting(env, 'HOMEPLANNER_ACCESS_PUBLIC_DB_PASSWORD');
+      const m = await readSetting(env, 'HOMEPLANNER_MAIL_DB_PASSWORD');
+      if ([a,m].some(v => Buffer.byteLength(v) < 32) || a === m) throw Error('Invalid database credentials');
+      const names = ['hp_access_public','hp_mail_worker','hp_access_public_login','hp_mail_worker_login'];
+      await client.query('BEGIN');
+      try {
+        const existing = await client.query('SELECT rolname FROM pg_catalog.pg_roles WHERE rolname = ANY($1::text[])', [names]);
+        if (existing.rowCount) throw Error('Role names already exist');
+        for (const name of names.slice(0,2)) await client.query(`CREATE ROLE ${client.escapeIdentifier(name)} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
+        for (const [name,password] of [[names[2],a],[names[3],m]]) await client.query(`CREATE ROLE ${client.escapeIdentifier(name)} LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD ${client.escapeLiteral(password)}`);
+        await client.query('GRANT hp_access_public TO hp_access_public_login');
+        await client.query('GRANT hp_mail_worker TO hp_mail_worker_login');
+        await client.query('COMMIT');
+      } catch (error) { await client.query('ROLLBACK'); throw error; }
+      return;
+    }
     const authPassword = await readSetting(env, 'HOMEPLANNER_AUTH_DB_PASSWORD');
     const appPassword = await readSetting(env, 'HOMEPLANNER_APP_DB_PASSWORD');
     const photoPassword = await readSetting(env, 'HOMEPLANNER_PHOTO_MAINTENANCE_DB_PASSWORD');

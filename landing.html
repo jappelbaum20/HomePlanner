@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><base href="/"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HomePlanner access</title><link rel="stylesheet" href="styles.css"></head>
+<body><main class="admin-shell"><h1>HomePlanner</h1>
+<p>Plan rooms and build a bookshelf. Access is granted individually, including for Google accounts.</p>
+<p id="accessStatus" role="status" aria-live="polite">Checking access…</p>
+<button class="btn" id="accessSignIn" type="button" hidden>Continue with Google</button>
+<button class="btn light" id="accessSignOut" type="button" hidden>Sign out</button>
+<nav id="workspaces" hidden><p><a href="/home">Open room planner</a> · <a href="/bookshelf">Open bookshelf builder</a></p></nav>
+<section id="binding" hidden><h2>Connect an approved request</h2><p>After your request is approved, verify the same Google account and email address to connect it.</p>
+<button class="btn" id="prepareBinding" type="button">Prepare Google verification</button><div id="bindingGoogle"></div></section>
+<section><h2>Request access</h2><p>Requests are reviewed by the owner. Submitting a request does not grant access.</p>
+<p id="requestAvailability" role="status">Checking availability…</p>
+<form id="requestForm" hidden><label class="field"><span>Name</span><input name="name" maxlength="120" required autocomplete="name"></label>
+<label class="field"><span>Email</span><input name="email" type="email" maxlength="254" required autocomplete="email"></label>
+<label class="field"><span>Note (optional)</span><input name="note" maxlength="1000"></label>
+<button class="btn" type="submit">Request access</button></form></section>
+<p><a href="/admin.html">Administrator</a></p></main>
+<script src="client/config.js"></script><script src="vendor/better-auth.js"></script><script src="bookshelf.js"></script><script src="client/contracts-loader.js"></script><script src="client/cloud.js"></script><script src="landing.js"></script></body></html>

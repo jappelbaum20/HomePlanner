@@ -1,5 +1,7 @@
 'use strict';
 const { createHash, randomUUID } = require('node:crypto');
+const { Readable } = require('node:stream');
+const { pipeline } = require('node:stream/promises');
 const { validate, LIMITS } = require('../shared/contracts');
 const { authenticate } = require('./auth');
 const { ApiError, fail, id, uuid, jsonBody, wrap, method } = require('./errors');
@@ -131,20 +133,40 @@ function createCompleteHandler(deps) {
   }, deps);
 }
 function createDownloadHandler(deps) {
-  return wrap(async req => {
+  return wrap(async (req, res) => {
     method(req, ['GET']);
     if (deps?.ensurePhotoOperational) await deps.ensurePhotoOperational();
     const ctx = await authenticate(req, deps);
-    const photo = await ctx.backend.photo(ctx, id(req.query?.id), id(req.query?.photoId));
+    const designId = id(req.query?.id), photoId = id(req.query?.photoId);
+    async function read(photo) {
     if (!photo || photo.status !== 'ready' || photo.tombstoned_at) fail(404, 'not_found', 'Resource not found.');
     let bytes;
     if (deps?.photoStore) {
-      const designId = id(req.query?.id), photoId = id(req.query?.photoId);
       assertKey(photo.object_key, ctx.userId, designId, photoId, 'ready');
       bytes = await deps.photoStore.readPart(ctx.userId, designId, photoId, 'ready');
     } else bytes = await ctx.backend.download(photo.object_key);
     if (bytes.length !== Number(photo.bytes) || digest(bytes) !== photo.checksum) fail(503, 'unavailable', 'Photo is temporarily unavailable.');
     return { bytes, mime: photo.mime };
+    }
+    if (typeof ctx.backend.withPhotoRead === 'function') {
+      // Authorization, the metadata lookup and the (fully buffered) file read happen inside the
+      // short transaction. It is committed and its pooled connection released BEFORE any byte is
+      // sent, so slow clients cannot starve the pool (size 5, 5 s acquire wait).
+      // Revocation semantics: a revoke committed after this point does not cut off a download
+      // that is already streaming; at most that one in-flight response (bounded by the 30 s
+      // limit below) may complete. Every new request re-checks approval.
+      const result = await ctx.backend.withPhotoRead(designId,photoId,photo => read(photo));
+      if (res.destroyed || res.writableEnded) return;
+      res.setHeader('Content-Type', result.mime); res.setHeader('Content-Disposition', 'inline'); res.status(200);
+      // Pipeline respects backpressure and destroys both ends on failure.
+      const chunks = function* () {
+        for (let offset=0; offset<result.bytes.length; offset+=65536)
+          yield result.bytes.subarray(offset,offset+65536);
+      };
+      await pipeline(Readable.from(chunks()), res, { signal: AbortSignal.timeout(30000) });
+      return;
+    }
+    return read(await ctx.backend.photo(ctx,designId,photoId));
   }, deps);
 }
 

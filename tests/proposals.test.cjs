@@ -69,6 +69,27 @@ test('concurrent retries and ambiguous provider failure never issue a second cal
   const result=await first; assert.equal(result.statusCode,503); assert.doesNotMatch(JSON.stringify(result.data),/private detail/);
   assert.equal(s.records.get(body.requestId).status,'ambiguous'); assert.equal((await call(s,body)).statusCode,409); assert.equal(s.calls,1);
 });
+test('reservation is durable first, the provider runs outside any transaction, and denial stops dispatch', async () => {
+  const s=fixture(), body=s.body(); let fenced=false, fences=0, settledWhileFenced=false;
+  const rpc=s.backend.rpc.bind(s.backend);
+  s.backend.rpc=async (name,args)=>{ if(name==='hp_finalize_usage') settledWhileFenced=fenced; return rpc(name,args); };
+  s.backend.withApproved=async work=>{ assert.equal(s.records.get(body.requestId).status,'reserved'); fenced=true; fences++; try { return await work(s.backend); } finally { fenced=false; } };
+  s.deps.provider={async generateShelfProposal(){assert.equal(fenced,false);return {candidate:{shelf:body.shelf,summary:'Fixture'},usage};}};
+  assert.equal((await call(s,body)).statusCode,200); assert.equal(settledWhileFenced,true); assert.equal(fences,2);
+  assert.equal(s.records.get(body.requestId).status,'succeeded');
+  const denied=fixture(), blocked=denied.body();
+  denied.backend.withApproved=async()=>{throw new ApiError(403,'access_revoked','Access revoked');};
+  assert.equal((await call(denied,blocked)).statusCode,403); assert.equal(denied.calls,0);
+  assert.equal(denied.records.get(blocked.requestId).status,'reserved');
+});
+test('revocation during the provider call settles the reservation as ambiguous and never retries', async () => {
+  const s=fixture(), body=s.body(); let fences=0;
+  s.backend.withApproved=async work=>{ if(++fences===2) throw new ApiError(403,'access_revoked','Access revoked'); return work(s.backend); };
+  const result=await call(s,body);
+  assert.equal(result.statusCode,403); assert.equal(s.calls,1);
+  assert.equal(s.records.get(body.requestId).status,'ambiguous');
+  assert.equal((await call(s,body)).statusCode,409); assert.equal(s.calls,1);
+});
 test('stale hash, revision, missing config, unsupported model and quota deny calls', async () => {
   const s=fixture(), b=s.body();
   assert.equal((await call(s,{...b,baseHash:'0'.repeat(64)})).statusCode,409);

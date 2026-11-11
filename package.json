@@ -14,12 +14,13 @@
     "start:vps": "node runtime/server.cjs",
     "test:runtime": "node --test tests/runtime.test.cjs",
     "audit:public": "node scripts/audit-public.mjs",
-    "test": "node --test tests/bookshelf.test.cjs tests/public-assets.test.cjs"
+    "test": "node --test tests/bookshelf.test.cjs tests/public-assets.test.cjs tests/cloud-photo-pool.test.cjs"
   },
   "dependencies": {
     "ajv": "8.20.0",
     "better-auth": "1.7.18",
     "google-auth-library": "11.3.3",
+    "nodemailer": "10.4.0",
     "pg": "8.23.1",
     "sharp": "0.35.5",
     "three": "0.128.0"

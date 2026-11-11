@@ -50,6 +50,8 @@ function wrap(action, dependencies) {
       }
       return res.status(status).json(result && result.body !== undefined ? result.body : {});
     } catch (err) {
+      if (res.destroyed) return;
+      if (res.headersSent) { res.destroy(); return; }
       const safe = err instanceof ApiError ? err : new ApiError(503, 'unavailable', 'Service is temporarily unavailable.');
       for (const [k, v] of Object.entries(safe.headers)) res.setHeader(k, v);
       return res.status(safe.status).json({ error: { code: safe.code, message: safe.message, requestId } });
