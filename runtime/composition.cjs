@@ -10,6 +10,7 @@ const { createBackend } = require('../server/db');
 const { createPhotoStore } = require('../server/photo-files.cjs');
 const { createPhotoService } = require('../server/photos');
 const { canonicalIp } = require('../server/access.cjs');
+const { parseTrustedProxies } = require('../server/trusted-proxy.cjs');
 const { createGmailTransport } = require('../server/gmail-transport.cjs');
 const { createOutboxWorker } = require('../server/mail-outbox.cjs');
 
@@ -43,7 +44,7 @@ function trustedClientIp(req, proxyIp) {
 }
 // Access requests are recorded (and shown in the owner's admin queue) whenever a trusted ingress
 // address is configured for rate limiting. Mail is an optional notification add-on only.
-function accessRequestsAvailable({ proxyIp } = {}) { return !!proxyIp; }
+function accessRequestsAvailable({ proxyIp, proxies } = {}) { return !!proxyIp || proxies?.configured === true; }
 function databasePair(auth, app) {
   const a = new URL(auth), b = new URL(app);
   if (![a, b].every(u => ['postgres:', 'postgresql:'].includes(u.protocol) && u.username && u.password && u.hostname && u.pathname.length > 1) ||
@@ -146,7 +147,7 @@ async function createComposition({ env = process.env, safety, PoolClass = Pool }
     if (providerKey) process.env.OPENAI_API_KEY = providerKey;
     const integrations = await createIntegrations({ origin, authPool, appPool, publicPool, rateKey, authSecret, csrfSecret, googleClientId: env.GOOGLE_OAUTH_CLIENT_ID,
       googleClientSecret, photoHandlers, photoRecovery: recovery, photoReady: photos.photoReady, close,
-      requestsAvailable: accessRequestsAvailable({ proxyIp }), getTrustedClientIp: req => trustedClientIp(req, proxyIp) });
+      requestsAvailable: accessRequestsAvailable({ proxies }), getTrustedClientIp: req => trustedClientIp(req, proxies) });
     if (!transport) console.log('mail notifications disabled; access requests are recorded for admin review only');
     if (transport) {
       const tick = () => { if (!mailTask) { mailTask = worker.runOnce().catch(() => {}).finally(() => { mailTask = null; }); } };

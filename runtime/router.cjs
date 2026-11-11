@@ -12,7 +12,8 @@ const JSON_LIMIT = 1100000, AUTH_LIMIT = 65536, RAW_LIMIT = 10485760, BODY_TIMEO
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const SAFE = new Set(['GET', 'HEAD']);
 const CSP = "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: blob: https://*.googleusercontent.com; connect-src 'self' data: blob: https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'";
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
+const EXPIRED = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>HomePlanner sign-in</title><link rel="stylesheet" href="/login.css"></head><body><main class="login-card"><h1>Please sign in again</h1><p>This request page is only available for ten minutes after you sign in with Google.</p><a class="login-request" href="/">Back to sign-in</a></main></body></html>';
 
 function securityHeaders(res) {
   res.setHeader('Content-Security-Policy', CSP);
@@ -82,7 +83,7 @@ function boundedStream(req, res, max, origin) {
   return { stream, failed: () => failed };
 }
 async function staticFile(req, res, pathname, dist) {
-  const name = pathname === '/' || pathname === '/access' ? 'landing.html' : pathname === '/home' ? 'index.html' : pathname === '/bookshelf' ? 'bookshelf.html' : pathname.slice(1);
+  const name = pathname === '/' || pathname === '/access' ? 'landing.html' : pathname === '/auth/request-access' ? 'request-access.html' : pathname === '/home' ? 'index.html' : pathname === '/bookshelf' ? 'bookshelf.html' : pathname.slice(1);
   if (!publicFiles.has(name)) return error(res, 404, 'not_found', 'Resource not found.');
   // The identity widget needs the page origin; paths and queries stay private cross-origin.
   if (name === 'admin.html' || name === 'landing.html') res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -90,7 +91,7 @@ async function staticFile(req, res, pathname, dist) {
   try {
     const root = await fs.lstat(dist); if (!root.isDirectory() || root.isSymbolicLink()) throw Error('invalid root');
     for (const part of components) { current = path.join(current, part); const info = await fs.lstat(current); if (info.isSymbolicLink()) throw Error('symlink'); }
-    const bytes = await fs.readFile(current); res.setHeader('Content-Type', MIME[path.extname(name)] || 'application/octet-stream'); res.setHeader('Cache-Control', 'no-cache');
+    const bytes = await fs.readFile(current); res.setHeader('Content-Type', MIME[path.extname(name)] || 'application/octet-stream'); res.setHeader('Cache-Control', name === 'request-access.html' ? 'no-store' : 'no-cache');
     res.statusCode = 200; if (req.method === 'HEAD') return res.end(); res.end(bytes);
   } catch { error(res, 404, 'not_found', 'Resource not found.'); }
 }
@@ -177,6 +178,8 @@ function createRuntime({ origin = 'https://home.appelbaums.com', dist = path.res
       let s = null;
       if (route.public) {
         if (integrations.requestsAvailable !== true) return error(res, 503, 'unavailable', 'Access requests are temporarily unavailable.');
+      } else if (route.anonymous) {
+        // Authenticated only by the signed request handoff, checked inside the handler.
       } else {
         s = await guard(req, res); if (!s) return;
         if (!route.escape) {
@@ -198,7 +201,7 @@ function createRuntime({ origin = 'https://home.appelbaums.com', dist = path.res
         } catch { req.unpipe(input.stream); input.stream.destroy(); if (!input.failed()) abortBody(req, res, 503, 'unavailable', 'Service is temporarily unavailable.'); return; }
       }
       if (!SAFE.has(req.method)) {
-        const max = route.name === 'accessBind' ? 20000 : route.name.startsWith('access') ? 4096 : route.name === 'proposals' ? 65536 : ['photoReserve', 'photoComplete', 'adminBootstrap', 'adminModelConfig', 'adminBudget'].includes(route.name) ? 4096 : JSON_LIMIT;
+        const max = route.name.startsWith('access') ? 4096 : route.name === 'proposals' ? 65536 : ['photoReserve', 'photoComplete', 'adminBootstrap', 'adminModelConfig', 'adminBudget'].includes(route.name) ? 4096 : JSON_LIMIT;
         try { req.body = await readJson(req, res, max); } catch { return; }
       }
       res.status = status => { res.statusCode = status; return res; };
@@ -209,6 +212,16 @@ function createRuntime({ origin = 'https://home.appelbaums.com', dist = path.res
     }
     if (!['GET', 'HEAD'].includes(req.method)) return error(res, 405, 'method_not_allowed', 'Method not allowed.');
     if (pathname === '/index.html' || pathname === '/landing.html') { res.statusCode = 302; res.setHeader('Location', '/'); return res.end(); }
+    if (pathname === '/auth/error' || pathname === '/auth/request-access') {
+      res.setHeader('Cache-Control', 'no-store');
+      let claims = null; try { claims = typeof integrations.handoffFromRequest === 'function' ? integrations.handoffFromRequest(req) : null; } catch {}
+      if (pathname === '/auth/error') {
+        const code = parsed.searchParams.get('error'), safe = /^[a-z_]{1,40}$/.test(code || '') ? code : 'unknown';
+        res.statusCode = 302; res.setHeader('Location', safe === 'access_not_approved' && claims ? '/auth/request-access' : '/?signin_error=' + safe); return res.end();
+      }
+      if (!claims) { res.statusCode = 401; res.setHeader('Content-Type', MIME['.html']); return res.end(req.method === 'HEAD' ? undefined : EXPIRED); }
+    }
+    if (pathname === '/request-access.html') return error(res, 404, 'not_found', 'Resource not found.');
     if (['/home','/bookshelf','/bookshelf.html'].includes(pathname)) {
       let s; try { s = configured() && await integrations.resolveSession(req); } catch { return error(res, 503, 'unavailable', 'Service is temporarily unavailable.'); }
       if (!validSession(s)) { res.statusCode = 302; res.setHeader('Location', '/'); return res.end(); }

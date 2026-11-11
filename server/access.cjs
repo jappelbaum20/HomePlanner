@@ -1,5 +1,5 @@
 'use strict';
-const { createHash, createHmac, randomBytes } = require('node:crypto');
+const { createHash, createHmac } = require('node:crypto');
 const net = require('node:net');
 const { fail, uuid } = require('./errors');
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -14,10 +14,6 @@ function email(value) {
   // Deliberately conservative ASCII mailbox grammar. Do not rewrite dots/plus.
   if (!/^[a-z0-9!#$%&'*+\-/=?^_`{|}~]+(?:\.[a-z0-9!#$%&'*+\-/=?^_`{|}~]+)*@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(result)) fail(422,'invalid_data','Invalid request.');
   return result;
-}
-function validateRequest(body) {
-  if (!body || Object.getPrototypeOf(body) !== Object.prototype || Object.keys(body).some(k => !['name','email','note'].includes(k)) || !Object.hasOwn(body,'name') || !Object.hasOwn(body,'email')) fail(422,'invalid_data','Invalid request.');
-  return { name:text(body.name,120), email:email(body.email), note:body.note === undefined ? '' : text(body.note,1000,false) };
 }
 function exactOrigin(req, origin) {
   if (!origin || new URL(origin).origin !== origin || req.headers.origin !== origin) fail(403,'origin_denied','Origin is not allowed.');
@@ -99,15 +95,14 @@ function createAccessStore({appPool,publicPool,rateKey}={}) {
         return true;
       });
     },
-    async request(body,ip) {
-      const value=validateRequest(body);
+    // Verified request: identity comes from the signed handoff (a Google-verified subject), never from the body.
+    async requestVerified(claims,ip) {
       const key=canonicalIp(ip);
-      return tx(publicPool,null,'',c=>rpc(c,'SELECT hp_app.hp_access_request($1,$2,$3,$4,$5) AS result',[value.name,value.email,value.note,digest('ip',key),digest('email',value.email)]));
+      return tx(publicPool,null,'',c=>rpc(c,'SELECT hp_app.hp_access_request_verified($1,$2,$3,$4,$5,$6) AS result',[claims.issuer,claims.subject,claims.email,claims.name||claims.email,digest('ip',key),digest('subject',claims.subject)]));
     },
+    handoffStatus:claims=>tx(publicPool,null,'',c=>rpc(c,'SELECT hp_app.hp_access_handoff_status($1,$2,$3) AS result',[claims.issuer,claims.subject,claims.email])),
     status:ctx=>actor(ctx,c=>rpc(c,'SELECT hp_app.hp_access_status() AS result',[])),
     assertApproved:ctx=>actor(ctx,c=>rpc(c,'SELECT hp_app.hp_access_assert_approved() AS result',[])),
-    issueChallenge:ctx=>actor(ctx,async c=>{const nonce=randomBytes(32).toString('base64url'); await rpc(c,'SELECT hp_app.hp_access_issue_challenge($1) AS result',[hash(nonce)]); return {nonce,expiresIn:300};}),
-    bindVerified:(ctx,nonce,verifiedEmail,subject)=>actor(ctx,c=>rpc(c,'SELECT hp_app.hp_access_bind_verified($1,$2,$3) AS result',[hash(nonce),verifiedEmail,subject])),
     review:(ctx,g,id)=>admin(ctx,g,(c,sub)=>rpc(c,'SELECT hp_app.hp_access_review($1,$2) AS result',[sub,id])),
     entitlements:(ctx,g)=>admin(ctx,g,(c,sub)=>rpc(c,'SELECT hp_app.hp_access_entitlements($1) AS result',[sub])),
     decide:(ctx,g,id,rev,decision)=>admin(ctx,g,(c,sub)=>rpc(c,'SELECT hp_app.hp_access_decide($1,$2,$3,$4) AS result',[sub,id,rev,decision])),
@@ -116,17 +111,4 @@ function createAccessStore({appPool,publicPool,rateKey}={}) {
     seedOwner:(ctx,g)=>admin(ctx,g,(c,sub)=>rpc(c,'SELECT hp_app.hp_access_seed_owner($1) AS result',[sub]),true)
   });
 }
-async function verifiedBinding(ctx, body, deps) {
-  if (!body || Object.getPrototypeOf(body)!==Object.prototype || Object.keys(body).sort().join(',')!=='nonce,token' || typeof body.nonce!=='string' || !/^[A-Za-z0-9_-]{43}$/.test(body.nonce) || typeof body.token!=='string' || body.token.length>16384) fail(422,'invalid_data','Invalid verification.');
-  if (typeof deps.googleClientId!=='string' || !deps.googleClientId.endsWith('.apps.googleusercontent.com')) fail(503,'unavailable','Verification is unavailable.');
-  let claims;
-  try {
-    if (deps.verifyGoogleToken) claims=await deps.verifyGoogleToken(body.token,deps.googleClientId);
-    else { const {OAuth2Client}=require('google-auth-library'); claims=(await new OAuth2Client().verifyIdToken({idToken:body.token,audience:deps.googleClientId})).getPayload(); }
-  } catch { fail(403,'verification_required','Google verification is required.'); }
-  const now=Math.floor(Date.now()/1000);
-  if (!claims || !['accounts.google.com','https://accounts.google.com'].includes(claims.iss) || claims.aud!==deps.googleClientId || claims.nonce!==body.nonce || claims.email_verified!==true || typeof claims.sub!=='string' || !/^[\x21-\x7e]{1,255}$/.test(claims.sub) || !Number.isInteger(claims.iat) || claims.iat>now+30 || claims.iat<now-330 || !Number.isInteger(claims.exp) || claims.exp<=now) fail(403,'verification_required','Google verification is required.');
-  let normalized; try { normalized=email(claims.email); } catch { fail(403,'verification_required','Google verification is required.'); }
-  return deps.accessStore.bindVerified(ctx,body.nonce,normalized,claims.sub);
-}
-module.exports={createAccessStore,validateRequest,email,canonicalIp,exactOrigin,session,csrf,grant,verifiedBinding};
+module.exports={createAccessStore,email,canonicalIp,exactOrigin,session,csrf,grant};

@@ -4,16 +4,30 @@ const { readFile } = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const FILES = Object.freeze(['001_auth.sql','002_business.sql','003_photos.sql','004_photo_maintenance.sql','005_shelf_documents.sql','006_access_requests.sql']);
+// Additive migrations are rollback-compatible: they only add nullable columns and new functions, so the
+// previous image keeps working against them. They are recorded in hp_migration.applied_additive because
+// the previous image requires hp_migration.applied to equal exactly FILES. Hashed over LF-normalised text,
+// so a CRLF or LF checkout produces the same checksum.
+const ADDITIVE = Object.freeze(['007_verified_signin.sql']);
 async function expectedMigrations() {
   return Promise.all(FILES.map(async name => {
     const sql = await readFile(path.join(__dirname,'migrations',name),'utf8');
     return { name, sql, sha256: createHash('sha256').update(sql,'utf8').digest('hex') };
   }));
 }
+async function additiveMigrations() {
+  return Promise.all(ADDITIVE.map(async name => {
+    const sql = (await readFile(path.join(__dirname,'migrations',name),'utf8')).replace(/\r\n/g,'\n');
+    return { name, sql, sha256: createHash('sha256').update(sql,'utf8').digest('hex') };
+  }));
+}
+const same = (actual, expected) => actual.length === expected.length && actual.every((row,i) => row.name === expected[i].name && row.sha256 === expected[i].sha256);
 async function verifyMigrations(pool) {
-  const expected = await expectedMigrations();
+  const expected = await expectedMigrations(), additive = await additiveMigrations();
   const actual = (await pool.query('SELECT name,sha256 FROM hp_migration.applied ORDER BY name')).rows;
-  return actual.length === expected.length && actual.every((row,i) => row.name === expected[i].name && row.sha256 === expected[i].sha256);
+  if (!same(actual, expected)) return false;
+  const extra = (await pool.query("SELECT name,sha256 FROM hp_migration.applied_additive ORDER BY name")).rows;
+  return same(extra, additive);
 }
 async function migrate(client) {
   const migrations = await expectedMigrations();
@@ -27,6 +41,9 @@ async function migrate(client) {
       await client.query('REVOKE ALL ON hp_migration.applied FROM PUBLIC');
       await client.query('GRANT USAGE ON SCHEMA hp_migration TO hp_auth_runtime, hp_app_runtime');
       await client.query('GRANT SELECT ON hp_migration.applied TO hp_auth_runtime, hp_app_runtime');
+      await client.query('CREATE TABLE IF NOT EXISTS hp_migration.applied_additive (name text PRIMARY KEY, sha256 text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())');
+      await client.query('REVOKE ALL ON hp_migration.applied_additive FROM PUBLIC');
+      await client.query('GRANT SELECT ON hp_migration.applied_additive TO hp_auth_runtime, hp_app_runtime');
       await client.query('COMMIT');
     } catch (error) { await client.query('ROLLBACK'); throw error; }
     const records = (await client.query('SELECT name,sha256 FROM hp_migration.applied ORDER BY name')).rows;
@@ -39,6 +56,16 @@ async function migrate(client) {
         await client.query('COMMIT');
       } catch (error) { await client.query('ROLLBACK'); throw error; }
     }
+    const done = (await client.query('SELECT name,sha256 FROM hp_migration.applied_additive ORDER BY name')).rows, additive = await additiveMigrations();
+    if (done.length > additive.length || done.some((r,i)=>r.name!==additive[i].name || r.sha256!==additive[i].sha256)) throw Error('Migration ledger mismatch');
+    for (const entry of additive.slice(done.length)) {
+      await client.query('BEGIN');
+      try {
+        await client.query(entry.sql);
+        await client.query('INSERT INTO hp_migration.applied_additive(name,sha256) VALUES($1,$2)', [entry.name,entry.sha256]);
+        await client.query('COMMIT');
+      } catch (error) { await client.query('ROLLBACK'); throw error; }
+    }
   } finally { await client.query("SELECT pg_catalog.pg_advisory_unlock(pg_catalog.hashtextextended('homeplanner-migration',0))"); }
 }
-module.exports = { FILES, expectedMigrations, verifyMigrations, migrate };
+module.exports = { FILES, ADDITIVE, expectedMigrations, additiveMigrations, verifyMigrations, migrate };

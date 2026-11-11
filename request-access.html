@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en" translate="no"><head><meta name="google" content="notranslate"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Request access to HomePlanner</title><link rel="stylesheet" href="/login.css"></head>
+<body><main class="login-card">
+<div class="login-brand"><span class="login-brand-name"><svg class="login-mark" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2 1.5 11.5h3V22h6v-6h3v6h6V11.5h3z"/></svg>HomePlanner</span>
+<div class="login-language" role="group" aria-label="Language"><button type="button" data-lang="de" aria-pressed="false">DE</button><button type="button" data-lang="en" aria-pressed="true">EN</button></div></div>
+<h1 data-i18n="title">Request access</h1>
+<p><span data-i18n="account">Verified Google account:</span> <strong id="account"></strong></p>
+<p id="state" class="login-status" role="status" aria-live="polite"></p>
+<div class="login-actions">
+<button class="google-signin pending-action" id="send" type="button" hidden data-i18n="send">Request access</button>
+<a id="again" href="/" data-i18n="again">Sign in with another account</a>
+</div>
+<a class="login-request" id="mail" href="mailto:jacob@appelbaums.com?subject=HomePlanner%20access%20request" data-i18n="mail">Request by email</a>
+</main>
+<script src="/request-access.js"></script></body></html>

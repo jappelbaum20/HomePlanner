@@ -8,6 +8,7 @@ const { verifyMigrations } = require('../db/migrate.cjs');
 const { createAccessStore } = require('../server/access.cjs');
 const { csrfFor } = require('./router.cjs');
 const { timingSafeEqual } = require('node:crypto');
+const handoff = require('../server/handoff.cjs');
 
 // Composition only. Callers supply credentials/pools and independently installed
 // filesystem handlers; the default runtime remains disconnected and unready.
@@ -20,7 +21,8 @@ async function createIntegrations({ origin = 'https://home.appelbaums.com', auth
     const token = req.headers['x-homeplanner-csrf'], expected = csrfFor(csrfSecret, ctx.sessionId);
     return typeof token === 'string' && /^[A-Za-z0-9_-]{43}$/.test(token) && timingSafeEqual(Buffer.from(token), Buffer.from(expected));
   };
-  const deps = { origin, backend, googleClientId, accessStore, getTrustedClientIp, verifyCsrf };
+  const handoffFromRequest = req => handoff.fromRequest(authSecret, req);
+  const deps = { origin, backend, googleClientId, accessStore, getTrustedClientIp, verifyCsrf, handoffFromRequest };
   const handlers = existingHandlers(deps);
   // Never enable the retained hosted-storage handlers in a self-hosted runtime.
   for (const key of ['photoReserve', 'photoRaw', 'photoComplete', 'photoDownload']) {
@@ -34,7 +36,7 @@ async function createIntegrations({ origin = 'https://home.appelbaums.com', auth
   }
   if (!await leastPrivilege(authPool,'hp_auth_runtime','hp_auth') || !await leastPrivilege(appPool,'hp_app_runtime',null) || !await accessStore.verifyPublicRole() || !await verifyMigrations(appPool)) throw Error('Runtime database roles or migrations are not ready');
   return {
-    csrfSecret, authHandler: await createBetterAuthHandler(auth), handlers, requestsAvailable,
+    csrfSecret, authHandler: await createBetterAuthHandler(auth), handlers, requestsAvailable, handoffFromRequest,
     accessStatus: s => accessStore.status(s), assertApproved: s => accessStore.assertApproved(s),
     async resolveSession(req) {
       const session = await resolveAuthSession(auth, req);

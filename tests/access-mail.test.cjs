@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 const access=require('../server/access.cjs'), mail=require('../server/mail-outbox.cjs');
-const request=require('../api/access/requests.js'), bind=require('../api/access/bind.js'), approve=require('../api/admin/access/requests/[id]/approve.js'), review=require('../api/admin/access/requests/[id].js');
+const  approve=require('../api/admin/access/requests/[id]/approve.js'), review=require('../api/admin/access/requests/[id].js');
 const userId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',sessionId='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',requestId='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const origin='https://home.appelbaums.com',nonce='n'.repeat(43),grant='g'.repeat(43),client='fixture.apps.googleusercontent.com';
 function fixture(){
@@ -17,26 +17,6 @@ async function call(api,fx,{method='GET',body,headers={},query={},authenticated=
  const res={statusCode:200,setHeader(){},status(n){this.statusCode=n;return this;},json(x){this.data=x;this.writableEnded=true;return this;},end(){this.writableEnded=true;return this;}};
  await api.createHandler(fx.deps)(req,res);return res;
 }
-test('strict public requests reject unknown fields, header controls, bad origins and oversize',async()=>{
- const fx=fixture();
- const body={name:'Example',email:'EXAMPLE+one@example.invalid',note:'Hello'};
- assert.deepEqual(access.validateRequest(body),{name:'Example',email:'example+one@example.invalid',note:'Hello'});
- for(const invalid of [{...body,role:'admin'},{...body,name:'Bad\r\nBcc: x'}, {...body,email:'x@example.invalid\nBcc:y'}, {...body,note:'x'.repeat(1001)}]) assert.throws(()=>access.validateRequest(invalid));
- assert.equal((await call(request,fx,{method:'POST',body,authenticated:false})).statusCode,403);
- assert.equal((await call(request,fx,{method:'POST',body,headers:{origin},authenticated:false})).statusCode,202);
- assert.equal(fx.calls[0][0],'request');
- assert.equal((await call(request,fx,{method:'POST',body:{...body,note:'x'.repeat(5000)},headers:{origin},authenticated:false})).statusCode,413);
-});
-test('binding requires verified fresh Google claims, exact origin, session and CSRF',async()=>{
- const fx=fixture(), opts={method:'POST',body:{token:'signed-fixture',nonce},headers:{origin,'x-homeplanner-session':sessionId,'x-homeplanner-csrf':'value'}};
- assert.equal((await call(bind,fx,opts)).statusCode,200);
- assert.deepEqual(fx.calls[0].slice(2),[nonce,'applicant@example.invalid','verified-subject']);
- for(const change of [x=>x.email_verified=false,x=>x.aud='other',x=>x.nonce='other',x=>x.iat-=331,x=>x.exp=0,x=>x.iss='https://evil.invalid',x=>x.email='a@example.invalid\nBcc:x']) {
-  const f=fixture();change(f.claims);assert.equal((await call(bind,f,opts)).statusCode,403);assert.equal(f.calls.length,0);
- }
- const noCsrf=fixture();delete noCsrf.deps.verifyCsrf;assert.equal((await call(bind,noCsrf,opts)).statusCode,403);
- assert.equal((await call(bind,fx,{...opts,headers:{...opts.headers,'x-homeplanner-session':userId}})).statusCode,403);
-});
 test('review GET is read only and decision POST requires grant, CSRF, session and revision',async()=>{
  const fx=fixture();const query={id:requestId};
  assert.equal((await call(review,fx,{query,headers:{'x-admin-grant':grant}})).statusCode,200);
@@ -59,21 +39,6 @@ test('mail fixes recipient, escapes markup and rejects injection; lease failure 
  assert.equal((await worker.runOnce()).outcome,'accepted');assert.equal(sent[0].messageId,job.messageId);
  next=[job];const failed=mail.createOutboxWorker({pool,origin,from:'sender@example.invalid',transport:{async sendMail(){throw Error('fixture failure');}}});
  assert.equal((await failed.runOnce()).outcome,'transient');
-});
-test('real Google verifier validates a synthetic signed token without network access',async()=>{
- const {OAuth2Client}=require('google-auth-library'),crypto=require('node:crypto');
- const fx=fixture(),{privateKey,publicKey}=crypto.generateKeyPairSync('rsa',{modulusLength:2048});
- const encode=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
- const signed=encode({alg:'RS256',typ:'JWT',kid:'fixture'})+'.'+encode(fx.claims);
- const token=signed+'.'+crypto.sign('RSA-SHA256',Buffer.from(signed),privateKey).toString('base64url');
- const previous=OAuth2Client.prototype.getFederatedSignonCertsAsync;
- OAuth2Client.prototype.getFederatedSignonCertsAsync=async()=>({certs:{fixture:publicKey.export({type:'spki',format:'pem'})}});
- delete fx.deps.verifyGoogleToken;
- try {
-  assert.equal((await access.verifiedBinding({userId,sessionId},{token,nonce},fx.deps)).status,'approved');
-  const corrupt=signed+'.'+Buffer.alloc(256).toString('base64url');
-  await assert.rejects(access.verifiedBinding({userId,sessionId},{token:corrupt,nonce},fx.deps),e=>e.status===403);
- } finally {OAuth2Client.prototype.getFederatedSignonCertsAsync=previous;}
 });
 test('IP rate keys normalize IPv4-mapped IPv6 and IPv6 spellings',()=>{
  assert.equal(access.canonicalIp('::ffff:127.0.0.1'),access.canonicalIp('127.0.0.1'));

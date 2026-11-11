@@ -45,6 +45,9 @@ services:
       HOMEPLANNER_MAIL_DATABASE_URL_FILE: /run/secrets/mail_database_url
       HOMEPLANNER_ACCESS_RATE_KEY_FILE: /run/secrets/access_rate_key
       HOMEPLANNER_TRUSTED_PROXY_IP: ${HOMEPLANNER_TRUSTED_PROXY_IP:-}
+      # Caddy's network. The app always excludes the gateway, network/broadcast and its own addresses.
+      HOMEPLANNER_TRUSTED_PROXY_CIDR: ${HOMEPLANNER_TRUSTED_PROXY_CIDR:-172.20.0.0/16}
+      HOMEPLANNER_TRUSTED_PROXY_EXCLUDE: ${HOMEPLANNER_TRUSTED_PROXY_EXCLUDE:-}
       HOMEPLANNER_MAIL_ENABLED: '0'
       HOMEPLANNER_AUTH_SECRET_FILE: /run/secrets/auth_secret
       HOMEPLANNER_CSRF_SECRET_FILE: /run/secrets/csrf_secret
