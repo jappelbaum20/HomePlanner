@@ -1,5 +1,6 @@
 -- Additive access foundation. Provision NOLOGIN roles hp_access_public and
--- hp_mail_worker before applying. No enforcement is activated by this file.
+-- hp_mail_worker before applying. WARNING: enforcement takes effect on commit (the replaced
+-- assert_actor and the RESTRICTIVE policies on designs and photos); the owner seed below must exist.
 SET ROLE hp_auth_owner;
 CREATE FUNCTION hp_auth.access_revoke_sessions(p_user uuid) RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
