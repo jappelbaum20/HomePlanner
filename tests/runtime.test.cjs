@@ -203,7 +203,7 @@ test('pending sessions reach status and bootstrap, but private pages and APIs fa
   assert.equal((await request(port,'/index.html')).headers.location,'/');
 });
 
-test('public request is disabled without configured mail and is bounded before dispatch', async t => {
+test('public request is disabled without a trusted ingress address (mail is optional) and is bounded before dispatch', async t => {
   let calls=0;
   const handler=async (_req,res)=>{calls++;res.status(202).json({status:'recorded'});};
   const off=await fixture(t, integrations({handlers:{accessRequest:handler},requestsAvailable:false}));

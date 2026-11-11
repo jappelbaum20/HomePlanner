@@ -41,6 +41,9 @@ function trustedClientIp(req, proxyIp) {
   if (typeof forwarded !== 'string' || forwarded.includes(',') || forwarded.trim() !== forwarded) throw Error('Invalid ingress address');
   return canonicalIp(forwarded);
 }
+// Access requests are recorded (and shown in the owner's admin queue) whenever a trusted ingress
+// address is configured for rate limiting. Mail is an optional notification add-on only.
+function accessRequestsAvailable({ proxyIp } = {}) { return !!proxyIp; }
 function databasePair(auth, app) {
   const a = new URL(auth), b = new URL(app);
   if (![a, b].every(u => ['postgres:', 'postgresql:'].includes(u.protocol) && u.username && u.password && u.hostname && u.pathname.length > 1) ||
@@ -143,7 +146,8 @@ async function createComposition({ env = process.env, safety, PoolClass = Pool }
     if (providerKey) process.env.OPENAI_API_KEY = providerKey;
     const integrations = await createIntegrations({ origin, authPool, appPool, publicPool, rateKey, authSecret, csrfSecret, googleClientId: env.GOOGLE_OAUTH_CLIENT_ID,
       googleClientSecret, photoHandlers, photoRecovery: recovery, photoReady: photos.photoReady, close,
-      requestsAvailable: !!transport && !!proxyIp, getTrustedClientIp: req => trustedClientIp(req, proxyIp) });
+      requestsAvailable: accessRequestsAvailable({ proxyIp }), getTrustedClientIp: req => trustedClientIp(req, proxyIp) });
+    if (!transport) console.log('mail notifications disabled; access requests are recorded for admin review only');
     if (transport) {
       const tick = () => { if (!mailTask) { mailTask = worker.runOnce().catch(() => {}).finally(() => { mailTask = null; }); } };
       timer = setInterval(tick, 15000); timer.unref(); tick();
@@ -156,4 +160,4 @@ async function createComposition({ env = process.env, safety, PoolClass = Pool }
     throw error;
   }
 }
-module.exports = { createComposition, readSetting, privateFileSetting, trustedClientIp, databasePair, requireDatabaseUrl, assertVolumeLock, maintenanceRole };
+module.exports = { createComposition, accessRequestsAvailable, readSetting, privateFileSetting, trustedClientIp, databasePair, requireDatabaseUrl, assertVolumeLock, maintenanceRole };

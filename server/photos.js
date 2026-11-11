@@ -149,17 +149,22 @@ function createDownloadHandler(deps) {
     return { bytes, mime: photo.mime };
     }
     if (typeof ctx.backend.withPhotoRead === 'function') {
-      return ctx.backend.withPhotoRead(designId,photoId,async photo => {
-        const result = await read(photo);
-        res.setHeader('Content-Type', result.mime); res.setHeader('Content-Disposition', 'inline'); res.status(200);
-        // Keep the entitlement transaction until completion or disconnect.
-        // Pipeline respects backpressure and destroys both ends on failure.
-        const chunks = function* () {
-          for (let offset=0; offset<result.bytes.length; offset+=65536)
-            yield result.bytes.subarray(offset,offset+65536);
-        };
-        await pipeline(Readable.from(chunks()), res, { signal: AbortSignal.timeout(30000) });
-      });
+      // Authorization, the metadata lookup and the (fully buffered) file read happen inside the
+      // short transaction. It is committed and its pooled connection released BEFORE any byte is
+      // sent, so slow clients cannot starve the pool (size 5, 5 s acquire wait).
+      // Revocation semantics: a revoke committed after this point does not cut off a download
+      // that is already streaming; at most that one in-flight response (bounded by the 30 s
+      // limit below) may complete. Every new request re-checks approval.
+      const result = await ctx.backend.withPhotoRead(designId,photoId,photo => read(photo));
+      if (res.destroyed || res.writableEnded) return;
+      res.setHeader('Content-Type', result.mime); res.setHeader('Content-Disposition', 'inline'); res.status(200);
+      // Pipeline respects backpressure and destroys both ends on failure.
+      const chunks = function* () {
+        for (let offset=0; offset<result.bytes.length; offset+=65536)
+          yield result.bytes.subarray(offset,offset+65536);
+      };
+      await pipeline(Readable.from(chunks()), res, { signal: AbortSignal.timeout(30000) });
+      return;
     }
     return read(await ctx.backend.photo(ctx,designId,photoId));
   }, deps);
