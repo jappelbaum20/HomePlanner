@@ -60,27 +60,39 @@ function createHandler(deps) { return wrap(async req => {
     if (reservation.status === 'succeeded') return sendOutcome(reservation.result);
     fail(409, 'request_pending', 'This request cannot be retried automatically.');
   }
-  // Fence dispatch and settlement in a single transaction after reservation.
-  async function dispatchProtected(backend = ctx.backend) {
-  const finish = (status, cost, result) => backend.rpc('hp_finalize_usage', { p_user_id: ctx.userId, p_reservation_id: reservation.reservationId, p_status: status, p_actual_micros: cost, p_result: result });
+  // The reservation above is already durable. The provider call (up to 25 s) runs OUTSIDE any
+  // database transaction: approval is re-checked in one short transaction before dispatch and the
+  // outcome is settled in a second short transaction afterwards, so no pooled connection or
+  // session/entitlement row lock is held while waiting for the provider.
+  const protectedRun = work => typeof ctx.backend.withApproved === 'function' ? ctx.backend.withApproved(work) : work(ctx.backend);
+  const finishWith = (backend, status, cost, result) => backend.rpc('hp_finalize_usage', { p_user_id: ctx.userId, p_reservation_id: reservation.reservationId, p_status: status, p_actual_micros: cost, p_result: result });
+  // Settle in one short protected transaction. If it cannot commit (for example access was revoked
+  // meanwhile, so the actor check rejects finalization too), try once to record the call as
+  // ambiguous and rethrow; an unsettled reservation stays 'reserved' and is never retried.
+  async function settle(status, cost, buildResult) {
+    try { return await protectedRun(async backend => finishWith(backend, status, cost, buildResult ? await buildResult(backend) : null)); }
+    catch (error) {
+      if (status === 'succeeded') await finishWith(ctx.backend, 'ambiguous', null, null).catch(() => {});
+      throw error;
+    }
+  }
+  await protectedRun(async () => true); // Denial here means dispatch never starts.
   let answer;
   try { answer = await provider.generateShelfProposal({ model: model.id, shelf: body.shelf, prompt: body.prompt, maxOutputTokens: config.limits.maxOutputTokens }); }
-  catch { await finish('ambiguous', null, null); return { failure: 'provider_unavailable' }; }
+  catch { await settle('ambiguous', null, null); return fail(503, 'provider_unavailable', 'The proposal request could not be completed.'); }
   const cost = actualCost(model, answer?.usage, config.limits.maxOutputTokens);
-  if (cost === null || cost > reserved) { await finish('ambiguous', null, null); return { failure: 'provider_unavailable' }; }
-  let outcome = { kind: 'invalid' };
-  const latest = await backend.get(ctx, body.designId);
-  if (!matchingShelf(latest, body)) outcome = { kind: 'stale' };
-  else if (safeCandidate(answer.candidate, body.shelf)) {
-    const proposal = { proposalId: randomUUID(), baseRevision: body.baseRevision, baseHash: body.baseHash, shelf: answer.candidate.shelf,
-      summary: answer.candidate.summary, expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString() };
-    if (validate('proposal', proposal).valid && Buffer.byteLength(JSON.stringify({ kind: 'ok', proposal })) < 64000) outcome = { kind: 'ok', proposal };
-  }
-  const finalized = await finish('succeeded', cost, outcome);
-  return { outcome: finalized?.result };
-  }
-  const completed = await (typeof ctx.backend.withApproved === 'function' ? ctx.backend.withApproved(dispatchProtected) : dispatchProtected());
-  if (completed.failure) fail(503, 'provider_unavailable', 'The proposal request could not be completed.');
-  return sendOutcome(completed.outcome);
+  if (cost === null || cost > reserved) { await settle('ambiguous', null, null); fail(503, 'provider_unavailable', 'The proposal request could not be completed.'); }
+  const finalized = await settle('succeeded', cost, async backend => {
+    let outcome = { kind: 'invalid' };
+    const latest = await backend.get(ctx, body.designId);
+    if (!matchingShelf(latest, body)) outcome = { kind: 'stale' };
+    else if (safeCandidate(answer.candidate, body.shelf)) {
+      const proposal = { proposalId: randomUUID(), baseRevision: body.baseRevision, baseHash: body.baseHash, shelf: answer.candidate.shelf,
+        summary: answer.candidate.summary, expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString() };
+      if (validate('proposal', proposal).valid && Buffer.byteLength(JSON.stringify({ kind: 'ok', proposal })) < 64000) outcome = { kind: 'ok', proposal };
+    }
+    return outcome;
+  });
+  return sendOutcome(finalized?.result);
 }, deps); }
 module.exports = { createHandler, hash, matchingShelf, safeCandidate };
