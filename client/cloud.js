@@ -80,6 +80,19 @@ window.HomePlannerCloud = (() => {
       return blob;
     } finally { pending.delete(controller); }
   }
+  /* Promise.all semantics with at most `limit` tasks in flight; results keep input order, the first failure rejects and stops new starts. */
+  function mapLimit(items, limit, fn) {
+    const list = Array.from(items), results = new Array(list.length), width = Math.max(1, Math.min(limit | 0 || 1, list.length));
+    let next = 0, failed = false;
+    const worker = async () => {
+      while (!failed && next < list.length) {
+        const i = next++;
+        try { results[i] = await fn(list[i], i); } catch (error) { failed = true; throw error; }
+      }
+    };
+    return Promise.all(Array.from({ length: width }, worker)).then(() => results);
+  }
+  const photos = (designId, ids) => mapLimit(ids, 4, id => photo(designId, id));
   async function uploadPhoto(designId, sourceId, blob, guard) {
     const stamp = snapshot();
     const check = () => { if (!isCurrent(stamp) || !guard()) throw Error('Account, design or edits changed; upload cancelled.'); };
@@ -240,6 +253,6 @@ window.HomePlannerCloud = (() => {
     current = { id: design.id, kind: design.kind, title: design.title, revision: design.revision };
   }
   function clearCurrent() { cancelPending(); current = null; }
-  return { init, signIn, signOut, list, open, create, save, remove, request, photo, uploadPhoto, snapshot, isCurrent, verificationStamp, select, clearCurrent,
+  return { init, signIn, signOut, list, open, create, save, remove, request, photo, photos, mapLimit, uploadPhoto, snapshot, isCurrent, verificationStamp, select, clearCurrent,
     subscribe: fn => { listeners.add(fn); return () => listeners.delete(fn); } };
 })();
