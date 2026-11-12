@@ -81,6 +81,17 @@
     });
     return out;
   }
+  // What 3D draws. The SÆTTER is a type case: every compartment is closed by full-height walls and open at the
+  // front, so its inferred short separators are drawn as one full divider. Cut list and drawing keep boards().
+  function visualBoards(s) {
+    const all = boards(s).filter(b => b.w > 0 && b.h > 0);
+    if (s.template !== 'saetter3') return all;
+    return all.filter(b => !/T$/.test(b.id)).map(b => {
+      if (b.kind !== 'Separator') return b;
+      const row = Number(b.id.slice(1).split(".")[0]), h = round(s.levels[row].y - b.y);
+      return { ...b, kind: 'Divider', h, length: h };
+    });
+  }
   function validate(s) {
     const errors = [], warnings = [], t = s.thickness;
     if (!(s.width >= 20 && s.width <= 1000 && s.height >= 20 && s.height <= 800 && s.depth >= 10 && s.depth <= 100 && t >= .9 && t <= 6))
@@ -156,7 +167,7 @@
     });
     return [...new Set(errors)];
   }
-  const api = { normalize, preset, saetter3, saetterVariant, SAETTER_VARIANTS, boards, validate, resize, dividerPosition, placement, fit, round };
+  const api = { normalize, preset, saetter3, saetterVariant, SAETTER_VARIANTS, boards, visualBoards, validate, resize, dividerPosition, placement, fit, round };
   root.Bookshelf = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

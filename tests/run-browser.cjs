@@ -10,6 +10,7 @@
  * Playwright is not a project dependency (local use only, no CI job). It is resolved from
  * node_modules, then $PLAYWRIGHT_DIR, then the npx cache. To get it once:
  *   npx -y playwright --version
+ * Docker: mcr.microsoft.com/playwright image with BROWSER_CHANNEL=bundled CI_DOCKER=1 (adds --no-sandbox); run as a normal user with --ipc=host.
  * Browser: system Chrome (channel "chrome"); override with BROWSER_CHANNEL=msedge or BROWSER_CHANNEL=bundled.
  * Routes: / and /home -> index.html, /bookshelf -> bookshelf.html, everything else is a file in dist-vps.
  * Unmocked /api/* requests answer 404 JSON; suites mock the ones they need with page.route.
@@ -69,7 +70,7 @@ async function main() {
       const failed = list.filter(x => x && typeof x === 'object' && x.pass === false);
       if (failed.length) { status = 'FAIL'; detail = failed.map(x => x.label).join(' | '); }
       else detail = list.length ? `${list.length} checks` : out && out.checks !== undefined ? `${out.checks} checks` : 'ok';
-    } catch (e) { status = 'FAIL'; detail = String(e.message || e).split('\n')[0].slice(0, 300); }
+    } catch (e) { if (process.env.DEBUG_STACK) console.error(e.stack); status = 'FAIL'; detail = String(e.message || e).split('\n')[0].slice(0, 300); }
     await context.close().catch(() => {});
     results.push({ file, status, detail, ms: Date.now() - started });
     console.log(`${status.padEnd(4)} ${file}  ${(Date.now() - started) / 1000}s  ${detail}`);

@@ -7,7 +7,9 @@ window.BookshelfBuilder = (() => {
   const mm = n => fmt(n * 10);
   const walls = { n: 'North · top', e: 'East · right', s: 'South · bottom', w: 'West · left' };
   let host, api, draft, visible = false, scene3d, row = 0, view = 'close', variant = null, showSizes = true, history = [], editing = null, interactionGeneration = 0, proposal = null;
-  const Scene = window.BookshelfScene;
+  // Items to compare against are a session-only aid: never saved, cleared whenever another design is opened.
+  let items = [], selected = null, person = false, itemsOn = null, itemSeq = 0;
+  const Scene = window.BookshelfScene, Props = window.BookshelfProps;
   // Comparison preview of another real SÆTTER size. Never saved, never used for fit checks.
   const displayDesign = () => draft.tab === 'saetter' && variant && variant !== '3' ? B.saetterVariant(variant) : draft.design;
   const room = () => api.rooms().find(r => r.id === draft.target.roomId) || api.rooms()[0];
@@ -20,6 +22,9 @@ window.BookshelfBuilder = (() => {
   };
   const field = (name, label, value, extra = '') => `<label class="field"><span>${label}</span><input data-bs="${name}" value="${esc(value)}" ${extra}></label>`;
   const numeric = (name, label, value, min = 0, max = 1000) => field(name, label, value, `type="number" step="any" min="${min}" max="${max}" required`);
+  const PROP_ICONS = { mug: `<path d="M6 9h15v13a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4z"/><path d="M21 12h3a3 3 0 0 1 0 8h-3"/>`, cup: `<path d="M5 14h18v3a7 7 0 0 1-7 7h-4a7 7 0 0 1-7-7z"/><path d="M23 15h2a3 3 0 0 1 0 6h-2.5"/><path d="M3 27h24"/>`, wine: `<path d="M9 4h12c0 7-2 11-6 11S9 11 9 4z"/><path d="M15 15v11M10 27h10"/>`, water: `<path d="M8 6h16l-2 20H10z"/><path d="M9 13h14"/>`, book: `<path d="M9 4h14v24H9z"/><path d="M9 9h14M12 4v24"/>`, plant: `<path d="M10 20h12l-2 8h-8z"/><path d="M16 20c0-6-1-9-5-12 4 0 6 2 5 8 0-5 2-8 6-9-1 5-2 9-6 13"/>`, vase: `<path d="M13 4h6l-1 5c5 3 6 10 4 16H10c-2-6-1-13 4-16z"/>`, person: `<path d="M10 28V15c0-3 2-5 6-5s6 2 6 5v13"/><circle cx="16" cy="7" r="3.5"/>` };
+  const propSvg = k => `<svg viewBox="0 0 32 32" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PROP_ICONS[k]}</svg>`;
+  function clearScene() { items = []; selected = null; person = false; itemsOn = null; }
   function checkpoint() { history.push(JSON.stringify(draft)); if (history.length > 50) history.shift(); }
   function persist(immediate = false) { return api.draft(JSON.parse(JSON.stringify(draft)), immediate); }
   const withoutAlternate = d => { const copy = JSON.parse(JSON.stringify(d)); delete copy.alternate; return copy; };
@@ -58,7 +63,7 @@ window.BookshelfBuilder = (() => {
       }
     } else draft = previous || fresh();
     prepare();
-    row = 0; history = []; editing = null; visible = true;
+    row = 0; history = []; editing = null; visible = true; clearScene();
     api.show(true); host.hidden = false; render(); persist();
     host.querySelector('h1').focus();
   }
@@ -68,7 +73,7 @@ window.BookshelfBuilder = (() => {
     const next = draft.alternate?.tab === tab ? withoutAlternate(draft.alternate) : fresh(tab);
     if (standalone()) next.wall = JSON.parse(JSON.stringify(draft.wall));
     variant = null; draft = next; draft.alternate = previous; prepare();
-    row = 0; history = []; editing = null; persist(true); render();
+    row = 0; history = []; editing = null; clearScene(); persist(true); render();
     host.querySelector(`#bs-tab-${tab}`).focus();
   }
   function close() { interactionGeneration++; proposal = null; persist(true); visible = false; host.hidden = true; api.show(false); }
@@ -129,14 +134,14 @@ window.BookshelfBuilder = (() => {
         <p class="note bs-edit-feedback" id="bsEditFeedback" role="status"></p><div id="bsRowEditor"></div>
       </aside><div class="bs-preview"><div class="bs-preview-head"><h2 id="bsPreviewTitle"></h2><div class="btnrow"><button class="btn light small" data-bs-action="undo" ${history.length ? '' : 'disabled'}>Undo</button><button class="btn light small" data-bs-action="resetCamera">Reset 3D view</button></div></div>
         <div class="bs-viewbar"><div class="bs-seg" role="group" aria-label="3D view"><button type="button" class="btn light small" data-bs-view="close" aria-pressed="true">Close-up</button><button type="button" class="btn light small" data-bs-view="wall" aria-pressed="false">Whole wall</button></div><label class="bs-switch"><input type="checkbox" data-bs-sizes ${showSizes ? 'checked' : ''}> Show sizes</label></div>
-        <div id="bs3d" aria-label="Orbitable 3D bookshelf against the selected wall"></div><div class="bs-size" id="bsSize" role="group" aria-label="Size">${draft.tab === 'saetter' ? `<span class="bs-size-label">Compare sizes <em class="bs-badge">Comparison only · not saved</em></span><span class="bs-chips">${B.SAETTER_VARIANTS.map(v => `<button type="button" class="btn light small" data-bs-variant="${v.id}" aria-pressed="false">${v.label}</button>`).join('')}</span>` : `<span class="bs-size-label">Size</span><span class="bs-chips">${[-10, -5, 5, 10].map(p => `<button type="button" class="btn light small" data-bs-size="${p}" aria-label="Make the bookshelf ${Math.abs(p)} percent ${p < 0 ? 'smaller' : 'bigger'}">${p < 0 ? '−' : '+'}${Math.abs(p)}%</button>`).join('')}</span>`}</div>
+        <div id="bs3d" aria-label="Orbitable 3D bookshelf against the selected wall"></div><div class="bs-props" id="bsProps" role="group" aria-label="Add something to compare"><span class="bs-size-label">Add something to compare</span><div class="bs-palette">${Props ? Props.KINDS.map(k => `<button type="button" class="bs-prop" data-bs-prop="${k}" aria-pressed="${selected === k}" aria-label="${Props.PROPS[k].name}, ${Props.PROPS[k].h} cm tall">${propSvg(k)}<span>${Props.PROPS[k].name}</span></button>`).join('') : ''}<button type="button" class="bs-prop" data-bs-person aria-pressed="${person}" aria-label="Person, 175 cm">${propSvg('person')}<span>Person 175 cm</span></button></div><div class="bs-props-foot"><p class="bs-prop-help" id="bsPropHelp" role="status"></p><button type="button" class="btn light small" data-bs-action="clearItems">Clear items</button></div></div><div class="bs-size" id="bsSize" role="group" aria-label="Size">${draft.tab === 'saetter' ? `<span class="bs-size-label">Compare sizes <em class="bs-badge">Comparison only · not saved</em></span><span class="bs-chips">${B.SAETTER_VARIANTS.map(v => `<button type="button" class="btn light small" data-bs-variant="${v.id}" aria-pressed="false">${v.label}</button>`).join('')}</span>` : `<span class="bs-size-label">Size</span><span class="bs-chips">${[-10, -5, 5, 10].map(p => `<button type="button" class="btn light small" data-bs-size="${p}" aria-label="Make the bookshelf ${Math.abs(p)} percent ${p < 0 ? 'smaller' : 'bigger'}">${p < 0 ? '−' : '+'}${Math.abs(p)}%</button>`).join('')}</span>`}</div>
         <p class="bs-readout" id="bsReadout" role="status"></p><p class="bs-note-grey" id="bsPreviewNote"></p>
-        <p class="note">Drag to orbit · scroll to zoom · click a board to edit its level</p>
+        <p class="note">Drag to orbit · scroll to zoom · click a board to edit its level, or pick an item above and click to place it</p>
         <div id="bsDrawing" class="bs-drawing"></div><div id="bsProblems" aria-live="polite"></div>
       </div><aside class="bs-output"><h2>3. ${standalone() ? 'Save design' : 'Save & place'}</h2>${standalone() ? '' : `<label class="field"><span>Saved bookshelf designs</span><select data-bs="saved"><option value="">Select a design…</option>${api.pieces().filter(p => p.shelfDesign).map(p => `<option value="${esc(p.id)}" ${p.id === draft.pieceId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>`}
         <p class="note" id="bsSaveNote"></p><div class="bs-save-actions"><button class="btn" data-bs-action="save">Save design</button>${standalone() ? '' : `<button class="btn mark" data-bs-action="place">Save & ${draft.itemId ? 'move placement' : 'place on wall'}</button><button class="btn light" data-bs-action="standaloneCopy">Copy to standalone bookshelf</button>`}<button class="btn light" data-bs-action="copy">Make a copy</button><button class="btn light" data-bs-action="new">New design</button></div>
         <h3>AI shelf edit</h3><p class="note">Only the current shelf geometry and your prompt are sent for a proposal. Nothing changes until you apply it.</p><button class="btn light" data-bs-action="propose" ${api.canPropose?.() ? '' : 'disabled'}>Request AI preview</button><p class="note" id="bsProposalStatus" role="status">${api.canPropose?.() ? '' : 'AI edits are unavailable until sign-in, model configuration and shared validation are ready.'}</p><div id="bsProposal"></div>
-        <h3>Workshop plan</h3><p class="note">${s.template === 'saetter3' ? 'Inferred square-cut shelves, back and paired short separators. The drawing and list use the same approximate geometry as 3D.' : 'Square-cut boards, full depth. Dividers fit between horizontal shelves with butt joints. The drawing and list use the same geometry as 3D.'}</p>
+        <h3>Workshop plan</h3><p class="note">${s.template === 'saetter3' ? 'Inferred square-cut shelves, back and paired short separators. The 3D view shows every compartment closed by full-height walls, as on the product; the drawing and list keep the inferred short separators.' : 'Square-cut boards, full depth. Dividers fit between horizontal shelves with butt joints. The drawing and list use the same geometry as 3D.'}</p>
         <div id="bsCutSummary"></div><div class="bs-table-wrap"><table class="bs-cut"><thead><tr><th>Board</th><th>Length × depth × thickness, mm</th></tr></thead><tbody id="bsCutList"></tbody></table></div>
         <div class="bs-save-actions"><button class="btn light" data-bs-action="csv">Download cut list</button><button class="btn light" data-bs-action="plan">Download build plan</button><button class="btn light" data-bs-action="print">Print / save PDF</button><button class="btn light" data-bs-action="json">Export design JSON</button></div>
         <p class="note">${api.cloudWorkspace?.() ? 'Cloud edits stay in this tab until saved through Private designs. Export a backup before leaving.' : standalone() ? 'Drafts autosave in this browser. Use Open local design to reopen saved shelves, or export JSON as a backup.' : 'Drafts autosave in this browser. Saved designs are in My pieces, versions, and full-plan backups.'}</p>
@@ -210,11 +215,49 @@ window.BookshelfBuilder = (() => {
       try {
         if (!window.THREE || !window.HouseModels || !THREE.OrbitControls || !Scene) throw Error('3D libraries unavailable');
         HouseModels.init(THREE);
-        scene3d = Scene.create({ THREE, el, onPick: bay => { row = bay; refresh(); } });
+        scene3d = Scene.create({ THREE, el, onPick: onScenePick });
         new ResizeObserver(() => resize3D()).observe(host);
       } catch (e) { el.innerHTML = '<p class="empty">3D needs WebGL and the online 3D libraries. You can still edit the dimensioned drawing.</p>'; return; }
     }
-    scene3d.update({ design: displayDesign(), wall: getWall(), target: draft.target, color: draft.color, view, showSizes, visible: () => visible }, reset, el);
+    syncItems(); paletteState();
+    scene3d.update({ design: displayDesign(), wall: getWall(), target: draft.target, color: draft.color, view, showSizes, props: items, person, visible: () => visible }, reset, el);
+  }
+
+  // ---- items to compare against ----
+  const itemName = k => Props.PROPS[k].name;
+  function help(text, warn) { const el = host && host.querySelector('#bsPropHelp'); if (!el) return; el.textContent = text; el.classList.toggle('warn', !!warn); }
+  function paletteState() {
+    if (!Props || !host) return;
+    host.querySelectorAll('[data-bs-prop]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.bsProp === selected)));
+    const pb = host.querySelector('[data-bs-person]'); if (pb) pb.setAttribute('aria-pressed', String(person));
+    const clear = host.querySelector('[data-bs-action="clearItems"]'); if (clear) clear.disabled = !items.length && !person;
+    const el = host.querySelector('#bs3d'); if (el) el.classList.toggle('placing', !!selected);
+    const msg = host.querySelector('#bsPropHelp');
+    if (msg && !msg.textContent) help('Pick an item, then click a shelf or compartment. Click a placed item to remove it.');
+  }
+  // Items keep their real size when the furniture changes: they move with it, or are removed if nothing carries them.
+  function syncItems() {
+    if (!Props) return;
+    const d = displayDesign(), key = JSON.stringify(d);
+    if (items.length && itemsOn && itemsOn.key !== key) {
+      const r = Props.resnap(d, items, itemsOn.design); items = r.items;
+      if (r.dropped.length) { const t = `${r.dropped.length} item${r.dropped.length > 1 ? 's' : ''} no longer fit and ${r.dropped.length > 1 ? 'were' : 'was'} removed.`; help(t, true); api.toast(t); }
+    }
+    itemsOn = { key, design: d };
+    if (window.__bsDebug) window.__bsDebug.items = items.map(i => ({ kind: i.kind, x: i.x, y: i.y, z: i.z, w: i.w, d: i.d, h: i.h, level: i.level }));
+  }
+  function onScenePick(info) {
+    if (info.propId) {
+      const it = items.find(i => i.id === info.propId); if (!it) return;
+      items = items.filter(i => i.id !== it.id); update3D(false); help(`${itemName(it.kind)} removed.`); return;
+    }
+    if (!selected || !Props) { row = info.bay; refresh(); return; }
+    if (items.length >= Props.MAX_ITEMS) { help(Props.MESSAGES.limit, true); return api.toast(Props.MESSAGES.limit); }
+    const r = Props.fitProp(displayDesign(), selected, info.local, items);
+    if (!r.ok) { help(r.message, true); return api.toast(r.message); }
+    const id = `i${++itemSeq}`;
+    items = items.concat([{ ...r, id, color: Props.BOOK_COLORS[itemSeq % Props.BOOK_COLORS.length] }]);
+    update3D(false); help(`${itemName(selected)} placed (${Props.PROPS[selected].w} × ${Props.PROPS[selected].h} cm). Click it to remove it.`);
   }
   function resize3D() { if (scene3d && visible) scene3d.refit(); }
   function changed(full = false, reframe = false) { persist(true); if (full) render(); else { refresh(); update3D(reframe); } }
@@ -281,6 +324,8 @@ window.BookshelfBuilder = (() => {
     host.addEventListener('click', async e => {
       const t = e.target.closest('button, [data-bs-board]'); if (!t) return;
       if (t.dataset.bsTab) return switchTab(t.dataset.bsTab);
+      if (t.dataset.bsProp) { selected = selected === t.dataset.bsProp ? null : t.dataset.bsProp; help(selected ? `${itemName(selected)} selected: click a shelf or compartment to place it.` : 'Pick an item, then click a shelf or compartment. Click a placed item to remove it.'); return paletteState(); }
+      if (t.dataset.bsPerson !== undefined) { person = !person; if (person) selected = null; help(person ? 'A 175 cm person stands next to the furniture.' : 'Person hidden.'); update3D(true); return; }
       if (t.dataset.bsView) { view = t.dataset.bsView; refresh(); return update3D(true); }
       if (t.dataset.bsVariant) { variant = t.dataset.bsVariant === '3' ? null : t.dataset.bsVariant; refresh(); return update3D(true); }
       if (t.dataset.bsSize) {
@@ -323,6 +368,7 @@ window.BookshelfBuilder = (() => {
       }
       if (act === 'close') return close();
       if (act === 'standaloneCopy') return api.copyStandalone(JSON.parse(JSON.stringify(draft)), getWall());
+      if (act === 'clearItems') { items = []; person = false; selected = null; help('All items cleared.'); update3D(true); return; }
       if (act === 'resetCamera') return update3D(true);
       if (act === 'undo') { if (history.length) { draft = JSON.parse(history.pop()); changed(true); } return; }
       if (act === 'new') { if (standalone() && api.detach && !api.detach()) return; variant = null; checkpoint(); const other = draft.alternate, wall = draft.wall; draft = fresh(draft.tab); if (standalone()) draft.wall = wall; if (other) draft.alternate = other; row = 0; changed(true); host.querySelector('[data-bs="name"]').focus(); return; }
@@ -364,7 +410,7 @@ window.BookshelfBuilder = (() => {
       window.addEventListener('pointermove', move); window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end); e.preventDefault();
     });
     return { open, close, isOpen: () => visible, updateStorage: () => { if (visible) refresh(); },
-      reset: () => { variant = null; interactionGeneration++; proposal = null; history = []; editing = null; draft = null; visible = false; host.hidden = true; host.replaceChildren(); },
+      reset: () => { variant = null; clearScene(); interactionGeneration++; proposal = null; history = []; editing = null; draft = null; visible = false; host.hidden = true; host.replaceChildren(); },
       openShelf: (design, name) => { open(); if (!visible) return; variant = null; draft.design = JSON.parse(JSON.stringify(design)); draft.name = name || 'Bookshelf'; draft.tab = design.template === 'saetter3' ? 'saetter' : 'custom'; history = []; persist(true); render(); },
       shelf: () => draft ? JSON.parse(JSON.stringify(draft.design)) : null,
       currentDraft: () => draft ? JSON.parse(JSON.stringify(draft)) : null,

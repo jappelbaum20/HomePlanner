@@ -8,6 +8,7 @@
 !/models3d.js
 !/bookshelf.js
 !/bookshelf-scene.js
+!/bookshelf-props.js
 !/bookshelf-builder.js
 !/starter-data.js
 !/admin.html

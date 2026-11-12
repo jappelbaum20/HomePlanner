@@ -78,18 +78,29 @@
   function create(opts) {
     const { THREE, onPick } = opts; let el = opts.el; // the host re-renders its markup, so update() hands over the current element
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); renderer.outputEncoding = THREE.sRGBEncoding;
+    // Phone budget: pixel ratio and shadow map are capped; a weak GPU (small max texture) drops shadows altogether.
+    const small = Math.min(window.innerWidth || 1024, window.innerHeight || 1024) < 700 || (window.matchMedia && matchMedia('(pointer: coarse)').matches);
+    const quality = { pixelRatio: Math.min(window.devicePixelRatio || 1, small ? 1.25 : 1.5), shadowMapSize: small ? 1024 : 2048, shadows: renderer.capabilities.maxTextureSize >= 4096 };
+    renderer.setPixelRatio(quality.pixelRatio); renderer.outputEncoding = THREE.sRGBEncoding;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    if (quality.shadows) { renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; }
     const scene = new THREE.Scene(); scene.background = new THREE.Color('#E8E9E4');
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x9D8671, .9));
-    const sun = new THREE.DirectionalLight(0xffffff, 1); sun.position.set(100, 400, 500); scene.add(sun);
+    scene.add(new THREE.HemisphereLight(0xfff6ea, 0x8a7a68, .62));
+    // Warm sun from the front left and above, like a window beside the shelf.
+    const sun = new THREE.DirectionalLight(0xfff1dc, 1.05); sun.position.set(-160, 300, 380); scene.add(sun, sun.target);
+    if (quality.shadows) { sun.castShadow = true; sun.shadow.mapSize.set(quality.shadowMapSize, quality.shadowMapSize); sun.shadow.bias = -.0005; sun.shadow.normalBias = .35; sun.shadow.radius = 4; }
     const camera = new THREE.PerspectiveCamera(FOV, 1, 1, 20000);
     const controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.maxPolarAngle = Math.PI * .85;
     controls.minAzimuthAngle = -rad(MAX_AZIMUTH); controls.maxAzimuthAngle = rad(MAX_AZIMUTH);
-    const rig = { renderer, scene, camera, controls, group: null, boards: [], labels: [], state: null, userMoved: false };
-    const debug = window.__bsDebug = { frames: 0, labels: [], view: 'close', fit: null, info: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles }) };
+    const rig = { renderer, scene, camera, controls, group: null, boards: [], furniture: [], propMeshes: [], frame: null, labels: [], state: null, userMoved: false };
+    const debug = window.__bsDebug = { frames: 0, labels: [], view: 'close', fit: null, quality, props: 0, person: false, info: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles }) };
     // Test hook: place the camera at an azimuth/elevation around the current target at the current distance.
     debug.orbit = (az, el = 10) => { const t = controls.target, d = camera.position.distanceTo(t), p = cameraPosition([t.x, t.y, t.z], d, clampAzimuth(az), el); camera.position.set(...p); controls.update(); request(300); };
+    // Test hook: client coordinates of a furniture-local point (cm) so a test can click a given compartment.
+    debug.screenOf = (x, y, z = 0) => { const f = rig.frame, v = new THREE.Vector3(f.offset + x, f.elev + y, f.gap + f.depth - z).project(camera), r = renderer.domElement.getBoundingClientRect(); return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; };
+    debug.realism = () => { const f = rig.furniture, mats = o => [].concat(o.material), g = rig.group, wall = g && g.children[0], floor = g && g.children[1], skirt = g && g.children[2];
+      return { shadowsOn: renderer.shadowMap.enabled, sunCasts: sun.castShadow, shadowMap: sun.shadow.mapSize.x, pixelRatio: renderer.getPixelRatio(), wallTextured: !!(wall && wall.material.map), wallReceives: !!(wall && wall.receiveShadow), floorTextured: !!(floor && floor.material.map), skirting: !!(skirt && skirt.geometry.parameters.height === 9), furnitureCasts: f.length > 0 && f.every(o => o.castShadow), furnitureTextured: f.length > 0 && f.every(o => mats(o).every(m => !!m.map)), sunColor: sun.color.getHexString() }; };
+    debug.propsInfo = () => rig.propMeshes.length;
     debug.projectLabels = () => rig.group ? rig.group.children.filter(o => o.isSprite).map(o => { const v = o.position.clone().project(camera), r = renderer.domElement.getBoundingClientRect(); return { key: o.userData.key, x: (v.x + 1) / 2 * r.width, y: (1 - v.y) / 2 * r.height, w: r.width, h: r.height }; }) : [];
     let raf = 0, keepUntil = 0;
     function frame() {
@@ -109,17 +120,24 @@
       if (!drag || Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 6) return;
       const rect = renderer.domElement.getBoundingClientRect(), ray = new THREE.Raycaster();
       ray.setFromCamera(new THREE.Vector2((e.clientX - rect.left) / rect.width * 2 - 1, -(e.clientY - rect.top) / rect.height * 2 + 1), camera);
-      const hit = ray.intersectObjects(rig.boards)[0];
-      if (hit && onPick) onPick(hit.object.userData.bay);
+      const hit = ray.intersectObjects(rig.propMeshes.concat(rig.furniture), false)[0];
+      if (!hit || !onPick) return;
+      if (hit.object.userData.propId) return onPick({ propId: hit.object.userData.propId });
+      const f = rig.frame, n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : null;
+      // Furniture-local point (cm): x from the left edge, y up from the bottom, z from the front face; z only for upward faces.
+      const local = { x: hit.point.x - f.offset, y: hit.point.y - f.elev, ...(n && n.y > .5 ? { z: f.gap + f.depth - hit.point.z } : {}) };
+      onPick({ bay: bayAt(local.y), local });
     });
+    function bayAt(y) { const lv = rig.frame.design.levels; let b = 0; lv.forEach((l, i) => { if (l.y <= y + .01 && i < lv.length - 1) b = i; }); return b; }
 
     function sprite(text) {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2), c = document.createElement('canvas'); c.width = 256 * dpr; c.height = 64 * dpr;
-      const g = c.getContext('2d'); g.scale(dpr, dpr); g.font = '700 42px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.lineJoin = 'round'; g.lineWidth = 10; g.strokeStyle = 'rgba(255,255,255,.95)'; g.strokeText(text, 128, 33); g.fillStyle = '#1D2B26'; g.fillText(text, 128, 33);
+      const dpr = Math.min(window.devicePixelRatio || 1, 2), font = '700 42px system-ui, sans-serif', m = document.createElement('canvas').getContext('2d'); m.font = font;
+      const cw = Math.max(256, Math.ceil(m.measureText(text).width + 28)), c = document.createElement('canvas'); c.width = cw * dpr; c.height = 64 * dpr; // long texts get a wider sprite, same letter size
+      const g = c.getContext('2d'); g.scale(dpr, dpr); g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.lineJoin = 'round'; g.lineWidth = 10; g.strokeStyle = 'rgba(255,255,255,.95)'; g.strokeText(text, cw / 2, 33); g.fillStyle = '#1D2B26'; g.fillText(text, cw / 2, 33);
       const tex = new THREE.CanvasTexture(c);
       const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false, sizeAttenuation: false, transparent: true });
-      const s = new THREE.Sprite(mat); const h = .1 * Math.tan(rad(FOV) / 2); s.scale.set(h * 4, h, 1); s.renderOrder = 999; s.raycast = () => {};
+      const s = new THREE.Sprite(mat); const h = .1 * Math.tan(rad(FOV) / 2); s.scale.set(h * cw / 64, h, 1); s.renderOrder = 999; s.raycast = () => {};
       return s;
     }
     function addLines(list, group) {
@@ -154,31 +172,63 @@
       const s = state.design, wall = state.wall, target = state.target, W = wall.width;
       const offset = wall.flip ? W - target.offset - s.width : target.offset;
       const g = rig.group = new THREE.Group(); scene.add(g);
-      const addBox = (w, h, d, x, y, z, color) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color })); m.position.set(x, y, z); g.add(m); return m; };
-      addBox(W, wall.height, 3, W / 2, wall.height / 2, -1.5, wall.color);
-      addBox(W + 50, 2, 150, W / 2, -1, 60, '#C9B497');
+      let personLabel = null;
+      const HMm = HM(), flat = (m, cast, recv = true) => { m.castShadow = cast; m.receiveShadow = recv; return m; };
+      const addBox = (w, h, d, x, y, z, color, material, cast = false) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material || new THREE.MeshStandardMaterial({ color })); m.position.set(x, y, z); flat(m, cast); g.add(m); return m; };
+      // Painted plaster wall (subtle texture), wooden floor and a skirting board along the wall base.
+      addBox(W, wall.height, 3, W / 2, wall.height / 2, -1.5, null, HMm.wallMaterial(wall.color, 'paint', W, wall.height));
+      addBox(W + 50, 2, 190, W / 2, -1, 80, null, HMm.floorMaterial('#CDB28F', 'wood', W + 50, 190));
+      const doors = wall.openings.filter(o => o.type === 'door').map(o => { const x = wall.flip ? W - o.offset - o.width : o.offset; return [x, x + o.width]; }).sort((a, b) => a[0] - b[0]);
+      if (target.elev < 10 && target.gap < 2) { doors.push([offset - .2, offset + s.width + .2]); doors.sort((a, b) => a[0] - b[0]); } // the furniture stands where the skirting would be
+      let sx = 0; const skirtMat = HMm.mat('#F3F1EA', { rough: .55 });
+      [...doors, [W, W]].forEach(([a, b]) => { if (a - sx > 1) addBox(a - sx, 9, 1.5, (sx + a) / 2, 4.5, .75, null, skirtMat, true); sx = Math.max(sx, b); });
       wall.openings.forEach(o => {
         const x = wall.flip ? W - o.offset - o.width : o.offset;
         addBox(o.width, o.height, 1, x + o.width / 2, o.sill + o.height / 2, .6, o.type === 'door' ? '#BFA98C' : '#C3DBE5');
         if (o.radiator) addBox(o.width * .9, Math.max(1, o.sill - 22), 12, x + o.width / 2, 10 + (o.sill - 22) / 2, 6, '#E8E9E5');
       });
-      const obj = HM().buildItem({ type: 'shelf', w: s.width, d: s.depth, h: s.height, color: state.color, shelfDesign: s, elev: target.elev }, { evening: false });
+      const obj = HMm.buildItem({ type: 'shelf', w: s.width, d: s.depth, h: s.height, color: state.color, shelfDesign: s, elev: target.elev }, { evening: false });
       obj.position.set(offset + s.width / 2, target.elev, target.gap + s.depth / 2); g.add(obj);
-      const parts = Bookshelf.boards(s).filter(b => b.w > 0 && b.h > 0);
-      rig.boards = obj.children.filter(o => o.isMesh && o.geometry?.type !== 'PlaneGeometry');
-      rig.boards.forEach((o, i) => { const b = parts[i]; if (b && b.kind !== 'Back') o.userData.bay = Number(b.id.slice(1).split('.')[0]) - 1; });
-      rig.boards = rig.boards.filter(o => Number.isInteger(o.userData.bay));
+      const parts = (Bookshelf.visualBoards || Bookshelf.boards)(s).filter(b => b.w > 0 && b.h > 0);
+      rig.furniture = obj.children.filter(o => o.isMesh && o.geometry?.type !== 'PlaneGeometry');
+      rig.furniture.forEach((o, i) => { const b = parts[i]; if (b && b.kind !== 'Back') o.userData.bay = Number(b.id.slice(1).split('.')[0]) - 1; });
+      rig.boards = rig.furniture.filter(o => Number.isInteger(o.userData.bay));
+      rig.frame = { offset, elev: target.elev, gap: target.gap, depth: s.depth, design: s };
       const box = { minX: offset, maxX: offset + s.width, minY: target.elev, maxY: target.elev + s.height, minZ: target.gap, maxZ: target.gap + s.depth };
-      let lines = state.showSizes ? dimensionLines(box) : [];
-      if (state.showSizes && state.view === 'wall') { // the furniture is small here: one summary label instead of three crowded ones
-        const mid = [(box.minX + box.maxX) / 2, box.maxY + 10, box.maxZ];
-        lines = wallLines({ width: W, height: wall.height }, box).concat([{ key: 'furniture', text: `${fmtCm(s.width).replace(' cm', '')} × ${fmtCm(s.height).replace(' cm', '')} × ${fmtCm(s.depth)}`, a: mid, b: mid, mid, tick: [0, 0, 0], noLine: true }]);
+      // Items to compare against, at true size, in furniture-local cm (x from the left, y up, z from the front).
+      rig.propMeshes = []; const sizes = []; debug.propBounds = sizes;
+      const P = window.BookshelfProps, placed = state.props || [];
+      const front = target.gap + s.depth;
+      if (P) placed.forEach(p => {
+        const m = P.make(THREE, p.kind, { rot: p.rot, color: p.color });
+        m.position.set(offset + p.x, target.elev + p.y, front - p.z);
+        m.traverse(o => { if (o.isMesh) { o.userData.propId = p.id; rig.propMeshes.push(o); } }); g.add(m); m.updateMatrixWorld(true);
+        const bb = new THREE.Box3().setFromObject(m), sz = bb.getSize(new THREE.Vector3()); sizes.push({ kind: p.kind, id: p.id, w: Math.round(sz.x * 100) / 100, h: Math.round(sz.y * 100) / 100, d: Math.round(sz.z * 100) / 100, baseY: Math.round((bb.min.y - target.elev) * 100) / 100 });
+      });
+      debug.props = placed.length; debug.person = false;
+      let reach = { ...box };
+      placed.forEach(p => { reach.maxY = Math.max(reach.maxY, target.elev + p.y + p.h); reach.minX = Math.min(reach.minX, offset + p.x - p.w / 2); reach.maxX = Math.max(reach.maxX, offset + p.x + p.w / 2); });
+      if (P && state.person) {
+        const room = W - (offset + s.width), px = room >= 50 ? offset + s.width + 30 : offset - 30, pz = target.gap + s.depth / 2 + 4;
+        const m = P.make(THREE, 'person'); m.position.set(px, 0, pz); g.add(m); debug.person = true;
+        reach = { ...reach, minX: Math.min(reach.minX, px - 23), maxX: Math.max(reach.maxX, px + 23), minY: 0, maxY: Math.max(reach.maxY, 176) };
+        personLabel = { x: px, z: pz };
       }
+      // Sun and its shadow frustum follow the furniture (and the person) so the shadow map stays sharp.
+      { const cx = (reach.minX + reach.maxX) / 2, cy = (reach.minY + reach.maxY) / 2, half = Math.max(reach.maxX - reach.minX, reach.maxY - reach.minY) / 2 + 60;
+        sun.target.position.set(cx, cy, target.gap + s.depth / 2); sun.position.set(cx - 160, cy + 260, target.gap + s.depth / 2 + 360); sun.target.updateMatrixWorld();
+        const c = sun.shadow.camera; c.left = -half; c.right = half; c.top = half; c.bottom = -half; c.near = 50; c.far = 1200; c.updateProjectionMatrix(); }
+      let lines = state.showSizes ? dimensionLines(box) : [];
+      if (state.showSizes && (state.view === 'wall' || personLabel)) { // the furniture is small here: one summary label instead of three crowded ones
+        const mid = state.view === 'wall' ? [(box.minX + box.maxX) / 2, box.maxY + 10, box.maxZ] : [(box.minX + box.maxX) / 2, Math.max(box.minY - 7, 3), box.maxZ + 2];
+        lines = (state.view === 'wall' ? wallLines({ width: W, height: wall.height }, box) : []).concat([{ key: 'furniture', text: `${fmtCm(s.width).replace(' cm', '')} × ${fmtCm(s.height).replace(' cm', '')} × ${fmtCm(s.depth)}`, a: mid, b: mid, mid, tick: [0, 0, 0], noLine: true }]);
+      }
+      if (state.showSizes && personLabel) { const mid = [personLabel.x, 183, personLabel.z]; lines.push({ key: 'person', text: '175 cm', a: mid, b: mid, mid, tick: [0, 0, 0], noLine: true }); }
       addLines(lines, g);
       rig.labels = lines.map(l => ({ key: l.key, text: l.text }));
       debug.labels = rig.labels; debug.view = state.view;
       const wallBox = { minX: 0, maxX: W, minY: 0, maxY: wall.height, minZ: 0, maxZ: 0 };
-      const focus = state.view === 'wall' ? lineExtents(lines.length ? lines : [], wallBox) : lineExtents(lines, box);
+      const focus = state.view === 'wall' ? lineExtents(lines.length ? lines : [], wallBox) : lineExtents(lines, reach);
       resize();
       fitCamera(focus, state.view, state, !!reset);
       request(300);

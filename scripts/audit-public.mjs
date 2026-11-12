@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const PUBLIC_FILES = Object.freeze([
-  'index.html', 'bookshelf.html', 'standalone.js', 'styles.css', 'app.js', 'models3d.js', 'bookshelf.js', 'bookshelf-scene.js', 'bookshelf-builder.js',
+  'index.html', 'bookshelf.html', 'standalone.js', 'styles.css', 'app.js', 'models3d.js', 'bookshelf.js', 'bookshelf-scene.js', 'bookshelf-props.js', 'bookshelf-builder.js',
   'starter-data.js', 'shared/contracts.js', 'shared/validators.js', 'shared/canonical.js',
   'admin.html', 'admin.js', 'client/config.js', 'client/contracts-loader.js', 'client/cloud.js', 'client/ui.js',
   'vendor/supabase.js', 'vendor/three.min.js', 'vendor/OrbitControls.js', 'vendor/RoomEnvironment.js', 'vendor/RoundedBoxGeometry.js'
