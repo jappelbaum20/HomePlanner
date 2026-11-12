@@ -97,6 +97,18 @@
       for (let i = 0; i < n; i++) { const x = i * rw, gr = g.createLinearGradient(x, 0, x + rw, 0); gr.addColorStop(0, 'rgb(150,150,150)'); gr.addColorStop(0.18, 'rgb(215,215,215)'); gr.addColorStop(0.5, 'rgb(255,255,255)'); gr.addColorStop(0.82, 'rgb(215,215,215)'); gr.addColorStop(1, 'rgb(150,150,150)'); g.fillStyle = gr; g.fillRect(x, 0, rw, s); }
       noise(g, s, 12000, 0.1, 160, 255);
     }, 24),
+    // walnut: long dark growth streaks and pores along x, mid-tone figure bands, tinted by the wood color (80 cm repeat)
+    walnut: () => canvasTex('walnut', 1024, (g, s) => {
+      seed = 31; g.fillStyle = '#ececec'; g.fillRect(0, 0, s, s);
+      for (let k = 0; k < 26; k++) { const y = rnd() * s, v = 205 + rnd() * 40; g.fillStyle = `rgba(${v},${v},${v},.45)`; g.fillRect(0, y, s, 8 + rnd() * 46); }
+      for (let k = 0; k < 420; k++) {
+        const y = rnd() * s, v = 150 + rnd() * 70, a = 0.12 + rnd() * 0.32, ph = rnd() * 6, amp = 0.6 + rnd() * 2.2;
+        g.strokeStyle = `rgba(${v},${v},${v},${a})`; g.lineWidth = 0.4 + rnd() * 1.3; g.beginPath(); g.moveTo(0, y);
+        for (let x = 0; x <= s; x += 12) g.lineTo(x, y + Math.sin(x / (130 + k % 70) + ph) * amp + (rnd() - 0.5) * 0.8); g.stroke();
+      }
+      for (let k = 0; k < 5; k++) { const cx = rnd() * s, cy = rnd() * s; for (let r = 6; r < 60; r += 5 + rnd() * 5) { const v = 130 + rnd() * 60; g.strokeStyle = `rgba(${v},${v},${v},.28)`; g.lineWidth = 0.6 + rnd(); g.beginPath(); g.ellipse(cx, cy, r * 4.5, r * 0.7, 0, Math.PI * 0.92, Math.PI * 2.08); g.stroke(); } }
+      for (let k = 0; k < 14000; k++) { const v = 110 + rnd() * 90; g.fillStyle = `rgba(${v},${v},${v},.3)`; g.fillRect(rnd() * s, rnd() * s, 2 + rnd() * 6, 0.7); }
+    }, 80),
     grain: () => canvasTex('grain', 1024, (g, s) => {
       seed = 17; g.fillStyle = '#f6f6f6'; g.fillRect(0, 0, s, s);
       // broad tone bands along the board, then fine growth lines, cathedral arcs and pores
@@ -286,6 +298,20 @@
     m.envMapIntensity = 0.3; return m;
   };
   const wood = (hex, w, h) => mat(hex, { rough: 0.55, map: texFor('grain', w, h) });
+  // Walnut boards: grain runs along the longer side of the face; satin finish with a little pore relief.
+  // One texture per board size and orientation, kept between rebuilds: a tap no longer re-uploads every board's walnut map.
+  const walnutTex = new Map();
+  const walnut = (hex, w, h) => {
+    const tall = h > w, long = tall ? h : w, short = tall ? w : h, key = `${tall ? 1 : 0}:${long.toFixed(1)}:${short.toFixed(1)}`;
+    let map = walnutTex.get(key);
+    if (!map) {
+      if (walnutTex.size > 120) { walnutTex.forEach(t => t.dispose()); walnutTex.clear(); }
+      map = texFor('walnut', long, short); map.keep = true; walnutTex.set(key, map);
+      if (tall) { map.center.set(0.5, 0.5); map.rotation = Math.PI / 2; }
+    }
+    return mat(hex, { rough: 0.42, map, bump: map, bumpScale: 0.25 });
+  };
+  HM.walnut = walnut;
   const METAL_DARK = () => mat('#2A2C2E', { rough: 0.35, metal: 0.8 });
   const METAL_BRASS = () => mat('#B89559', { rough: 0.3, metal: 0.9 });
   const CERAMIC = () => mat('#F7F7F4', { rough: 0.12 });
@@ -1497,8 +1523,8 @@
     else {
       if (it.type === 'shelf' && it.shelfDesign && window.Bookshelf) {
         const s = Bookshelf.normalize(it.shelfDesign);
-        Bookshelf.boards(s).filter(b => b.w > 0 && b.h > 0).forEach(b => {
-          part(g, wood(it.color, b.w, b.h), b.w, b.h, b.renderDepth ?? b.depth,
+        (Bookshelf.visualBoards || Bookshelf.boards)(s).filter(b => b.w > 0 && b.h > 0).forEach(b => {
+          part(g, walnut(it.color, b.w, b.h), b.w, b.h, b.renderDepth ?? b.depth,
             b.x + b.w / 2 - s.width / 2, b.y + b.h / 2, b.z ?? 0, 0);
         });
       } else (B[it.type] || B.box)(g, w, d, h, it.color, it, opts);

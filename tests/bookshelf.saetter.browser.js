@@ -56,7 +56,7 @@ async page => {
   const geometry = await page.evaluate(() => {
     if (!window.THREE || !window.HouseModels) return 'unavailable';
     const d = JSON.parse(localStorage.getItem('houseplanner.anonymous.v3')).bookshelfDraft.design;
-    const parts = Bookshelf.boards(d), obj = HouseModels.buildItem({ type: 'shelf', w: d.width, d: d.depth, h: d.height, color: '#76513D', shelfDesign: d, elev: 1 }, { evening: false });
+    const parts = Bookshelf.visualBoards(d), obj = HouseModels.buildItem({ type: 'shelf', w: d.width, d: d.depth, h: d.height, color: '#76513D', shelfDesign: d, elev: 1 }, { evening: false });
     obj.updateMatrixWorld(true);
     return parts.every((p, i) => { const size = new THREE.Box3().setFromObject(obj.children[i]).getSize(new THREE.Vector3()); return Math.abs(size.x - p.w) < 1e-4 && Math.abs(size.y - p.h) < 1e-4 && Math.abs(size.z - (p.renderDepth ?? p.depth)) < 1e-4; });
   });

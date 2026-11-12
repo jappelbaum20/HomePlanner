@@ -17,7 +17,7 @@ await mkdir(dist, { recursive: true });
 const current = await enumerate(dist);
 const unexpected = current.filter(file => !(vps ? VPS_PUBLIC_FILES : PUBLIC_FILES).includes(file));
 if (unexpected.length) throw new Error('Refusing to build over unexpected output; inspect the dist directory.');
-const sources = ['styles.css', 'app.js', 'standalone.js', 'bookshelf.html', 'models3d.js', 'bookshelf.js', 'bookshelf-builder.js', 'starter-data.js', 'shared/contracts.js', 'shared/canonical.js',
+const sources = ['styles.css', 'app.js', 'standalone.js', 'bookshelf.html', 'models3d.js', 'bookshelf.js', 'bookshelf-scene.js', 'bookshelf-props.js', 'bookshelf-builder.js', 'starter-data.js', 'shared/contracts.js', 'shared/canonical.js',
   'admin.html', 'admin.js', 'client/contracts-loader.js', 'client/cloud.js', 'client/ui.js'];
 if (vps) sources.push('landing.html', 'landing.js', 'request-access.html', 'request-access.js', 'login.css', 'google-g.svg');
 for (const source of sources) {

@@ -1,5 +1,6 @@
 /* Offline fake proposal API. Canonicalization conformance is tested separately. */
 async page => {
+  const openMore = async () => { if (!(await page.locator('#bsMore').evaluate(d => d.open))) await page.locator('#bsMore summary').click(); }, openMenu = async () => { if (await page.locator('#myDesignsMenu').isHidden()) await page.locator('#myDesigns').click(); };
   const origin='http://127.0.0.1:8765', checks=[], check=(ok,label)=>checks.push({label,pass:!!ok});
   const userId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab', sessionId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', csrf='A'.repeat(43), protocolErrors=[];
   await page.context().addCookies([{name:'fixture_session',value:'a',url:origin,httpOnly:true,sameSite:'Lax'}]);
@@ -20,8 +21,8 @@ async page => {
     }
     return json(404,{});
   });
-  await page.goto(origin+'/bookshelf');await page.evaluate(()=>window.HomePlannerContractsReady);await page.getByRole('button',{name:'Private designs'}).click();await page.getByRole('button',{name:'New shelf'}).waitFor();
-  page.once('dialog',d=>d.accept('Fixture shelf'));await page.getByRole('button',{name:'New shelf'}).click();await page.getByText('Saved to cloud · revision 1').waitFor();await page.locator('#cloudClose').click();
+  await page.goto(origin+'/bookshelf');await page.evaluate(()=>window.HomePlannerContractsReady);await openMenu();await page.getByRole('button',{name:'Private designs'}).click();await page.getByRole('button',{name:'New shelf'}).waitFor();
+  page.once('dialog',d=>d.accept('Fixture shelf'));await page.getByRole('button',{name:'New shelf'}).click();await page.getByText('Saved to cloud · revision 1').waitFor();await page.locator('#cloudClose').click();await openMore();
   const depth=page.getByRole('spinbutton',{name:'Depth, cm'});const before=await depth.inputValue();
   page.once('dialog',d=>d.accept('Make the shelf a little deeper'));await page.getByRole('button',{name:'Request AI preview'}).click();await page.getByText('A fixture preview').waitFor();
   check(await depth.inputValue()===before,'request does not mutate shelf');await page.getByRole('button',{name:'Apply preview'}).click();check(await depth.inputValue()==='31','apply changes shelf');

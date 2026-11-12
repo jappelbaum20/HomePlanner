@@ -170,5 +170,11 @@
     });
     HomePlannerCloudUI(cloudBridge);
   }
+  // One "My designs" menu holds Open, Import and Private designs.
+  const menu = $('#myDesignsMenu'), menuBtn = $('#myDesigns'), setMenu = open => { menu.hidden = !open; menuBtn.setAttribute('aria-expanded', String(open)); };
+  menuBtn.addEventListener('click', event => { event.stopPropagation(); setMenu(menu.hidden); });
+  menu.addEventListener('click', () => setMenu(false));
+  document.addEventListener('click', event => { if (!$('#myDesignsWrap').contains(event.target)) setMenu(false); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && !menu.hidden) { setMenu(false); menuBtn.focus(); } });
   void start();
 })();

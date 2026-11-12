@@ -1,12 +1,13 @@
 /* Fictional, zero-room browser acceptance. The harness serves the built public artifact on loopback. */
 async page => {
+  const openMore = async () => { if (!(await page.locator('#bsMore').evaluate(d => d.open))) await page.locator('#bsMore summary').click(); }, openMenu = async () => { if (await page.locator('#myDesignsMenu').isHidden()) await page.locator('#myDesigns').click(); };
   const checks = [], check = (ok, label) => { if (!ok) throw Error(label); checks.push(label); };
   await page.goto('http://127.0.0.1:8765/bookshelf');
   await page.locator('[data-bs="wallWidth"]').waitFor();
   check(await page.locator('[data-bs="roomId"]').count() === 0, 'standalone editor has no room selector');
   await page.locator('[data-bs="wallWidth"]').fill('315');
   await page.locator('[data-bs="wallHeight"]').fill('220');
-  await page.locator('[data-bs="wallColor"]').fill('#aabbcc');
+  await openMore(); await page.locator('[data-bs="wallColor"]').fill('#aabbcc');
   await page.locator('[data-bs="offset"]').fill('12');
   await page.locator('[data-bs-action="save"]').click();
   const downloadPromise = page.waitForEvent('download'); await page.locator('[data-bs-action="json"]').click();
@@ -18,7 +19,7 @@ async page => {
   check(plan.includes('3150 × 2200 mm') && plan.toLowerCase().includes('#aabbcc'), 'build plan contains wall dimensions and color');
   await page.reload(); await page.locator('[data-bs="wallWidth"]').waitFor();
   check(await page.locator('[data-bs="wallWidth"]').inputValue() === '315', 'draft survives reload');
-  page.once('dialog', dialog => dialog.accept('1')); await page.locator('#localOpen').click();
+  page.once('dialog', dialog => dialog.accept('1')); await openMenu(); await page.locator('#localOpen').click();
   check(await page.locator('[data-bs="wallHeight"]').inputValue() === '220', 'saved wall reopens locally');
   const localBefore = await page.evaluate(() => JSON.parse(localStorage.getItem('homeplanner.standalone.v2.designs')));
   await page.reload(); await page.locator('[data-bs="wallHeight"]').waitFor();
@@ -33,7 +34,7 @@ async page => {
   check(await page.locator('#bs-tab-custom').getAttribute('aria-selected') === 'true' && await page.locator('[data-bs="width"]').inputValue() === oldWidth, 'tabs retain separate geometry');
   await page.setViewportSize({width: 800, height: 700});
   check(await page.locator('h1').isVisible() && await page.locator('[data-bs="wallWidth"]').isVisible(), 'narrow desktop controls remain available');
-  await page.locator('[data-bs-action="copy"]').click(); await page.locator('[data-bs-action="save"]').click();
+  await openMore(); await page.locator('[data-bs-action="copy"]').click(); await page.locator('[data-bs-action="save"]').click();
   const copied = await page.evaluate(() => JSON.parse(localStorage.getItem('homeplanner.standalone.v2.designs')));
   check(copied.length === localAfter.length + 1 && copied.at(-1).id !== localAfter[0].id, 'explicit copy gets a separate local ID');
   await page.locator('[data-bs-action="new"]').click(); await page.locator('[data-bs-action="save"]').click();

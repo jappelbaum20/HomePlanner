@@ -1,5 +1,6 @@
 /* Fictional same-origin cloud storage, including revision checks and legacy upgrade. */
 async page => {
+  const openMore = async () => { if (!(await page.locator('#bsMore').evaluate(d => d.open))) await page.locator('#bsMore summary').click(); }, openMenu = async () => { if (await page.locator('#myDesignsMenu').isHidden()) await page.locator('#myDesigns').click(); };
   const origin='http://127.0.0.1:8765', user='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab', sid='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
   let record = null, ifMatch = null, proposalBody = null;
   await page.route('**/api/**', async route => {
@@ -14,25 +15,25 @@ async page => {
     return send(404,{});
   });
   await page.goto(origin+'/bookshelf'); await page.waitForFunction(()=>HomePlannerCloud.snapshot().me);
-  await page.locator('[data-bs="wallWidth"]').fill('345'); await page.locator('[data-bs="wallColor"]').fill('#778899');
-  await page.locator('#cloudBtn').click(); page.once('dialog',d=>d.accept('Fixture shelf')); await page.getByRole('button',{name:'Create cloud copy of this shelf'}).click();
+  await page.locator('[data-bs="wallWidth"]').fill('345'); await openMore(); await page.locator('[data-bs="wallColor"]').fill('#778899');
+  await openMenu(); await page.locator('#cloudBtn').click(); page.once('dialog',d=>d.accept('Fixture shelf')); await page.getByRole('button',{name:'Create cloud copy of this shelf'}).click();
   await page.getByText(/Saved to cloud · revision 1/).waitFor();
   if(record.payload.wall.widthCm!==345 || record.schemaVersion!==4) throw Error('cloud create lost wall');
-  await page.locator('#cloudClose').click(); await page.locator('[data-bs="wallHeight"]').fill('245'); await page.locator('#cloudBtn').click();
+  await page.locator('#cloudClose').click(); await page.locator('[data-bs="wallHeight"]').fill('245'); await openMenu(); await page.locator('#cloudBtn').click();
   await page.getByRole('button',{name:'Save to cloud',exact:true}).click(); await page.getByText(/Saved to cloud · revision 2/).waitFor();
   if(ifMatch!=='"1"' || record.id!==id || record.payload.wall.heightCm!==245) throw Error('cloud CAS save lost document or ID');
-  await page.reload(); await page.waitForFunction(()=>HomePlannerCloud.snapshot().me); await page.locator('#cloudBtn').click();
+  await page.reload(); await page.waitForFunction(()=>HomePlannerCloud.snapshot().me); await openMenu(); await page.locator('#cloudBtn').click();
   await page.getByRole('button',{name:'Open',exact:true}).click(); await page.locator('#cloudDlg').waitFor({state:'hidden'});
   if(await page.locator('[data-bs="wallHeight"]').inputValue()!=='245') throw Error('cloud reopen lost wall');
   const geometry=record.payload.shelf; record={...record,schemaVersion:3,payload:geometry,revision:3};
-  await page.locator('#cloudBtn').click(); await page.getByRole('button',{name:'Open',exact:true}).click();
+  await openMenu(); await page.locator('#cloudBtn').click(); await page.getByRole('button',{name:'Open',exact:true}).click();
   await page.getByText(/Legacy shelf: default/).waitFor();
   if(await page.locator('[data-bs="wallWidth"]').inputValue()!=='500' || await page.locator('[data-bs="wallHeight"]').inputValue()!=='500' || await page.locator('[data-bs="offset"]').inputValue()!=='0') throw Error('legacy wall defaults are incorrect');
   if(record.schemaVersion!==3 || record.revision!==3) throw Error('legacy record was changed on read');
-  await page.locator('#cloudBtn').click(); await page.getByRole('button',{name:'Save to cloud',exact:true}).click(); await page.getByText(/Saved to cloud · revision 4/).waitFor();
+  await openMenu(); await page.locator('#cloudBtn').click(); await page.getByRole('button',{name:'Save to cloud',exact:true}).click(); await page.getByText(/Saved to cloud · revision 4/).waitFor();
   if(record.schemaVersion!==4 || record.id!==id || ifMatch!=='"3"' || JSON.stringify(record.payload.shelf)!==JSON.stringify(geometry)) throw Error('explicit legacy upgrade changed identity or geometry');
   await page.locator('#cloudClose').click(); const wall=await page.locator('[data-bs="wallWidth"]').inputValue(), depth=await page.locator('[data-bs="depth"]').inputValue();
-  page.once('dialog',d=>d.accept('Make this slightly deeper')); await page.getByRole('button',{name:'Request AI preview'}).click();
+  await openMore(); page.once('dialog',d=>d.accept('Make this slightly deeper')); await page.getByRole('button',{name:'Request AI preview'}).click();
   await page.getByRole('button',{name:'Apply preview'}).click();
   if(!proposalBody || proposalBody.wall || proposalBody.shelf.version!==1 || await page.locator('[data-bs="wallWidth"]').inputValue()!==wall || Number(await page.locator('[data-bs="depth"]').inputValue())!==Number(depth)+1) throw Error('preview sent wall or lost wall on apply');
   await page.getByRole('button',{name:'Undo',exact:true}).click();

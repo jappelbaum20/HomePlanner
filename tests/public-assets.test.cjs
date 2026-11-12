@@ -67,7 +67,7 @@ test('build emits only audited assets, empty starter and equivalent browser cont
   assert.equal(run.status,0,run.stderr || run.stdout);
   const {auditPublic}=await import('../scripts/audit-public.mjs');
   const files=await auditPublic(dist);
-  assert.equal(files.length,23);
+  assert.equal(files.length,25);
   const context=vm.createContext({TextEncoder, console}); context.window=context;
   for (const file of ['bookshelf.js','shared/validators.js','shared/contracts.js','starter-data.js']) vm.runInContext(fs.readFileSync(path.join(dist,file),'utf8'),context,{filename:file,timeout:5000});
   assert.equal(context.HOUSE_SEED.rooms.length,0);
@@ -76,6 +76,7 @@ test('build emits only audited assets, empty starter and equivalent browser cont
   assert.equal(context.HomePlannerContracts.validate('shelf',{...B.saetter3(),width:'45.5'}).valid,false);
   const html=fs.readFileSync(path.join(dist,'index.html'),'utf8');
   assert.match(html,/<script src="starter-data\.js"><\/script>/);
+  for (const page of ['index.html','bookshelf.html']) assert.match(fs.readFileSync(path.join(dist,page),'utf8'),/<script src="bookshelf-scene\.js(\?v=\d+)?"><\/script>\s*<script src="bookshelf-props\.js(\?v=\d+)?"><\/script>[\s\S]*<script src="bookshelf-builder\.js/,page+' loads the scene and props modules before the builder');
   assert.doesNotMatch(html,/<script src="house-data\.js"/);
   assert.doesNotMatch(html,/https?:\/\//);
   assert.ok(html.indexOf('vendor/supabase.js') < html.indexOf('client/cloud.js'));
