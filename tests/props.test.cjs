@@ -122,3 +122,13 @@ test('resnap keeps true size, moves items with the furniture and drops those wit
 test('the limit constant is stable and unknown kinds are refused', () => {
   assert.equal(P.MAX_ITEMS, 20); assert.equal(P.fitProp(saetter, 'piano', { x: 1, y: 1 }).reason, 'unknown');
 });
+
+test('an underside click lands on the shelf below, not on the board that was clicked', () => {
+  const S = require('../bookshelf-scene.js'), s = saetter, l1 = s.levels[1];
+  const f = { offset: 0, elev: 120, gap: 0, depth: s.depth, design: s };
+  const hit = S.hitToLocal({ x: 20, y: 120 + l1.y, z: 5 }, -1, f);
+  const r = P.fitProp(s, 'mug', hit, []);
+  assert.ok(r.ok && r.level === 0, 'underside of level 1 -> surface of level 0 (got ' + JSON.stringify(r) + ')');
+  const top = P.fitProp(s, 'mug', { x: 20, y: l1.y + .5 }, []);
+  assert.ok(top.ok && top.level === 1, 'a click on the board top still means that board');
+});

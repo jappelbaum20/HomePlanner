@@ -299,9 +299,16 @@
   };
   const wood = (hex, w, h) => mat(hex, { rough: 0.55, map: texFor('grain', w, h) });
   // Walnut boards: grain runs along the longer side of the face; satin finish with a little pore relief.
+  // One texture per board size and orientation, kept between rebuilds: a tap no longer re-uploads every board's walnut map.
+  const walnutTex = new Map();
   const walnut = (hex, w, h) => {
-    const tall = h > w, map = texFor('walnut', tall ? h : w, tall ? w : h);
-    if (tall) { map.center.set(0.5, 0.5); map.rotation = Math.PI / 2; }
+    const tall = h > w, long = tall ? h : w, short = tall ? w : h, key = `${tall ? 1 : 0}:${long.toFixed(1)}:${short.toFixed(1)}`;
+    let map = walnutTex.get(key);
+    if (!map) {
+      if (walnutTex.size > 120) { walnutTex.forEach(t => t.dispose()); walnutTex.clear(); }
+      map = texFor('walnut', long, short); map.keep = true; walnutTex.set(key, map);
+      if (tall) { map.center.set(0.5, 0.5); map.rotation = Math.PI / 2; }
+    }
     return mat(hex, { rough: 0.42, map, bump: map, bumpScale: 0.25 });
   };
   HM.walnut = walnut;

@@ -75,3 +75,11 @@ test('SAETTER comparison variants are valid designs with the published sizes', (
   assert.deepEqual(B.saetterVariant('3'), B.saetter3());
   assert.equal(S.readout(B.saetter3()), 'Furniture 45.5 × 40.6 × 10.5 cm (W × H × D)');
 });
+
+test('hitToLocal: a hit on a board underside belongs to the bay below, an upward face keeps its depth', () => {
+  const f = { offset: 100, elev: 120, gap: 0, depth: 10.5, design: { thickness: 1.1 } };
+  const up = S.hitToLocal({ x: 130, y: 121.1, z: 4 }, 1, f), down = S.hitToLocal({ x: 130, y: 132.2, z: 10 }, -1, f), face = S.hitToLocal({ x: 130, y: 125, z: 10.5 }, 0, f);
+  assert.ok(Math.abs(up.x - 30) < 1e-9 && Math.abs(up.y - 1.1) < 1e-9 && Math.abs(up.z - 6.5) < 1e-9);
+  assert.ok(Math.abs(down.y - (12.2 - 1.75)) < 1e-9 && !('z' in down));
+  assert.ok(!('z' in face));
+});

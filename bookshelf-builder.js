@@ -6,7 +6,7 @@ window.BookshelfBuilder = (() => {
   const fmt = n => String(B.round(n));
   const mm = n => fmt(n * 10);
   const walls = { n: 'North · top', e: 'East · right', s: 'South · bottom', w: 'West · left' };
-  let host, api, draft, visible = false, scene3d, row = 0, view = 'close', variant = null, showSizes = true, history = [], editing = null, interactionGeneration = 0, proposal = null, addOpen = false, sheet = null, moreOpen = false;
+  let host, api, draft, visible = false, scene3d, row = 0, view = 'close', variant = null, showSizes = true, history = [], editing = null, interactionGeneration = 0, proposal = null, addOpen = false, sheet = null, moreOpen = false, lastRemoved = null;
   // Items to compare against are a session-only aid: never saved, cleared whenever another design is opened.
   let items = [], selected = null, person = false, itemsOn = null, itemSeq = 0;
   const Scene = window.BookshelfScene, Props = window.BookshelfProps;
@@ -24,7 +24,7 @@ window.BookshelfBuilder = (() => {
   const numeric = (name, label, value, min = 0, max = 1000) => field(name, label, value, `type="number" step="any" min="${min}" max="${max}" required`);
   const PROP_ICONS = { mug: `<path d="M6 9h15v13a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4z"/><path d="M21 12h3a3 3 0 0 1 0 8h-3"/>`, cup: `<path d="M5 14h18v3a7 7 0 0 1-7 7h-4a7 7 0 0 1-7-7z"/><path d="M23 15h2a3 3 0 0 1 0 6h-2.5"/><path d="M3 27h24"/>`, wine: `<path d="M9 4h12c0 7-2 11-6 11S9 11 9 4z"/><path d="M15 15v11M10 27h10"/>`, water: `<path d="M8 6h16l-2 20H10z"/><path d="M9 13h14"/>`, book: `<path d="M9 4h14v24H9z"/><path d="M9 9h14M12 4v24"/>`, plant: `<path d="M10 20h12l-2 8h-8z"/><path d="M16 20c0-6-1-9-5-12 4 0 6 2 5 8 0-5 2-8 6-9-1 5-2 9-6 13"/>`, vase: `<path d="M13 4h6l-1 5c5 3 6 10 4 16H10c-2-6-1-13 4-16z"/>`, person: `<path d="M10 28V15c0-3 2-5 6-5s6 2 6 5v13"/><circle cx="16" cy="7" r="3.5"/>` };
   const propSvg = k => `<svg viewBox="0 0 32 32" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PROP_ICONS[k]}</svg>`;
-  function clearScene() { items = []; selected = null; person = false; itemsOn = null; }
+  function clearScene() { items = []; selected = null; person = false; itemsOn = null; lastRemoved = null; }
   function checkpoint() { history.push(JSON.stringify(draft)); if (history.length > 50) history.shift(); }
   function persist(immediate = false) { return api.draft(JSON.parse(JSON.stringify(draft)), immediate); }
   const withoutAlternate = d => { const copy = JSON.parse(JSON.stringify(d)); delete copy.alternate; return copy; };
@@ -119,7 +119,7 @@ window.BookshelfBuilder = (() => {
     saetter: `<svg viewBox="0 0 120 84" aria-hidden="true"><rect x="10" y="10" width="100" height="64" rx="2" fill="#E3CDB4" stroke="#5E3F2E" stroke-width="4"/>${[0, 1, 2, 3].map(i => [0, 1, 2].map(j => `<rect x="${14 + i * 24}" y="${14 + j * 20}" width="20" height="16" fill="#9A7358"/>`).join('')).join('')}</svg>`
   };
   const typeTab = (id, title, sub) => `<button type="button" id="bs-tab-${id}" role="tab" class="bs-card" aria-label="${title}" aria-selected="${draft.tab === id}" aria-controls="bs-tabpanel" tabindex="${draft.tab === id ? 0 : -1}" data-bs-tab="${id}">${CARD_ART[id]}<b>${title}</b><span>${sub}</span></button>`;
-  const propsHtml = open => `<div class="bs-props${open ? ' open' : ''}" id="bsProps" role="group" aria-label="Add something to compare"><span class="bs-size-label">Add something to compare</span><div class="bs-palette">${Props ? Props.KINDS.map(k => `<button type="button" class="bs-prop" data-bs-prop="${k}" aria-pressed="${selected === k}" aria-label="${Props.PROPS[k].name}, ${Props.PROPS[k].h} cm tall">${propSvg(k)}<span>${Props.PROPS[k].name}</span></button>`).join('') : ''}<button type="button" class="bs-prop" data-bs-person aria-pressed="${person}" aria-label="Person, 175 cm">${propSvg('person')}<span>Person 175 cm</span></button></div><div class="bs-props-foot"><p class="bs-prop-help" id="bsPropHelp" role="status"></p><button type="button" class="btn light small" data-bs-action="clearItems">Clear items</button></div></div>`;
+  const propsHtml = (open, label = true) => `<div class="bs-props${open ? ' open' : ''}" id="bsProps" role="group" aria-label="Add something to compare">${label ? '<span class="bs-size-label">Add something to compare</span>' : ''}<div class="bs-palette">${Props ? Props.KINDS.map(k => `<button type="button" class="bs-prop" data-bs-prop="${k}" aria-pressed="${selected === k}" aria-label="${Props.PROPS[k].name}, ${Props.PROPS[k].h} cm tall">${propSvg(k)}<span>${Props.PROPS[k].name}</span></button>`).join('') : ''}<button type="button" class="bs-prop" data-bs-person aria-pressed="${person}" aria-label="Person, 175 cm">${propSvg('person')}<span>Person 175 cm</span></button></div><div class="bs-props-foot"><p class="bs-prop-help" id="bsPropHelp" role="status"></p><button type="button" class="btn light small" data-bs-action="clearItems">Clear items</button></div></div>`;
   const sizeHtml = undo => `<div class="bs-size" id="bsSize" role="group" aria-label="Size" data-group>${draft.tab === 'saetter' ? `<span class="bs-size-label">Compare sizes <em class="bs-badge">Comparison only · not saved</em></span><span class="bs-chips">${B.SAETTER_VARIANTS.map(v => `<button type="button" class="btn light small" data-bs-variant="${v.id}" aria-pressed="false">${v.label}</button>`).join('')}</span>` : `<span class="bs-size-label">Size</span><span class="bs-chips">${[-10, -5, 5, 10].map(p => `<button type="button" class="btn light small" data-bs-size="${p}" aria-label="Make the bookshelf ${Math.abs(p)} percent ${p < 0 ? 'smaller' : 'bigger'}">${p < 0 ? '−' : '+'}${Math.abs(p)}%</button>`).join('')}</span>`}${undo ? `<button class="btn light small" data-bs-action="undo" ${history.length ? '' : 'disabled'}>Undo</button>` : ''}</div>`;
   const levelsHtml = () => `${draft.tab === 'custom' ? '<div class="bs-presets"><button class="btn light small" data-preset="framed">Framed</button><button class="btn light small" data-preset="staggered">Staggered</button><button class="btn light small" data-preset="stepped">Stepped edges</button></div>' : ''}
         <div class="sec-head"><h3>Individual shelves · bottom to top</h3><button class="btn light small" data-bs-action="addLevel">+ Shelf</button></div><div id="bsLevels"></div>
@@ -166,15 +166,15 @@ window.BookshelfBuilder = (() => {
       </aside>
       <div class="bs-preview">
         <p class="bs-wallname" id="bsPreviewTitle"></p>
-        <div id="bs3d" aria-label="Orbitable 3D bookshelf against the selected wall"></div>
+        <div id="bs3d" role="img" aria-label="Orbitable 3D bookshelf against the selected wall"></div>
         <div class="bs-viewbar"><div class="bs-seg" role="group" aria-label="3D view" data-group><button type="button" class="btn light small" data-bs-view="close" aria-pressed="true">Close-up</button><button type="button" class="btn light small" data-bs-view="wall" aria-pressed="false">Whole wall</button></div><p class="bs-readout" id="bsReadout" role="status"></p></div>
         <p class="bs-note-grey" id="bsPreviewNote"></p>
-        <div class="bs-tools"><button type="button" class="btn light bs-addtoggle" data-bs-addtoggle aria-expanded="${addOpen}" aria-controls="bsProps">Add something to compare</button>${sizeHtml(true)}${propsHtml(addOpen)}</div>
+        <div class="bs-tools"><button type="button" class="btn light bs-addtoggle" data-bs-addtoggle aria-expanded="${addOpen}" aria-controls="bsProps">Add something to compare</button>${sizeHtml(true)}${propsHtml(addOpen, false)}</div>
         <div id="bsProblems" aria-live="polite"></div>
         <p class="note bs-hint">Drag to turn the view · scroll to zoom · pick an item, then click a shelf to place it.</p>
       </div>
       </div>
-      <nav class="bs-bar" aria-label="Quick actions"><button type="button" class="btn light" data-bs-sheet="size" aria-expanded="${sheet === 'size'}">Size</button><button type="button" class="btn light" data-bs-sheet="add" aria-expanded="${sheet === 'add'}">Add item</button><button type="button" class="btn" data-bs-barsave>Save</button></nav>`;
+      <nav class="bs-bar" aria-label="Quick actions"><button type="button" class="btn light" data-bs-sheet="size" aria-controls="bsSize" aria-expanded="${sheet === 'size'}">Size</button><button type="button" class="btn light" data-bs-sheet="add" aria-controls="bsProps" aria-expanded="${sheet === 'add'}">Add item</button><button type="button" class="btn" data-bs-barsave>Save</button></nav>`;
   }
   function roomTemplate() {
     const s = draft.design, r = room();
@@ -194,7 +194,7 @@ window.BookshelfBuilder = (() => {
         ${levelsHtml()}
       </aside><div class="bs-preview"><div class="bs-preview-head"><h2 id="bsPreviewTitle"></h2><div class="btnrow"><button class="btn light small" data-bs-action="undo" ${history.length ? '' : 'disabled'}>Undo</button><button class="btn light small" data-bs-action="resetCamera">Reset 3D view</button></div></div>
         <div class="bs-viewbar"><div class="bs-seg" role="group" aria-label="3D view"><button type="button" class="btn light small" data-bs-view="close" aria-pressed="true">Close-up</button><button type="button" class="btn light small" data-bs-view="wall" aria-pressed="false">Whole wall</button></div><label class="bs-switch"><input type="checkbox" data-bs-sizes ${showSizes ? 'checked' : ''}> Show sizes</label></div>
-        <div id="bs3d" aria-label="Orbitable 3D bookshelf against the selected wall"></div>${propsHtml(true)}${sizeHtml(false)}
+        <div id="bs3d" role="img" aria-label="Orbitable 3D bookshelf against the selected wall"></div>${propsHtml(true)}${sizeHtml(false)}
         <p class="bs-readout" id="bsReadout" role="status"></p><p class="bs-note-grey" id="bsPreviewNote"></p>
         <p class="note">Drag to orbit · scroll to zoom · click a board to edit its level, or pick an item above and click to place it</p>
         <div id="bsDrawing" class="bs-drawing"></div><div id="bsProblems" aria-live="polite"></div>
@@ -282,12 +282,21 @@ window.BookshelfBuilder = (() => {
       } catch (e) { el.innerHTML = '<p class="empty">3D needs WebGL and the online 3D libraries. You can still edit the dimensioned drawing.</p>'; return; }
     }
     syncItems(); paletteState();
-    scene3d.update({ design: displayDesign(), wall: getWall(), target: draft.target, color: draft.color, view, showSizes, props: items, person, visible: () => visible }, reset, el);
+    scene3d.update({ design: displayDesign(), wall: getWall(), target: draft.target, color: draft.color, view, showSizes, props: items, person, standalone: standalone(), visible: () => visible }, reset, el);
   }
 
   // ---- items to compare against ----
   const itemName = k => Props.PROPS[k].name;
-  function help(text, warn) { const el = host && host.querySelector('#bsPropHelp'); if (!el) return; el.textContent = text; el.classList.toggle('warn', !!warn); }
+  function help(text, warn, undo) {
+    const el = host && host.querySelector('#bsPropHelp'); if (!el) return; el.textContent = text; el.classList.toggle('warn', !!warn);
+    if (undo) { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn light small'; b.dataset.bsAction = 'restoreItem'; b.textContent = 'Undo'; el.append(' ', b); }
+  }
+  // The message (and its Undo) lives in the palette: make sure the palette is showing.
+  function showHelp() {
+    if (!standalone()) return;
+    if (window.matchMedia('(max-width: 700px)').matches) { sheet = 'add'; const p = host.querySelector('.bs-simple'); if (p) p.dataset.sheet = 'add'; host.querySelectorAll('[data-bs-sheet]').forEach(b => b.setAttribute('aria-expanded', String(b.dataset.bsSheet === sheet))); }
+    else { addOpen = true; host.querySelector('#bsProps').classList.add('open'); host.querySelector('[data-bs-addtoggle]').setAttribute('aria-expanded', 'true'); }
+  }
   function paletteState() {
     if (!Props || !host) return;
     host.querySelectorAll('[data-bs-prop]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.bsProp === selected)));
@@ -302,6 +311,7 @@ window.BookshelfBuilder = (() => {
     if (!Props) return;
     const d = displayDesign(), key = JSON.stringify(d);
     if (items.length && itemsOn && itemsOn.key !== key) {
+      lastRemoved = null;
       const r = Props.resnap(d, items, itemsOn.design); items = r.items;
       if (r.dropped.length) { const t = `${r.dropped.length} item${r.dropped.length > 1 ? 's' : ''} no longer fit and ${r.dropped.length > 1 ? 'were' : 'was'} removed.`; help(t, true); api.toast(t); }
     }
@@ -310,10 +320,12 @@ window.BookshelfBuilder = (() => {
   }
   function onScenePick(info) {
     if (info.propId) {
-      const it = items.find(i => i.id === info.propId); if (!it) return;
-      items = items.filter(i => i.id !== it.id); update3D(false); help(`${itemName(it.kind)} removed.`); return;
+      const at = items.findIndex(i => i.id === info.propId); if (at < 0) return;
+      const it = items[at]; lastRemoved = { item: it, index: at };
+      items = items.filter(i => i.id !== it.id); update3D(false); showHelp(); help(`${itemName(it.kind)} removed ·`, false, true); return;
     }
-    if (!selected || !Props) { row = info.bay; refresh(); return; }
+    if (info.none) { if (selected && Props) { showHelp(); help(Props.MESSAGES.noSurface, true); } return; }
+    if (!selected || !Props) { row = Math.min(info.bay, draft.design.levels.length - 1); refresh(); return; } // a SÆTTER size preview can have more levels than the design
     if (items.length >= Props.MAX_ITEMS) { help(Props.MESSAGES.limit, true); return api.toast(Props.MESSAGES.limit); }
     const r = Props.fitProp(displayDesign(), selected, info.local, items);
     if (!r.ok) { help(r.message, true); return api.toast(r.message); }
@@ -321,6 +333,8 @@ window.BookshelfBuilder = (() => {
     items = items.concat([{ ...r, id, color: Props.BOOK_COLORS[itemSeq % Props.BOOK_COLORS.length] }]);
     update3D(false); help(`${itemName(selected)} placed (${Props.PROPS[selected].w} × ${Props.PROPS[selected].h} cm). Click it to remove it.`);
   }
+  // render() rebuilds the page: put keyboard focus back on the control that was used.
+  function refocus(selector) { const b = host.querySelector(selector); if (b && !b.disabled) b.focus({ preventScroll: true }); else host.querySelector('h1')?.focus({ preventScroll: true }); }
   function resize3D() { if (scene3d && visible) scene3d.refit(); }
   function changed(full = false, reframe = false) { persist(true); if (full) render(); else { refresh(); update3D(reframe); } }
   function applyField(t, baseline) {
@@ -390,7 +404,9 @@ window.BookshelfBuilder = (() => {
       if (t.dataset.bsAddtoggle !== undefined) { addOpen = !addOpen; host.querySelector('#bsProps').classList.toggle('open', addOpen); t.setAttribute('aria-expanded', String(addOpen)); return; }
       if (t.dataset.bsSheet) {
         sheet = sheet === t.dataset.bsSheet ? null : t.dataset.bsSheet; host.querySelector('.bs-simple').dataset.sheet = sheet || '';
-        host.querySelectorAll('[data-bs-sheet]').forEach(b => b.setAttribute('aria-expanded', String(b.dataset.bsSheet === sheet))); return;
+        host.querySelectorAll('[data-bs-sheet]').forEach(b => b.setAttribute('aria-expanded', String(b.dataset.bsSheet === sheet)));
+        if (sheet) host.querySelector(sheet === 'size' ? '#bsSize button' : '[data-bs-prop]')?.focus({ preventScroll: true }); // keyboard and screen reader users land in the sheet
+        return;
       }
       if (t.dataset.bsBarsave !== undefined) { const save = host.querySelector('[data-bs-action="save"]'); if (!save.disabled) save.click(); else api.toast('Resolve the highlighted issues first.'); return; }
       if (t.dataset.bsProp) { selected = selected === t.dataset.bsProp ? null : t.dataset.bsProp; help(selected ? `${itemName(selected)} selected: click a shelf or compartment to place it.` : 'Pick an item, then click a shelf or compartment. Click a placed item to remove it.'); return paletteState(); }
@@ -437,11 +453,12 @@ window.BookshelfBuilder = (() => {
       }
       if (act === 'close') return close();
       if (act === 'standaloneCopy') return api.copyStandalone(JSON.parse(JSON.stringify(draft)), getWall());
+      if (act === 'restoreItem') { if (lastRemoved && items.length < Props.MAX_ITEMS) { items.splice(Math.min(lastRemoved.index, items.length), 0, lastRemoved.item); const k = lastRemoved.item.kind; lastRemoved = null; update3D(false); help(`${itemName(k)} is back.`); } return; }
       if (act === 'clearItems') { items = []; person = false; selected = null; help('All items cleared.'); update3D(true); return; }
       if (act === 'resetCamera') return update3D(true);
-      if (act === 'undo') { if (history.length) { draft = JSON.parse(history.pop()); changed(true); } return; }
-      if (act === 'new') { if (standalone() && api.detach && !api.detach()) return; variant = null; checkpoint(); const other = draft.alternate, wall = draft.wall; draft = fresh(draft.tab); if (standalone()) draft.wall = wall; if (other) draft.alternate = other; row = 0; changed(true); host.querySelector('[data-bs="name"]').focus(); return; }
-      if (act === 'copy') { if (standalone() && api.detach && !api.detach()) return; checkpoint(); draft.pieceId = null; draft.itemId = null; draft.itemRoomId = null; draft.name += ' copy'; changed(true); host.querySelector('[data-bs="name"]').focus(); return; }
+      if (act === 'undo') { if (history.length) { draft = JSON.parse(history.pop()); changed(true); } refocus('[data-bs-action="undo"]'); return; }
+      if (act === 'new') { if (standalone() && api.detach && !api.detach()) return; variant = null; checkpoint(); const other = draft.alternate, wall = draft.wall; draft = fresh(draft.tab); if (standalone()) draft.wall = wall; if (other) draft.alternate = other; row = 0; changed(true); const nm = host.querySelector('[data-bs="name"]'); nm.focus(); if (document.activeElement !== nm) refocus(`[data-bs-action="${act}"]`); return; }
+      if (act === 'copy') { if (standalone() && api.detach && !api.detach()) return; checkpoint(); draft.pieceId = null; draft.itemId = null; draft.itemRoomId = null; draft.name += ' copy'; changed(true); const nm = host.querySelector('[data-bs="name"]'); nm.focus(); if (document.activeElement !== nm) refocus(`[data-bs-action="${act}"]`); return; }
       if (act === 'addLevel') {
         if (s.levels.length >= 25) return api.toast('Maximum 25 shelves per design.');
         checkpoint(); const index = Math.min(row, s.levels.length - 2), l = s.levels[index], next = s.levels[index + 1];

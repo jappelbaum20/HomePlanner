@@ -71,8 +71,13 @@
     const x = rect.x - Math.max(p, room), y = rect.y - Math.max(p, fs * 1.6), w = rect.w + Math.max(p, room) * 2, h = rect.h + Math.max(p, fs * 1.6) + Math.max(p, room);
     return { x, y, w, h, fontSize: fs, viewBox: `${round1(x * 100) / 100} ${round1(y * 100) / 100} ${round1(w * 100) / 100} ${round1(h * 100) / 100}` };
   }
+  // Furniture-local point (cm) for a ray hit: x from the left edge, y up from the bottom, z from the front face (upward faces only).
+  // A hit on a downward face (board underside) belongs to the bay below that board, so y is nudged below the surface that board carries (thickness + the .6 cm tolerance of fitProp).
+  function hitToLocal(point, normalY, f) {
+    return { x: point.x - f.offset, y: point.y - f.elev - (normalY < -.5 ? ((f.design && f.design.thickness) || 0) + .65 : 0), ...(normalY > .5 ? { z: f.gap + f.depth - point.z } : {}) };
+  }
   const readout = d => `Furniture ${fmtCm(d.width).replace(' cm', '')} × ${fmtCm(d.height).replace(' cm', '')} × ${fmtCm(d.depth)} (W × H × D)`;
-  const pure = { FOV, MARGIN, MAX_AZIMUTH, LIMITS, fmtCm, frameDistance, frameBox, clampAzimuth, cameraPosition, sizeStep, applySizeStep, dimensionLines, wallLines, lineExtents, cropViewBox, readout };
+  const pure = { FOV, MARGIN, MAX_AZIMUTH, LIMITS, fmtCm, frameDistance, frameBox, clampAzimuth, cameraPosition, sizeStep, applySizeStep, dimensionLines, wallLines, lineExtents, cropViewBox, readout, hitToLocal };
 
   // ---------- 3D drawing (browser only) ----------
   function create(opts) {
@@ -87,13 +92,13 @@
     const scene = new THREE.Scene(); scene.background = new THREE.Color('#E8E9E4');
     scene.add(new THREE.HemisphereLight(0xfff6ea, 0x8a7a68, .62));
     // Warm sun from the front left and above, like a window beside the shelf.
-    const sun = new THREE.DirectionalLight(0xfff1dc, 1.05); sun.position.set(-160, 300, 380); scene.add(sun, sun.target);
+    const sun = new THREE.DirectionalLight(0xfff1dc, 1.05); sun.position.set(-60, 320, 420); scene.add(sun, sun.target);
     if (quality.shadows) { sun.castShadow = true; sun.shadow.mapSize.set(quality.shadowMapSize, quality.shadowMapSize); sun.shadow.bias = -.0005; sun.shadow.normalBias = .35; sun.shadow.radius = 4; }
     const camera = new THREE.PerspectiveCamera(FOV, 1, 1, 20000);
     const controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.maxPolarAngle = Math.PI * .85;
     controls.minAzimuthAngle = -rad(MAX_AZIMUTH); controls.maxAzimuthAngle = rad(MAX_AZIMUTH);
     const rig = { renderer, scene, camera, controls, group: null, boards: [], furniture: [], propMeshes: [], frame: null, labels: [], state: null, userMoved: false };
-    const debug = window.__bsDebug = { frames: 0, labels: [], view: 'close', fit: null, quality, props: 0, person: false, info: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles }) };
+    const debug = window.__bsDebug = { frames: 0, labels: [], view: 'close', fit: null, quality, props: 0, person: false, info: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, textures: renderer.info.memory.textures }) };
     // Test hook: place the camera at an azimuth/elevation around the current target at the current distance.
     debug.orbit = (az, el = 10) => { const t = controls.target, d = camera.position.distanceTo(t), p = cameraPosition([t.x, t.y, t.z], d, clampAzimuth(az), el); camera.position.set(...p); controls.update(); request(300); };
     // Test hook: client coordinates of a furniture-local point (cm) so a test can click a given compartment.
@@ -120,13 +125,16 @@
       if (!drag || Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 6) return;
       const rect = renderer.domElement.getBoundingClientRect(), ray = new THREE.Raycaster();
       ray.setFromCamera(new THREE.Vector2((e.clientX - rect.left) / rect.width * 2 - 1, -(e.clientY - rect.top) / rect.height * 2 + 1), camera);
-      const hit = ray.intersectObjects(rig.propMeshes.concat(rig.furniture), false)[0];
-      if (!hit || !onPick) return;
+      const wallMesh = rig.group && rig.group.children[0];
+      const hit = ray.intersectObjects(rig.propMeshes.concat(rig.furniture, wallMesh ? [wallMesh] : []), false)[0];
+      if (!onPick) return;
+      if (!hit) return onPick({ none: true });
       if (hit.object.userData.propId) return onPick({ propId: hit.object.userData.propId });
       const f = rig.frame, n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : null;
       // Furniture-local point (cm): x from the left edge, y up from the bottom, z from the front face; z only for upward faces.
-      const local = { x: hit.point.x - f.offset, y: hit.point.y - f.elev, ...(n && n.y > .5 ? { z: f.gap + f.depth - hit.point.z } : {}) };
-      onPick({ bay: bayAt(local.y), local });
+      const local = hitToLocal(hit.point, n ? n.y : 0, f), onWall = hit.object === wallMesh;
+      if (onWall && !(local.x >= 0 && local.x <= f.design.width && local.y >= 0 && local.y <= f.design.height)) return onPick({ none: true }); // the bare wall beside the furniture
+      onPick({ bay: bayAt(local.y), local, wall: onWall });
     });
     function bayAt(y) { const lv = rig.frame.design.levels; let b = 0; lv.forEach((l, i) => { if (l.y <= y + .01 && i < lv.length - 1) b = i; }); return b; }
 
@@ -134,6 +142,7 @@
       const dpr = Math.min(window.devicePixelRatio || 1, 2), font = '700 42px system-ui, sans-serif', m = document.createElement('canvas').getContext('2d'); m.font = font;
       const cw = Math.max(256, Math.ceil(m.measureText(text).width + 28)), c = document.createElement('canvas'); c.width = cw * dpr; c.height = 64 * dpr; // long texts get a wider sprite, same letter size
       const g = c.getContext('2d'); g.scale(dpr, dpr); g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle';
+      { const tw = m.measureText(text).width + 26, x0 = cw / 2 - tw / 2, r = 14; g.fillStyle = 'rgba(255,255,255,.94)'; g.beginPath(); g.moveTo(x0 + r, 6); g.arcTo(x0 + tw, 6, x0 + tw, 58, r); g.arcTo(x0 + tw, 58, x0, 58, r); g.arcTo(x0, 58, x0, 6, r); g.arcTo(x0, 6, x0 + tw, 6, r); g.closePath(); g.fill(); }
       g.lineJoin = 'round'; g.lineWidth = 10; g.strokeStyle = 'rgba(255,255,255,.95)'; g.strokeText(text, cw / 2, 33); g.fillStyle = '#1D2B26'; g.fillText(text, cw / 2, 33);
       const tex = new THREE.CanvasTexture(c);
       const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false, sizeAttenuation: false, transparent: true });
@@ -158,13 +167,13 @@
     function fitCamera(box, view, state, force) {
       last = { box, view, state };
       const aspect = el.clientWidth / Math.max(el.clientHeight, 1), f = frameBox(box, aspect);
-      if (aspect > 1.25) f.distance *= 1.1; // wide views are height-limited: leave room for the dimension labels
-      if (aspect > 1.25) f.distance *= 1.1; // wide views are height-limited: leave room for the dimension labels
+      const base = f.distance, pull = state.standalone && aspect > 1.25 ? 1.1 : 1; // wide standalone views are height-limited: leave room for the labels (once, x1.1); room mode keeps the plain framing
+      f.distance *= pull;
       const elev = state.target.elev > 0 ? 6 : 10, az = view === 'wall' ? 0 : 22;
       if (!force && rig.userMoved) return;
       controls.target.set(...f.center); controls.minDistance = f.distance * .6; controls.maxDistance = f.distance * 2.5;
       camera.position.set(...cameraPosition(f.center, f.distance, az, elev)); camera.near = Math.max(1, f.distance / 100); camera.far = f.distance * 40; camera.updateProjectionMatrix();
-      controls.update(); rig.userMoved = false; debug.fit = { distance: f.distance, center: f.center, aspect };
+      controls.update(); rig.userMoved = false; debug.fit = { distance: f.distance, base, pull, center: f.center, aspect };
     }
     // state: {design, wall, target, color, view, showSizes, flip, visible()} ; reset re-frames the camera.
     function update(state, reset, element) {
@@ -193,7 +202,7 @@
       obj.position.set(offset + s.width / 2, target.elev, target.gap + s.depth / 2); g.add(obj);
       const parts = (Bookshelf.visualBoards || Bookshelf.boards)(s).filter(b => b.w > 0 && b.h > 0);
       rig.furniture = obj.children.filter(o => o.isMesh && o.geometry?.type !== 'PlaneGeometry');
-      rig.furniture.forEach((o, i) => { const b = parts[i]; if (b && b.kind !== 'Back') o.userData.bay = Number(b.id.slice(1).split('.')[0]) - 1; });
+      rig.furniture.forEach((o, i) => { const b = parts[i]; if (b && b.kind !== 'Back') o.userData.bay = Number(b.id.slice(1).split('.')[0]) - 1; if (b && b.kind === 'Back' && s.template === 'saetter3') o.receiveShadow = false; }); // no hard sun shadows on the dark back panel inside the small SAETTER compartments
       rig.boards = rig.furniture.filter(o => Number.isInteger(o.userData.bay));
       rig.frame = { offset, elev: target.elev, gap: target.gap, depth: s.depth, design: s };
       const box = { minX: offset, maxX: offset + s.width, minY: target.elev, maxY: target.elev + s.height, minZ: target.gap, maxZ: target.gap + s.depth };
@@ -218,7 +227,7 @@
       }
       // Sun and its shadow frustum follow the furniture (and the person) so the shadow map stays sharp.
       { const cx = (reach.minX + reach.maxX) / 2, cy = (reach.minY + reach.maxY) / 2, half = Math.max(reach.maxX - reach.minX, reach.maxY - reach.minY) / 2 + 60;
-        sun.target.position.set(cx, cy, target.gap + s.depth / 2); sun.position.set(cx - 160, cy + 260, target.gap + s.depth / 2 + 360); sun.target.updateMatrixWorld();
+        sun.target.position.set(cx, cy, target.gap + s.depth / 2); sun.position.set(cx - 60, cy + 320, target.gap + s.depth / 2 + 420); sun.target.updateMatrixWorld();
         const c = sun.shadow.camera; c.left = -half; c.right = half; c.top = half; c.bottom = -half; c.near = 50; c.far = 1200; c.updateProjectionMatrix(); }
       let lines = state.showSizes ? dimensionLines(box) : [];
       if (state.showSizes && (state.view === 'wall' || personLabel)) { // the furniture is small here: one summary label instead of three crowded ones
