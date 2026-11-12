@@ -158,6 +158,8 @@
     function fitCamera(box, view, state, force) {
       last = { box, view, state };
       const aspect = el.clientWidth / Math.max(el.clientHeight, 1), f = frameBox(box, aspect);
+      if (aspect > 1.25) f.distance *= 1.1; // wide views are height-limited: leave room for the dimension labels
+      if (aspect > 1.25) f.distance *= 1.1; // wide views are height-limited: leave room for the dimension labels
       const elev = state.target.elev > 0 ? 6 : 10, az = view === 'wall' ? 0 : 22;
       if (!force && rig.userMoved) return;
       controls.target.set(...f.center); controls.minDistance = f.distance * .6; controls.maxDistance = f.distance * 2.5;

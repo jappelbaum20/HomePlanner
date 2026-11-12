@@ -10,6 +10,7 @@ async page => {
     await page.goto('http://127.0.0.1:8765/bookshelf'); await page.evaluate(() => localStorage.clear()); await page.reload(); await page.locator('#bs3d canvas').waitFor();
     if (tab === 'saetter') await page.locator('#bs-tab-saetter').click();
     await page.waitForFunction(() => window.__bsDebug && window.__bsDebug.frames > 0); await page.waitForTimeout(300);
+    await ((vp && vp.width <= 700) ? page.locator('[data-bs-sheet="add"]') : page.locator('[data-bs-addtoggle]')).click(); // the palette opens from the button under the 3D view (a bottom sheet on phones)
   };
   const at = (x, y, z = 0) => page.evaluate(([x, y, z]) => window.__bsDebug.screenOf(x, y, z), [x, y, z]);
   const click = async (x, y, z) => { const p = await at(x, y, z); await page.mouse.click(p.x, p.y); await page.waitForTimeout(120); };

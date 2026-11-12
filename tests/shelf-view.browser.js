@@ -40,7 +40,7 @@ async page => {
   const wallDistance = d.fit.distance;
   await page.locator('[data-bs-view="close"]').click(); await page.waitForTimeout(300); d = await dbg();
   check(d.fit.distance < wallDistance && !d.labels.some(l => l.key === 'wallWidth'), 'back to Close-up frames closer and hides wall labels');
-  await page.locator('#bs3d').locator('xpath=..').locator('[data-bs-sizes]').uncheck(); await page.waitForTimeout(200);
+  await page.locator('#bsMore summary').click(); await page.locator('[data-bs-sizes]').uncheck(); await page.waitForTimeout(200);
   check((await dbg()).labels.length === 0, 'Show sizes off hides the labels'); await page.locator('[data-bs-sizes]').check();
 
   // four azimuths: labels stay on screen and no errors
@@ -85,7 +85,7 @@ async page => {
   const dl = page.waitForEvent('download'); await page.locator('[data-bs-action="json"]').click();
   const saved = JSON.parse(require('fs').readFileSync(await (await dl).path(), 'utf8'));
   check(saved.shelf.height === 40.6 && saved.shelf.depth === 10.5 && !('view' in saved) && !('scene' in saved), 'export keeps the real design and no preview data');
-  await page.locator('[data-bs-variant="3"]').click(); check((await page.locator('#bsReadout').innerText()).startsWith('Furniture 45.5'), 'SAETTER 3 resets the preview');
+  await page.locator('[data-bs-variant="3"]').click(); check((await page.locator('#bsReadout').innerText()).startsWith('Bookshelf 45.5'), 'SAETTER 3 resets the preview');
   await page.locator('[data-bs-variant="7"]').click(); await input('wallHeight').fill('80');
   check((await page.locator('#bsPreviewNote').innerText()).includes('taller than the wall') && !(await page.locator('#bsProblems').innerText()).includes('Wall overflow'), 'oversize comparison gives a grey note, while the real fit check stays clean');
   await input('wallHeight').fill('500'); await page.locator('[data-bs-variant="3"]').click();

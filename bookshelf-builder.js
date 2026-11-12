@@ -6,7 +6,7 @@ window.BookshelfBuilder = (() => {
   const fmt = n => String(B.round(n));
   const mm = n => fmt(n * 10);
   const walls = { n: 'North · top', e: 'East · right', s: 'South · bottom', w: 'West · left' };
-  let host, api, draft, visible = false, scene3d, row = 0, view = 'close', variant = null, showSizes = true, history = [], editing = null, interactionGeneration = 0, proposal = null;
+  let host, api, draft, visible = false, scene3d, row = 0, view = 'close', variant = null, showSizes = true, history = [], editing = null, interactionGeneration = 0, proposal = null, addOpen = false, sheet = null, moreOpen = false;
   // Items to compare against are a session-only aid: never saved, cleared whenever another design is opened.
   let items = [], selected = null, person = false, itemsOn = null, itemSeq = 0;
   const Scene = window.BookshelfScene, Props = window.BookshelfProps;
@@ -28,12 +28,13 @@ window.BookshelfBuilder = (() => {
   function checkpoint() { history.push(JSON.stringify(draft)); if (history.length > 50) history.shift(); }
   function persist(immediate = false) { return api.draft(JSON.parse(JSON.stringify(draft)), immediate); }
   const withoutAlternate = d => { const copy = JSON.parse(JSON.stringify(d)); delete copy.alternate; return copy; };
+  const defaultWall = tab => ({ widthCm: tab === 'saetter' ? 300 : 500, heightCm: tab === 'saetter' ? 250 : 500, color: '#EEEDE8' });
   function fresh(tab = 'custom') {
     const r = standalone() ? null : (api.rooms().find(r => r.id === api.activeRoom()) || api.rooms()[0]);
     const saetter = tab === 'saetter';
     return { tab, name: saetter ? 'SÆTTER 3 · walnut' : 'Custom bookshelf', color: saetter ? '#76513D' : '#A46B42',
       design: saetter ? B.saetter3() : B.preset('staggered', Math.min(240, r?.width ?? 500), Math.min(200, (r?.height ?? 500) - 8)),
-      ...(standalone() ? { wall: { widthCm: 500, heightCm: 500, color: '#EEEDE8' } } : {}),
+      ...(standalone() ? { wall: defaultWall(tab) } : {}),
       target: { roomId: r?.id || null, wall: 'n', offset: standalone() ? 0 : 20, gap: standalone() ? 0 : saetter ? 0 : 2, elev: standalone() ? 0 : saetter ? 120 : 0 }, pieceId: null, itemId: null, itemRoomId: null };
   }
   function prepare() {
@@ -71,7 +72,7 @@ window.BookshelfBuilder = (() => {
     if (draft.tab === tab) return;
     const previous = withoutAlternate(draft);
     const next = draft.alternate?.tab === tab ? withoutAlternate(draft.alternate) : fresh(tab);
-    if (standalone()) next.wall = JSON.parse(JSON.stringify(draft.wall));
+    if (standalone()) { const d = defaultWall(draft.tab); next.wall = ['widthCm', 'heightCm', 'color'].every(k => draft.wall[k] === d[k]) ? defaultWall(tab) : JSON.parse(JSON.stringify(draft.wall)); }
     variant = null; draft = next; draft.alternate = previous; prepare();
     row = 0; history = []; editing = null; clearScene(); persist(true); render();
     host.querySelector(`#bs-tab-${tab}`).focus();
@@ -112,45 +113,105 @@ window.BookshelfBuilder = (() => {
     return out;
   }
   const getWall = wallContext;
-  function render() {
-    const s = draft.design, r = standalone() ? null : room();
-    row = Math.max(0, Math.min(row, s.levels.length - 1));
-    host.innerHTML = `<div class="bs-heading"><div><p class="bs-eyebrow">DESIGN FOR YOUR HOME</p><h1 tabindex="-1">Bookshelf builder</h1><p class="note">Choose a wall. Shape each shelf. Keep a plan to build from.</p></div>${standalone() ? '<a class="btn light" href="/home">Home planner</a>' : '<button class="btn light" data-bs-action="close">Back to room</button>'}</div>
+  // ---- shared pieces of the template (standalone page and room mode) ----
+  const CARD_ART = {
+    custom: `<svg viewBox="0 0 120 84" aria-hidden="true"><rect x="12" y="6" width="96" height="72" rx="2" fill="#F1E2C8" stroke="#8A5A36" stroke-width="4"/><path d="M12 30h58M50 54h58" stroke="#8A5A36" stroke-width="4"/><path d="M38 30v24M82 54v24M70 6v24" stroke="#8A5A36" stroke-width="3"/><rect x="18" y="14" width="8" height="16" fill="#B5543F"/><rect x="28" y="18" width="7" height="12" fill="#3F6F8A"/><rect x="56" y="38" width="9" height="16" fill="#6E8A3F"/></svg>`,
+    saetter: `<svg viewBox="0 0 120 84" aria-hidden="true"><rect x="10" y="10" width="100" height="64" rx="2" fill="#E3CDB4" stroke="#5E3F2E" stroke-width="4"/>${[0, 1, 2, 3].map(i => [0, 1, 2].map(j => `<rect x="${14 + i * 24}" y="${14 + j * 20}" width="20" height="16" fill="#9A7358"/>`).join('')).join('')}</svg>`
+  };
+  const typeTab = (id, title, sub) => `<button type="button" id="bs-tab-${id}" role="tab" class="bs-card" aria-label="${title}" aria-selected="${draft.tab === id}" aria-controls="bs-tabpanel" tabindex="${draft.tab === id ? 0 : -1}" data-bs-tab="${id}">${CARD_ART[id]}<b>${title}</b><span>${sub}</span></button>`;
+  const propsHtml = open => `<div class="bs-props${open ? ' open' : ''}" id="bsProps" role="group" aria-label="Add something to compare"><span class="bs-size-label">Add something to compare</span><div class="bs-palette">${Props ? Props.KINDS.map(k => `<button type="button" class="bs-prop" data-bs-prop="${k}" aria-pressed="${selected === k}" aria-label="${Props.PROPS[k].name}, ${Props.PROPS[k].h} cm tall">${propSvg(k)}<span>${Props.PROPS[k].name}</span></button>`).join('') : ''}<button type="button" class="bs-prop" data-bs-person aria-pressed="${person}" aria-label="Person, 175 cm">${propSvg('person')}<span>Person 175 cm</span></button></div><div class="bs-props-foot"><p class="bs-prop-help" id="bsPropHelp" role="status"></p><button type="button" class="btn light small" data-bs-action="clearItems">Clear items</button></div></div>`;
+  const sizeHtml = undo => `<div class="bs-size" id="bsSize" role="group" aria-label="Size" data-group>${draft.tab === 'saetter' ? `<span class="bs-size-label">Compare sizes <em class="bs-badge">Comparison only · not saved</em></span><span class="bs-chips">${B.SAETTER_VARIANTS.map(v => `<button type="button" class="btn light small" data-bs-variant="${v.id}" aria-pressed="false">${v.label}</button>`).join('')}</span>` : `<span class="bs-size-label">Size</span><span class="bs-chips">${[-10, -5, 5, 10].map(p => `<button type="button" class="btn light small" data-bs-size="${p}" aria-label="Make the bookshelf ${Math.abs(p)} percent ${p < 0 ? 'smaller' : 'bigger'}">${p < 0 ? '−' : '+'}${Math.abs(p)}%</button>`).join('')}</span>`}${undo ? `<button class="btn light small" data-bs-action="undo" ${history.length ? '' : 'disabled'}>Undo</button>` : ''}</div>`;
+  const levelsHtml = () => `${draft.tab === 'custom' ? '<div class="bs-presets"><button class="btn light small" data-preset="framed">Framed</button><button class="btn light small" data-preset="staggered">Staggered</button><button class="btn light small" data-preset="stepped">Stepped edges</button></div>' : ''}
+        <div class="sec-head"><h3>Individual shelves · bottom to top</h3><button class="btn light small" data-bs-action="addLevel">+ Shelf</button></div><div id="bsLevels"></div>
+        <p class="note">Select a board in the drawing or 3D view. Drag a divider in the drawing, or enter exact values below. All editing values are cm.</p>
+        <p class="note bs-edit-feedback" id="bsEditFeedback" role="status"></p><div id="bsRowEditor"></div>`;
+  const aiHtml = () => `<h3>AI shelf edit</h3><p class="note">Only the current shelf geometry and your prompt are sent for a proposal. Nothing changes until you apply it.</p><button class="btn light" data-bs-action="propose" ${api.canPropose?.() ? '' : 'disabled'}>Request AI preview</button><p class="note" id="bsProposalStatus" role="status">${api.canPropose?.() ? '' : 'AI edits are unavailable until sign-in, model configuration and shared validation are ready.'}</p><div id="bsProposal"></div>`;
+  const planHtml = () => { const s = draft.design; return `<h3>Workshop plan</h3><p class="note">${s.template === 'saetter3' ? 'Inferred square-cut shelves, back and paired short separators. The 3D view shows every compartment closed by full-height walls, as on the product; the drawing and list keep the inferred short separators.' : 'Square-cut boards, full depth. Dividers fit between horizontal shelves with butt joints. The drawing and list use the same geometry as 3D.'}</p>
+        <div id="bsCutSummary"></div><div class="bs-table-wrap"><table class="bs-cut"><thead><tr><th>Board</th><th>Length × depth × thickness, mm</th></tr></thead><tbody id="bsCutList"></tbody></table></div>
+        <div class="bs-save-actions"><button class="btn light" data-bs-action="csv">Download cut list</button><button class="btn light" data-bs-action="plan">Download build plan</button><button class="btn light" data-bs-action="print">Print / save PDF</button><button class="btn light" data-bs-action="json">Export design JSON</button></div>`; };
+  const storageNote = () => `<p class="note">${api.cloudWorkspace?.() ? 'Cloud edits stay in this tab until saved through Private designs. Export a backup before leaving.' : standalone() ? 'Drafts autosave in this browser. Use My designs to reopen saved shelves, or export JSON as a backup.' : 'Drafts autosave in this browser. Saved designs are in My pieces, versions, and full-plan backups.'}</p>
+        <p class="note">Measure the actual wall and timber before cutting. Cut sizes exclude saw kerf, machining allowances, fasteners and joinery. Check sag, stability and wall anchoring for your chosen wood and loads.</p>`;
+
+  // Standalone page: a calm first screen, everything else under "More details".
+  function simpleTemplate() {
+    const s = draft.design, saet = draft.tab === 'saetter';
+    const sizeFields = `<div class="row3">${numeric('width', 'Width, cm', s.width, 20)}${numeric('height', 'Height, cm', s.height, 20, 800)}${numeric('depth', 'Depth, cm', s.depth, 10, 100)}</div>`;
+    return `<div class="bs-heading"><div><h1 tabindex="-1">Bookshelf builder</h1><p class="note">Pick a shelf, enter your wall, and see how it looks at real size.</p></div></div>
+      <div class="bs-layout bs-simple" id="bs-tabpanel" role="tabpanel" aria-labelledby="bs-tab-${draft.tab}" data-sheet="${sheet || ''}">
+      <aside class="bs-controls">
+        <h2>1. Choose a type</h2>
+        <div class="bs-cards" role="tablist" aria-label="Bookshelf type" data-group>${typeTab('custom', 'Custom bookshelf', 'Shelves you design yourself')}${typeTab('saetter', 'SÆTTER 3', 'Ready-made walnut shelf')}</div>
+        <h2>2. Your wall</h2>
+        <div class="row2">${numeric('wallWidth', 'Wall width, cm', draft.wall.widthCm, 10, 2000)}${numeric('wallHeight', 'Wall height, cm', draft.wall.heightCm, 10, 2000)}</div>
+        <h2>3. Bookshelf size</h2>
+        ${saet ? `<p class="bs-fixed">SÆTTER 3 comes in one size: ${fmt(B.saetter3().width)} × ${fmt(B.saetter3().height)} × ${fmt(B.saetter3().depth)} cm. Try the other real sizes under the 3D view.</p>` : `${sizeFields}<p class="note">Or make it bigger or smaller with the Size buttons under the 3D view.</p>`}
+        <h2>4. Color</h2>${field('color', 'Wood color', draft.color, 'type="color"')}
+        <h2>5. Save</h2>
+        <div class="bs-save-actions"><button class="btn bs-save" data-bs-action="save">Save design</button></div><p class="note" id="bsSaveNote"></p>
+        <details class="bs-more" id="bsMore" ${moreOpen ? 'open' : ''}><summary>More details</summary><div class="bs-more-body">
+          <section><h3>Your design</h3>${field('name', 'Design name', draft.name, 'maxlength="100"')}${field('wallColor', 'Wall color', draft.wall.color, 'type="color"')}
+            <div class="bs-save-actions two"><button class="btn light" data-bs-action="copy">Make a copy</button><button class="btn light" data-bs-action="new">New design</button></div></section>
+          <section><h3>Where it stands</h3><p class="note">Leave these at 0 to stand the shelf on the floor in the left corner of the wall.</p>
+            <div class="row3">${numeric('offset', 'Distance from left corner, cm', draft.target.offset, 0, 2000)}${numeric('gap', 'Distance from wall, cm', draft.target.gap, 0, 100)}${numeric('elev', 'Height from floor, cm', draft.target.elev, 0, 2000)}</div></section>
+          <section><h3>Exact size and boards</h3>${saet ? `${sizeFields}<p class="note bs-reference"><a href="https://saetter.dk/en/products/saetter-3-valnod" target="_blank" rel="noopener noreferrer">SÆTTER 3 · walnut reference</a>. This editable approximation uses estimated board, back and divider sizes. Joinery and hardware are not specified.</p>` : ''}
+            <div class="row2">${numeric('thickness', 'Board thickness, cm (advanced)', s.thickness, .9, 6)}</div>
+            ${s.template === 'saetter3' ? `<div class="row2">${numeric('separatorHeight', 'Divider height, cm (estimated)', s.separatorHeight, .1, 100)}${numeric('backThickness', 'Back thickness, cm (estimated)', s.backThickness, .1, 10)}</div>` : ''}
+            <p class="note">Width and height changes scale the layout. Board thickness stays exact.</p></section>
+          <section><h3>Shelves and boards</h3><div id="bsDrawing" class="bs-drawing"></div>${levelsHtml()}</section>
+          <section><h3>3D view</h3><div class="bs-save-actions two"><label class="bs-switch"><input type="checkbox" data-bs-sizes ${showSizes ? 'checked' : ''}> Show sizes</label><button class="btn light" data-bs-action="resetCamera">Reset view</button></div></section>
+          <section>${planHtml()}</section>
+          <section><div id="bsWarnings"></div>${storageNote()}</section>
+          <section>${aiHtml()}</section>
+        </div></details>
+      </aside>
+      <div class="bs-preview">
+        <p class="bs-wallname" id="bsPreviewTitle"></p>
+        <div id="bs3d" aria-label="Orbitable 3D bookshelf against the selected wall"></div>
+        <div class="bs-viewbar"><div class="bs-seg" role="group" aria-label="3D view" data-group><button type="button" class="btn light small" data-bs-view="close" aria-pressed="true">Close-up</button><button type="button" class="btn light small" data-bs-view="wall" aria-pressed="false">Whole wall</button></div><p class="bs-readout" id="bsReadout" role="status"></p></div>
+        <p class="bs-note-grey" id="bsPreviewNote"></p>
+        <div class="bs-tools"><button type="button" class="btn light bs-addtoggle" data-bs-addtoggle aria-expanded="${addOpen}" aria-controls="bsProps">Add something to compare</button>${sizeHtml(true)}${propsHtml(addOpen)}</div>
+        <div id="bsProblems" aria-live="polite"></div>
+        <p class="note bs-hint">Drag to turn the view · scroll to zoom · pick an item, then click a shelf to place it.</p>
+      </div>
+      </div>
+      <nav class="bs-bar" aria-label="Quick actions"><button type="button" class="btn light" data-bs-sheet="size" aria-expanded="${sheet === 'size'}">Size</button><button type="button" class="btn light" data-bs-sheet="add" aria-expanded="${sheet === 'add'}">Add item</button><button type="button" class="btn" data-bs-barsave>Save</button></nav>`;
+  }
+  function roomTemplate() {
+    const s = draft.design, r = room();
+    return `<div class="bs-heading"><div><p class="bs-eyebrow">DESIGN FOR YOUR HOME</p><h1 tabindex="-1">Bookshelf builder</h1><p class="note">Choose a wall. Shape each shelf. Keep a plan to build from.</p></div><button class="btn light" data-bs-action="close">Back to room</button></div>
       <div class="bs-tabs" role="tablist" aria-label="Bookshelf designs">${[['custom', 'Custom bookshelf'], ['saetter', 'SÆTTER 3']].map(([id, label]) => `<button type="button" id="bs-tab-${id}" role="tab" aria-selected="${draft.tab === id}" aria-controls="bs-tabpanel" tabindex="${draft.tab === id ? 0 : -1}" data-bs-tab="${id}">${label}</button>`).join('')}</div>
       <div class="bs-layout" id="bs-tabpanel" role="tabpanel" aria-labelledby="bs-tab-${draft.tab}"><aside class="bs-controls">
         ${draft.tab === 'saetter' ? `<p class="note bs-reference"><a href="https://saetter.dk/en/products/saetter-3-valnod" target="_blank" rel="noopener noreferrer">SÆTTER 3 · walnut reference</a><br>Reference: 45.5 × 40.6 × 10.5 cm overall; compartments 10 × 12 × 10 cm. This editable approximation uses an inferred 1.1 cm board, 0.5 cm back and 3 cm separators; initial clear height is about 12.07 cm. Joinery and hardware are not specified.</p>` : ''}
-        <h2>1. Choose your wall</h2>${standalone() ? `<div class="row2">${numeric('wallWidth', 'Wall width, cm', draft.wall.widthCm, 10, 2000)}${numeric('wallHeight', 'Wall height, cm', draft.wall.heightCm, 10, 2000)}</div>${field('wallColor', 'Wall color', draft.wall.color, 'type="color"')}<p class="note" id="bsWallNote">This wall belongs to this standalone design.</p>` : `<label class="field"><span>Room</span><select data-bs="roomId">${api.rooms().map(x => `<option value="${esc(x.id)}" ${x.id === r.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
+        <h2>1. Choose your wall</h2><label class="field"><span>Room</span><select data-bs="roomId">${api.rooms().map(x => `<option value="${esc(x.id)}" ${x.id === r.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
         <label class="field"><span>Wall</span><select data-bs="wall">${Object.entries(walls).map(([k, label]) => `<option value="${k}" ${k === draft.target.wall ? 'selected' : ''}>${label} · ${['n', 's'].includes(k) ? r.width : r.length} cm</option>`).join('')}</select></label>
-        <p class="note" id="bsWallNote">Ceiling ${r.height} cm. Wall sides match the floor plan. Offset is from its left corner (north/south) or top corner (east/west).</p>`}
-        <div class="row3">${numeric('offset', 'Wall offset, cm', draft.target.offset, 0, standalone() ? 2000 : 1000)}${numeric('gap', 'Wall gap, cm', draft.target.gap, 0, standalone() ? 100 : 1000)}${numeric('elev', 'Above floor, cm', draft.target.elev, 0, standalone() ? 2000 : 1000)}</div>
+        <p class="note" id="bsWallNote">Ceiling ${r.height} cm. Wall sides match the floor plan. Offset is from its left corner (north/south) or top corner (east/west).</p>
+        <div class="row3">${numeric('offset', 'Wall offset, cm', draft.target.offset, 0, 1000)}${numeric('gap', 'Wall gap, cm', draft.target.gap, 0, 1000)}${numeric('elev', 'Above floor, cm', draft.target.elev, 0, 1000)}</div>
         <h2>2. Shape the bookshelf</h2>${field('name', 'Design name', draft.name, 'maxlength="100"')}
         <div class="row3">${numeric('width', 'Width, cm', s.width, 20)}${numeric('height', 'Height, cm', s.height, 20, 800)}${numeric('depth', 'Depth, cm', s.depth, 10, 100)}</div>
         <div class="row2">${numeric('thickness', 'Board thickness, cm', s.thickness, .9, 6)}${field('color', 'Wood / finish color', draft.color, 'type="color"')}</div>
         ${s.template === 'saetter3' ? `<div class="row2">${numeric('separatorHeight', 'Separator height, cm (inferred)', s.separatorHeight, .1, 100)}${numeric('backThickness', 'Back thickness, cm (inferred)', s.backThickness, .1, 10)}</div>` : ''}
         <p class="note">Width and height changes scale the layout. Board thickness stays exact.</p>
-        ${draft.tab === 'custom' ? '<div class="bs-presets"><button class="btn light small" data-preset="framed">Framed</button><button class="btn light small" data-preset="staggered">Staggered</button><button class="btn light small" data-preset="stepped">Stepped edges</button></div>' : ''}
-        <div class="sec-head"><h3>Individual shelves · bottom to top</h3><button class="btn light small" data-bs-action="addLevel">+ Shelf</button></div><div id="bsLevels"></div>
-        <p class="note">Select a board in the drawing or 3D view. Drag a divider in the drawing, or enter exact values below. All editing values are cm.</p>
-        <p class="note bs-edit-feedback" id="bsEditFeedback" role="status"></p><div id="bsRowEditor"></div>
+        ${levelsHtml()}
       </aside><div class="bs-preview"><div class="bs-preview-head"><h2 id="bsPreviewTitle"></h2><div class="btnrow"><button class="btn light small" data-bs-action="undo" ${history.length ? '' : 'disabled'}>Undo</button><button class="btn light small" data-bs-action="resetCamera">Reset 3D view</button></div></div>
         <div class="bs-viewbar"><div class="bs-seg" role="group" aria-label="3D view"><button type="button" class="btn light small" data-bs-view="close" aria-pressed="true">Close-up</button><button type="button" class="btn light small" data-bs-view="wall" aria-pressed="false">Whole wall</button></div><label class="bs-switch"><input type="checkbox" data-bs-sizes ${showSizes ? 'checked' : ''}> Show sizes</label></div>
-        <div id="bs3d" aria-label="Orbitable 3D bookshelf against the selected wall"></div><div class="bs-props" id="bsProps" role="group" aria-label="Add something to compare"><span class="bs-size-label">Add something to compare</span><div class="bs-palette">${Props ? Props.KINDS.map(k => `<button type="button" class="bs-prop" data-bs-prop="${k}" aria-pressed="${selected === k}" aria-label="${Props.PROPS[k].name}, ${Props.PROPS[k].h} cm tall">${propSvg(k)}<span>${Props.PROPS[k].name}</span></button>`).join('') : ''}<button type="button" class="bs-prop" data-bs-person aria-pressed="${person}" aria-label="Person, 175 cm">${propSvg('person')}<span>Person 175 cm</span></button></div><div class="bs-props-foot"><p class="bs-prop-help" id="bsPropHelp" role="status"></p><button type="button" class="btn light small" data-bs-action="clearItems">Clear items</button></div></div><div class="bs-size" id="bsSize" role="group" aria-label="Size">${draft.tab === 'saetter' ? `<span class="bs-size-label">Compare sizes <em class="bs-badge">Comparison only · not saved</em></span><span class="bs-chips">${B.SAETTER_VARIANTS.map(v => `<button type="button" class="btn light small" data-bs-variant="${v.id}" aria-pressed="false">${v.label}</button>`).join('')}</span>` : `<span class="bs-size-label">Size</span><span class="bs-chips">${[-10, -5, 5, 10].map(p => `<button type="button" class="btn light small" data-bs-size="${p}" aria-label="Make the bookshelf ${Math.abs(p)} percent ${p < 0 ? 'smaller' : 'bigger'}">${p < 0 ? '−' : '+'}${Math.abs(p)}%</button>`).join('')}</span>`}</div>
+        <div id="bs3d" aria-label="Orbitable 3D bookshelf against the selected wall"></div>${propsHtml(true)}${sizeHtml(false)}
         <p class="bs-readout" id="bsReadout" role="status"></p><p class="bs-note-grey" id="bsPreviewNote"></p>
         <p class="note">Drag to orbit · scroll to zoom · click a board to edit its level, or pick an item above and click to place it</p>
         <div id="bsDrawing" class="bs-drawing"></div><div id="bsProblems" aria-live="polite"></div>
-      </div><aside class="bs-output"><h2>3. ${standalone() ? 'Save design' : 'Save & place'}</h2>${standalone() ? '' : `<label class="field"><span>Saved bookshelf designs</span><select data-bs="saved"><option value="">Select a design…</option>${api.pieces().filter(p => p.shelfDesign).map(p => `<option value="${esc(p.id)}" ${p.id === draft.pieceId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>`}
-        <p class="note" id="bsSaveNote"></p><div class="bs-save-actions"><button class="btn" data-bs-action="save">Save design</button>${standalone() ? '' : `<button class="btn mark" data-bs-action="place">Save & ${draft.itemId ? 'move placement' : 'place on wall'}</button><button class="btn light" data-bs-action="standaloneCopy">Copy to standalone bookshelf</button>`}<button class="btn light" data-bs-action="copy">Make a copy</button><button class="btn light" data-bs-action="new">New design</button></div>
-        <h3>AI shelf edit</h3><p class="note">Only the current shelf geometry and your prompt are sent for a proposal. Nothing changes until you apply it.</p><button class="btn light" data-bs-action="propose" ${api.canPropose?.() ? '' : 'disabled'}>Request AI preview</button><p class="note" id="bsProposalStatus" role="status">${api.canPropose?.() ? '' : 'AI edits are unavailable until sign-in, model configuration and shared validation are ready.'}</p><div id="bsProposal"></div>
-        <h3>Workshop plan</h3><p class="note">${s.template === 'saetter3' ? 'Inferred square-cut shelves, back and paired short separators. The 3D view shows every compartment closed by full-height walls, as on the product; the drawing and list keep the inferred short separators.' : 'Square-cut boards, full depth. Dividers fit between horizontal shelves with butt joints. The drawing and list use the same geometry as 3D.'}</p>
-        <div id="bsCutSummary"></div><div class="bs-table-wrap"><table class="bs-cut"><thead><tr><th>Board</th><th>Length × depth × thickness, mm</th></tr></thead><tbody id="bsCutList"></tbody></table></div>
-        <div class="bs-save-actions"><button class="btn light" data-bs-action="csv">Download cut list</button><button class="btn light" data-bs-action="plan">Download build plan</button><button class="btn light" data-bs-action="print">Print / save PDF</button><button class="btn light" data-bs-action="json">Export design JSON</button></div>
-        <p class="note">${api.cloudWorkspace?.() ? 'Cloud edits stay in this tab until saved through Private designs. Export a backup before leaving.' : standalone() ? 'Drafts autosave in this browser. Use Open local design to reopen saved shelves, or export JSON as a backup.' : 'Drafts autosave in this browser. Saved designs are in My pieces, versions, and full-plan backups.'}</p>
-        <p class="note">Measure the actual wall and timber before cutting. Cut sizes exclude saw kerf, machining allowances, fasteners and joinery. Check sag, stability and wall anchoring for your chosen wood and loads.</p>
+      </div><aside class="bs-output"><h2>3. Save & place</h2><label class="field"><span>Saved bookshelf designs</span><select data-bs="saved"><option value="">Select a design…</option>${api.pieces().filter(p => p.shelfDesign).map(p => `<option value="${esc(p.id)}" ${p.id === draft.pieceId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
+        <p class="note" id="bsSaveNote"></p><div class="bs-save-actions"><button class="btn" data-bs-action="save">Save design</button><button class="btn mark" data-bs-action="place">Save & ${draft.itemId ? 'move placement' : 'place on wall'}</button><button class="btn light" data-bs-action="standaloneCopy">Copy to standalone bookshelf</button><button class="btn light" data-bs-action="copy">Make a copy</button><button class="btn light" data-bs-action="new">New design</button></div>
+        ${aiHtml()}${planHtml()}${storageNote()}
       </aside></div>`;
+  }
+  function render() {
+    const s = draft.design;
+    row = Math.max(0, Math.min(row, s.levels.length - 1));
+    host.innerHTML = standalone() ? simpleTemplate() : roomTemplate();
     refresh();
     if (scene3d) host.querySelector('#bs3d').appendChild(scene3d.rig.renderer.domElement);
     update3D(true);
   }
+  const warningsHtml = p => `<div class="bs-warning"><b>Construction checks</b><ul>${p.warnings.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
   function refresh() {
     const s = draft.design, p = problems(), valid = !p.errors.length;
     const l = s.levels[row], next = s.levels[row + 1];
@@ -180,7 +241,7 @@ window.BookshelfBuilder = (() => {
       host.querySelector('#bsWallNote').textContent = `Ceiling ${r.height} cm. Wall sides match the floor plan. Offset is from its left corner (north/south) or top corner (east/west).`;
     }
     const values = { ...draft.target, wallWidth: draft.wall?.widthCm, wallHeight: draft.wall?.heightCm, wallColor: draft.wall?.color, name: draft.name, color: draft.color, width: s.width, height: s.height, depth: s.depth, thickness: s.thickness, separatorHeight: s.separatorHeight, backThickness: s.backThickness };
-    host.querySelector('.bs-controls').querySelectorAll('[data-bs]').forEach(t => {
+    host.querySelectorAll('[data-bs]').forEach(t => {
       if (Object.hasOwn(values, t.dataset.bs) && t !== document.activeElement) t.value = values[t.dataset.bs];
     });
     host.querySelector('[data-bs-action="addLevel"]').disabled = s.levels.length < 2 || s.levels.length >= 25;
@@ -189,18 +250,19 @@ window.BookshelfBuilder = (() => {
     host.querySelectorAll('[data-bs-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.bsView === view)));
     host.querySelectorAll('[data-bs-variant]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.bsVariant === (variant || '3'))));
     const shown = displayDesign(), previewing = shown !== s, dims = d => `${fmt(d.width)} × ${fmt(d.height)} × ${fmt(d.depth)} cm`;
-    host.querySelector('#bsReadout').textContent = previewing ? `Comparison preview ${B.SAETTER_VARIANTS.find(v => v.id === variant).label}: ${dims(shown)}. Your design and fit checks stay at ${dims(s)}.` : `Furniture ${dims(s)} (width × height × depth)`;
+    host.querySelector('#bsReadout').textContent = previewing ? `Comparison preview ${B.SAETTER_VARIANTS.find(v => v.id === variant).label}: ${dims(shown)}. Your design and fit checks stay at ${dims(s)}.` : `Bookshelf ${dims(s)} (width × height × depth)`;
     const over = previewing ? (standalone() ? [...(draft.target.offset + shown.width > draft.wall.widthCm ? ['wider than the wall'] : []), ...(draft.target.elev + shown.height > draft.wall.heightCm ? ['taller than the wall'] : [])] : B.fit(shown, room(), draft.target).length ? ['too big for this spot'] : []) : [];
     host.querySelector('#bsPreviewNote').textContent = over.length ? `At this comparison size it would be ${over.join(' and ')}. Preview only.` : '';
-    host.querySelector('#bsPreviewTitle').textContent = getWall().name;
+    host.querySelector('#bsPreviewTitle').textContent = standalone() ? `Your wall: ${fmt(draft.wall.widthCm)} × ${fmt(draft.wall.heightCm)} cm` : getWall().name;
     host.querySelector('#bsProblems').innerHTML = `${p.errors.length ? `<div class="bs-error"><b>Fix the board layout before saving</b><ul>${p.errors.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
       ${p.fit.length ? `<div class="bs-error"><b>${standalone() ? 'Wall overflow' : 'Choose a clear placement before placing'}</b><ul>${p.fit.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : `<p class="bs-ok">${standalone() ? 'Fits the wall dimensions.' : 'Fits the wall dimensions and clears the checked openings and furniture.'}</p>`}
-      ${p.warnings.length ? `<div class="bs-warning"><b>Construction checks</b><ul>${p.warnings.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}`;
+      ${p.warnings.length && !standalone() ? warningsHtml(p) : p.warnings.length ? `<p class="note">${p.warnings.length} building note${p.warnings.length > 1 ? 's' : ''} under More details.</p>` : ''}`;
+    const warnBox = host.querySelector('#bsWarnings'); if (warnBox) warnBox.innerHTML = p.warnings.length ? warningsHtml(p) : '';
     const parts = B.boards(s);
     host.querySelector('#bsCutList').innerHTML = valid ? parts.map(b => `<tr><td>${b.id}</td><td>${mm(b.length)} × ${mm(b.depth)} × ${mm(b.thickness)}</td></tr>`).join('') : '<tr><td colspan="2">Fix the layout to calculate a usable cut list.</td></tr>';
     host.querySelector('#bsCutSummary').textContent = valid ? `${parts.length} boards · ${fmt(parts.reduce((sum, b) => sum + b.length * b.depth, 0) / 10000)} m² of board face (before waste)` : '';
     host.querySelector('#bsSaveNote').textContent = draft.pieceId ? 'Saving updates this design and all its existing placements. Make a copy for a different version.' : 'Save as a reusable piece; place it now or later in either room.';
-    if (standalone()) host.querySelector('#bsSaveNote').textContent = api.legacyDefault?.() ? 'Legacy shelf: default 500 × 500 cm neutral wall and zero placement. Save explicitly to retain wall settings.' : 'Save locally or use Private designs to save to your account.';
+    if (standalone()) host.querySelector('#bsSaveNote').textContent = api.legacyDefault?.() ? 'Legacy shelf: default 500 × 500 cm neutral wall and zero placement. Save explicitly to retain wall settings.' : 'Saved in this browser. To keep it in your account, use My designs > Private designs.';
     if (!standalone() && api.cloudWorkspace?.()) host.querySelector('#bsSaveNote').textContent = 'Use Private designs to save changes to cloud.';
     if (!api.storageAvailable()) host.querySelector('#bsSaveNote').textContent = 'Browser storage is unavailable: changes only last for this session. Download a design or export a full-plan backup now.';
     for (const action of ['save', 'csv', 'plan', 'print', 'json']) host.querySelector(`[data-bs-action="${action}"]`).disabled = !valid;
@@ -296,6 +358,7 @@ window.BookshelfBuilder = (() => {
       const next = e.key === 'Home' ? 'custom' : e.key === 'End' ? 'saetter' : tab.dataset.bsTab === 'custom' ? 'saetter' : 'custom';
       switchTab(next);
     });
+    host.addEventListener('toggle', e => { if (e.target.id === 'bsMore') moreOpen = e.target.open; }, true);
     host.addEventListener('focusin', e => {
       if (e.target.matches('input[data-bs]')) editing = { key: e.target.dataset.bs, before: JSON.parse(JSON.stringify(draft)), changed: false };
     });
@@ -324,6 +387,12 @@ window.BookshelfBuilder = (() => {
     host.addEventListener('click', async e => {
       const t = e.target.closest('button, [data-bs-board]'); if (!t) return;
       if (t.dataset.bsTab) return switchTab(t.dataset.bsTab);
+      if (t.dataset.bsAddtoggle !== undefined) { addOpen = !addOpen; host.querySelector('#bsProps').classList.toggle('open', addOpen); t.setAttribute('aria-expanded', String(addOpen)); return; }
+      if (t.dataset.bsSheet) {
+        sheet = sheet === t.dataset.bsSheet ? null : t.dataset.bsSheet; host.querySelector('.bs-simple').dataset.sheet = sheet || '';
+        host.querySelectorAll('[data-bs-sheet]').forEach(b => b.setAttribute('aria-expanded', String(b.dataset.bsSheet === sheet))); return;
+      }
+      if (t.dataset.bsBarsave !== undefined) { const save = host.querySelector('[data-bs-action="save"]'); if (!save.disabled) save.click(); else api.toast('Resolve the highlighted issues first.'); return; }
       if (t.dataset.bsProp) { selected = selected === t.dataset.bsProp ? null : t.dataset.bsProp; help(selected ? `${itemName(selected)} selected: click a shelf or compartment to place it.` : 'Pick an item, then click a shelf or compartment. Click a placed item to remove it.'); return paletteState(); }
       if (t.dataset.bsPerson !== undefined) { person = !person; if (person) selected = null; help(person ? 'A 175 cm person stands next to the furniture.' : 'Person hidden.'); update3D(true); return; }
       if (t.dataset.bsView) { view = t.dataset.bsView; refresh(); return update3D(true); }
