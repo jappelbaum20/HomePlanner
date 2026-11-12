@@ -26,6 +26,20 @@
       levels: Array.from({ length: 4 }, (_, i) => ({ y: round(i * (height - thickness) / 3),
         left: 0, right: width, dividers: i < 3 ? [...dividers] : [] })) });
   }
+  // Real SÆTTER sizes from saetter.dk (walnut): rows x columns of 10 x 12 cm compartments. Comparison previews only.
+  const SAETTER_VARIANTS = [
+    { id: '3', label: 'SÆTTER 3', rows: 3, cols: 4, width: 45.5, height: 40.6, depth: 10.5 },
+    { id: '5', label: 'SÆTTER 5', rows: 5, cols: 4, width: 45.5, height: 66.7, depth: 11.2 },
+    { id: '7', label: 'SÆTTER 7', rows: 7, cols: 4, width: 45.5, height: 92.4, depth: 11.2 },
+    { id: '15', label: 'SÆTTER 15', rows: 5, cols: 3, width: 34.4, height: 66.7, depth: 11.2 }
+  ];
+  function saetterVariant(id) {
+    const v = SAETTER_VARIANTS.find(x => x.id === String(id)) || SAETTER_VARIANTS[0];
+    if (v.id === '3') return saetter3();
+    const t = 1.1, dividers = Array.from({ length: v.cols + 1 }, (_, j) => round(t / 2 + j * (10 + t)));
+    return normalize({ template: 'saetter3', width: v.width, height: v.height, depth: v.depth, thickness: t, separatorHeight: 3, backThickness: .5,
+      levels: Array.from({ length: v.rows + 1 }, (_, i) => ({ y: round(i * (v.height - t) / v.rows), left: 0, right: v.width, dividers: i < v.rows ? [...dividers] : [] })) });
+  }
   function preset(kind = 'staggered', width = 240, height = 200, depth = 30, thickness = 2.4, rows = 5) {
     const levels = [];
     for (let i = 0; i <= rows; i++) {
@@ -142,7 +156,7 @@
     });
     return [...new Set(errors)];
   }
-  const api = { normalize, preset, saetter3, boards, validate, resize, dividerPosition, placement, fit, round };
+  const api = { normalize, preset, saetter3, saetterVariant, SAETTER_VARIANTS, boards, validate, resize, dividerPosition, placement, fit, round };
   root.Bookshelf = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

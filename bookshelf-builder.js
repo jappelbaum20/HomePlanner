@@ -6,7 +6,10 @@ window.BookshelfBuilder = (() => {
   const fmt = n => String(B.round(n));
   const mm = n => fmt(n * 10);
   const walls = { n: 'North · top', e: 'East · right', s: 'South · bottom', w: 'West · left' };
-  let host, api, draft, visible = false, rig, drag, row = 0, history = [], editing = null, interactionGeneration = 0, proposal = null;
+  let host, api, draft, visible = false, scene3d, row = 0, view = 'close', variant = null, showSizes = true, history = [], editing = null, interactionGeneration = 0, proposal = null;
+  const Scene = window.BookshelfScene;
+  // Comparison preview of another real SÆTTER size. Never saved, never used for fit checks.
+  const displayDesign = () => draft.tab === 'saetter' && variant && variant !== '3' ? B.saetterVariant(variant) : draft.design;
   const room = () => api.rooms().find(r => r.id === draft.target.roomId) || api.rooms()[0];
   const standalone = () => api.mode === 'standalone';
   // A wall is a rendering/fit context, independent of room membership.
@@ -36,7 +39,7 @@ window.BookshelfBuilder = (() => {
     if (draft.itemId && !api.hasPlacement(draft.itemId, draft.itemRoomId)) { draft.itemId = null; draft.itemRoomId = null; }
   }
   function open(piece, placement) {
-    interactionGeneration++; proposal = null;
+    interactionGeneration++; proposal = null; variant = null;
     if (!standalone() && !api.rooms().length) return api.toast('Office and Living room are unavailable in this plan.');
     const previous = api.draft();
     if (piece) {
@@ -64,7 +67,7 @@ window.BookshelfBuilder = (() => {
     const previous = withoutAlternate(draft);
     const next = draft.alternate?.tab === tab ? withoutAlternate(draft.alternate) : fresh(tab);
     if (standalone()) next.wall = JSON.parse(JSON.stringify(draft.wall));
-    draft = next; draft.alternate = previous; prepare();
+    variant = null; draft = next; draft.alternate = previous; prepare();
     row = 0; history = []; editing = null; persist(true); render();
     host.querySelector(`#bs-tab-${tab}`).focus();
   }
@@ -75,15 +78,16 @@ window.BookshelfBuilder = (() => {
     return { ...geometry, errors: [...geometry.errors, ...invalid.map(t => `${t.closest('label').textContent.trim()}: enter a number within the shown range.`)],
       fit: standalone() ? [ ...(draft.target.offset + draft.design.width > draft.wall.widthCm ? ['Bookshelf extends beyond the wall width.'] : []), ...(draft.target.elev + draft.design.height > draft.wall.heightCm ? ['Bookshelf extends beyond the wall height.'] : []) ] : [...B.fit(draft.design, room(), draft.target), ...api.collisions(draft, room())] };
   }
-  function drawing(wallContext = true) {
+  function drawing(wallContext = true, cropped = false) {
     const s = draft.design, wall = getWall(), target = draft.target;
     const W = wallContext ? wall.width : s.width;
     const H = wallContext ? wall.height : s.height;
     const flip = wallContext && wall.flip;
     const dx = wallContext ? (flip ? W - target.offset - s.width : target.offset) : 0;
     const dy = wallContext ? target.elev : 0;
-    const fs = Math.max(W, H) / 45, pad = fs * 3;
-    let out = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-pad} ${-pad} ${W + pad * 2} ${H + pad * 2}" role="img" aria-label="Dimensioned front elevation; all dimensions in centimetres"><rect width="${W}" height="${H}" fill="${wallContext ? esc(wall.color) : '#FAF8F3'}" stroke="#B5B8B0"/>`;
+    const crop = wallContext && cropped && Scene ? Scene.cropViewBox({ x: dx, y: H - dy - s.height, w: s.width, h: s.height }) : null;
+    const fs = crop ? crop.fontSize : Math.max(W, H) / 45, pad = fs * 3;
+    let out = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${crop ? crop.viewBox : `${-pad} ${-pad} ${W + pad * 2} ${H + pad * 2}`}" role="img" aria-label="Dimensioned front elevation; all dimensions in centimetres"><rect width="${W}" height="${H}" fill="${wallContext ? esc(wall.color) : '#FAF8F3'}" stroke="#B5B8B0"/>`;
     if (wallContext) wall.openings.forEach(o => {
       const x = flip ? W - o.offset - o.width : o.offset;
       out += `<rect x="${x}" y="${H - (o.sill + o.height)}" width="${o.width}" height="${o.height}" fill="${o.type === 'door' ? '#D7C6AE' : '#D5E5EA'}" stroke="#737D7C"/><text x="${x + 3}" y="${H - o.sill - 5}" font-size="${fs}" fill="#293A3D">${o.type}</text>`;
@@ -98,7 +102,8 @@ window.BookshelfBuilder = (() => {
       const ty = b.kind === 'Shelf' ? y - fs * .25 : y + b.h / 2;
       out += `<text x="${dx + b.x + b.w / 2}" y="${ty}" font-size="${fs * .85}" text-anchor="middle" fill="#302922" pointer-events="none">${b.id}</text></g>`;
     });
-    out += `<text x="${W / 2}" y="${H + fs * 1.7}" text-anchor="middle" font-size="${fs}" fill="#313C37">${fmt(W)} cm${wallContext ? ' wall' : ' overall width'}</text><text transform="translate(${-fs * 1.3} ${H / 2}) rotate(-90)" text-anchor="middle" font-size="${fs}" fill="#313C37">${fmt(H)} cm</text></svg>`;
+    if (crop) out += `<text x="${dx + s.width / 2}" y="${H - dy + fs * 1.7}" text-anchor="middle" font-size="${fs}" fill="#313C37" data-bs-dim="width">${fmt(s.width)} cm</text><text transform="translate(${dx - fs * .9} ${H - dy - s.height / 2}) rotate(-90)" text-anchor="middle" font-size="${fs}" fill="#313C37" data-bs-dim="height">${fmt(s.height)} cm</text></svg>`;
+    else out += `<text x="${W / 2}" y="${H + fs * 1.7}" text-anchor="middle" font-size="${fs}" fill="#313C37">${fmt(W)} cm${wallContext ? ' wall' : ' overall width'}</text><text transform="translate(${-fs * 1.3} ${H / 2}) rotate(-90)" text-anchor="middle" font-size="${fs}" fill="#313C37">${fmt(H)} cm</text></svg>`;
     return out;
   }
   const getWall = wallContext;
@@ -123,7 +128,10 @@ window.BookshelfBuilder = (() => {
         <p class="note">Select a board in the drawing or 3D view. Drag a divider in the drawing, or enter exact values below. All editing values are cm.</p>
         <p class="note bs-edit-feedback" id="bsEditFeedback" role="status"></p><div id="bsRowEditor"></div>
       </aside><div class="bs-preview"><div class="bs-preview-head"><h2 id="bsPreviewTitle"></h2><div class="btnrow"><button class="btn light small" data-bs-action="undo" ${history.length ? '' : 'disabled'}>Undo</button><button class="btn light small" data-bs-action="resetCamera">Reset 3D view</button></div></div>
-        <div id="bs3d" aria-label="Orbitable 3D bookshelf against the selected wall"></div><p class="note">Drag to orbit · scroll to zoom · click a board to edit its level</p>
+        <div class="bs-viewbar"><div class="bs-seg" role="group" aria-label="3D view"><button type="button" class="btn light small" data-bs-view="close" aria-pressed="true">Close-up</button><button type="button" class="btn light small" data-bs-view="wall" aria-pressed="false">Whole wall</button></div><label class="bs-switch"><input type="checkbox" data-bs-sizes ${showSizes ? 'checked' : ''}> Show sizes</label></div>
+        <div id="bs3d" aria-label="Orbitable 3D bookshelf against the selected wall"></div><div class="bs-size" id="bsSize" role="group" aria-label="Size">${draft.tab === 'saetter' ? `<span class="bs-size-label">Compare sizes <em class="bs-badge">Comparison only · not saved</em></span><span class="bs-chips">${B.SAETTER_VARIANTS.map(v => `<button type="button" class="btn light small" data-bs-variant="${v.id}" aria-pressed="false">${v.label}</button>`).join('')}</span>` : `<span class="bs-size-label">Size</span><span class="bs-chips">${[-10, -5, 5, 10].map(p => `<button type="button" class="btn light small" data-bs-size="${p}" aria-label="Make the bookshelf ${Math.abs(p)} percent ${p < 0 ? 'smaller' : 'bigger'}">${p < 0 ? '−' : '+'}${Math.abs(p)}%</button>`).join('')}</span>`}</div>
+        <p class="bs-readout" id="bsReadout" role="status"></p><p class="bs-note-grey" id="bsPreviewNote"></p>
+        <p class="note">Drag to orbit · scroll to zoom · click a board to edit its level</p>
         <div id="bsDrawing" class="bs-drawing"></div><div id="bsProblems" aria-live="polite"></div>
       </div><aside class="bs-output"><h2>3. ${standalone() ? 'Save design' : 'Save & place'}</h2>${standalone() ? '' : `<label class="field"><span>Saved bookshelf designs</span><select data-bs="saved"><option value="">Select a design…</option>${api.pieces().filter(p => p.shelfDesign).map(p => `<option value="${esc(p.id)}" ${p.id === draft.pieceId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>`}
         <p class="note" id="bsSaveNote"></p><div class="bs-save-actions"><button class="btn" data-bs-action="save">Save design</button>${standalone() ? '' : `<button class="btn mark" data-bs-action="place">Save & ${draft.itemId ? 'move placement' : 'place on wall'}</button><button class="btn light" data-bs-action="standaloneCopy">Copy to standalone bookshelf</button>`}<button class="btn light" data-bs-action="copy">Make a copy</button><button class="btn light" data-bs-action="new">New design</button></div>
@@ -135,7 +143,7 @@ window.BookshelfBuilder = (() => {
         <p class="note">Measure the actual wall and timber before cutting. Cut sizes exclude saw kerf, machining allowances, fasteners and joinery. Check sag, stability and wall anchoring for your chosen wood and loads.</p>
       </aside></div>`;
     refresh();
-    if (rig) host.querySelector('#bs3d').appendChild(rig.renderer.domElement);
+    if (scene3d) host.querySelector('#bs3d').appendChild(scene3d.rig.renderer.domElement);
     update3D(true);
   }
   function refresh() {
@@ -172,7 +180,13 @@ window.BookshelfBuilder = (() => {
     });
     host.querySelector('[data-bs-action="addLevel"]').disabled = s.levels.length < 2 || s.levels.length >= 25;
     host.querySelector('#bsEditFeedback').textContent = p.errors[0] || '';
-    host.querySelector('#bsDrawing').innerHTML = drawing();
+    host.querySelector('#bsDrawing').innerHTML = drawing(true, view === 'close');
+    host.querySelectorAll('[data-bs-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.bsView === view)));
+    host.querySelectorAll('[data-bs-variant]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.bsVariant === (variant || '3'))));
+    const shown = displayDesign(), previewing = shown !== s, dims = d => `${fmt(d.width)} × ${fmt(d.height)} × ${fmt(d.depth)} cm`;
+    host.querySelector('#bsReadout').textContent = previewing ? `Comparison preview ${B.SAETTER_VARIANTS.find(v => v.id === variant).label}: ${dims(shown)}. Your design and fit checks stay at ${dims(s)}.` : `Furniture ${dims(s)} (width × height × depth)`;
+    const over = previewing ? (standalone() ? [...(draft.target.offset + shown.width > draft.wall.widthCm ? ['wider than the wall'] : []), ...(draft.target.elev + shown.height > draft.wall.heightCm ? ['taller than the wall'] : [])] : B.fit(shown, room(), draft.target).length ? ['too big for this spot'] : []) : [];
+    host.querySelector('#bsPreviewNote').textContent = over.length ? `At this comparison size it would be ${over.join(' and ')}. Preview only.` : '';
     host.querySelector('#bsPreviewTitle').textContent = getWall().name;
     host.querySelector('#bsProblems').innerHTML = `${p.errors.length ? `<div class="bs-error"><b>Fix the board layout before saving</b><ul>${p.errors.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
       ${p.fit.length ? `<div class="bs-error"><b>${standalone() ? 'Wall overflow' : 'Choose a clear placement before placing'}</b><ul>${p.fit.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : `<p class="bs-ok">${standalone() ? 'Fits the wall dimensions.' : 'Fits the wall dimensions and clears the checked openings and furniture.'}</p>`}
@@ -192,69 +206,17 @@ window.BookshelfBuilder = (() => {
   }
   function update3D(reset = false) {
     const el = host.querySelector('#bs3d');
-    if (!rig) {
+    if (!scene3d) {
       try {
-        if (!window.THREE || !window.HouseModels || !THREE.OrbitControls) throw Error('3D libraries unavailable');
+        if (!window.THREE || !window.HouseModels || !THREE.OrbitControls || !Scene) throw Error('3D libraries unavailable');
         HouseModels.init(THREE);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2)); renderer.outputEncoding = THREE.sRGBEncoding;
-        renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        const scene = new THREE.Scene(); scene.background = new THREE.Color('#E8E9E4');
-        scene.add(new THREE.HemisphereLight(0xffffff, 0x9D8671, .9));
-        const sun = new THREE.DirectionalLight(0xffffff, 1); sun.position.set(100, 400, 500); scene.add(sun);
-        const camera = new THREE.PerspectiveCamera(38, 1, 1, 10000);
-        const controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
-        controls.maxPolarAngle = Math.PI * .85;
-        rig = { renderer, scene, camera, controls, group: null, boards: [] };
-        renderer.domElement.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; });
-        renderer.domElement.addEventListener('pointerup', e => {
-          if (!drag || Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 5) return;
-          const rect = renderer.domElement.getBoundingClientRect(), ray = new THREE.Raycaster();
-          ray.setFromCamera(new THREE.Vector2((e.clientX - rect.left) / rect.width * 2 - 1, -(e.clientY - rect.top) / rect.height * 2 + 1), camera);
-          const hit = ray.intersectObjects(rig.boards)[0];
-          if (hit) { row = hit.object.userData.bay; refresh(); }
-        });
+        scene3d = Scene.create({ THREE, el, onPick: bay => { row = bay; refresh(); } });
         new ResizeObserver(() => resize3D()).observe(host);
-        (function animate() { requestAnimationFrame(animate); if (!visible) return; controls.update(); renderer.render(scene, camera); })();
       } catch (e) { el.innerHTML = '<p class="empty">3D needs WebGL and the online 3D libraries. You can still edit the dimensioned drawing.</p>'; return; }
     }
-    if (!el.contains(rig.renderer.domElement)) el.appendChild(rig.renderer.domElement);
-    if (rig.group) {
-      rig.scene.remove(rig.group);
-      rig.group.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach(m => {
-        ['map', 'bumpMap'].forEach(k => { if (m[k] && !m[k].keep && o.geometry?.type !== 'PlaneGeometry') m[k].dispose(); }); m.dispose();
-      }); });
-    }
-    const s = draft.design, wall = getWall(), target = draft.target, W = wall.width;
-    const flip = wall.flip, offset = flip ? W - target.offset - s.width : target.offset;
-    const g = rig.group = new THREE.Group(); rig.scene.add(g);
-    const addBox = (w, h, d, x, y, z, color) => { const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color })); mesh.position.set(x, y, z); g.add(mesh); return mesh; };
-    addBox(W, wall.height, 3, W / 2, wall.height / 2, -1.5, wall.color);
-    addBox(W + 50, 2, 150, W / 2, -1, 60, '#C9B497');
-    wall.openings.forEach(o => {
-      const x = flip ? W - o.offset - o.width : o.offset;
-      addBox(o.width, o.height, 1, x + o.width / 2, o.sill + o.height / 2, .6, o.type === 'door' ? '#BFA98C' : '#C3DBE5');
-      if (o.radiator) addBox(o.width * .9, Math.max(1, o.sill - 22), 12, x + o.width / 2, 10 + (o.sill - 22) / 2, 6, '#E8E9E5');
-    });
-    const obj = HouseModels.buildItem({ type: 'shelf', w: s.width, d: s.depth, h: s.height, color: draft.color, shelfDesign: s, elev: target.elev }, { evening: false });
-    obj.position.set(offset + s.width / 2, target.elev, target.gap + s.depth / 2); g.add(obj);
-    const parts = B.boards(s).filter(b => b.w > 0 && b.h > 0);
-    rig.boards = obj.children.filter(o => o.isMesh && o.geometry?.type !== 'PlaneGeometry');
-    rig.boards.forEach((o, i) => { const b = parts[i]; if (b && b.kind !== 'Back') o.userData.bay = Number(b.id.slice(1).split('.')[0]) - 1; });
-    rig.boards = rig.boards.filter(o => Number.isInteger(o.userData.bay));
-    if (reset) {
-      rig.controls.target.set(offset + s.width / 2, target.elev + s.height / 2, s.depth / 2);
-      const distance = Math.max(s.width, s.height) * 1.8;
-      rig.camera.position.set(offset + s.width / 2 + distance * .35, target.elev + s.height / 2 + distance * .2, distance);
-      rig.controls.update();
-    }
-    resize3D();
+    scene3d.update({ design: displayDesign(), wall: getWall(), target: draft.target, color: draft.color, view, showSizes, visible: () => visible }, reset, el);
   }
-  function resize3D() {
-    if (!rig || !visible) return;
-    const el = host.querySelector('#bs3d'); if (!el) return;
-    rig.renderer.setSize(el.clientWidth, el.clientHeight); rig.camera.aspect = el.clientWidth / Math.max(el.clientHeight, 1); rig.camera.updateProjectionMatrix();
-  }
+  function resize3D() { if (scene3d && visible) scene3d.refit(); }
   function changed(full = false, reframe = false) { persist(true); if (full) render(); else { refresh(); update3D(reframe); } }
   function applyField(t, baseline) {
     const key = t.dataset.bs, s = draft.design, l = s.levels[row];
@@ -302,7 +264,9 @@ window.BookshelfBuilder = (() => {
       applyField(t, editing.before); changed(false, ['offset', 'gap', 'elev', 'width', 'height'].includes(t.dataset.bs));
     });
     host.addEventListener('change', e => {
-      const t = e.target, key = t.dataset.bs; if (!key) return;
+      const t = e.target, key = t.dataset.bs;
+      if (t.matches('[data-bs-sizes]')) { showSizes = t.checked; update3D(false); return; }
+      if (!key) return;
       if (key === 'saved') { const p = api.pieces().find(p => p.id === t.value); if (p) open(p, api.findPlacement(p.id)); return; }
       if (t.matches('input[data-bs]')) {
         if (t.type === 'number' && (!t.value.trim() || !t.validity.valid)) {
@@ -317,6 +281,13 @@ window.BookshelfBuilder = (() => {
     host.addEventListener('click', async e => {
       const t = e.target.closest('button, [data-bs-board]'); if (!t) return;
       if (t.dataset.bsTab) return switchTab(t.dataset.bsTab);
+      if (t.dataset.bsView) { view = t.dataset.bsView; refresh(); return update3D(true); }
+      if (t.dataset.bsVariant) { variant = t.dataset.bsVariant === '3' ? null : t.dataset.bsVariant; refresh(); return update3D(true); }
+      if (t.dataset.bsSize) {
+        const step = Scene.applySizeStep(B, draft.design, +t.dataset.bsSize);
+        if (step.clamped || !step.changed) return api.toast(`Size limit reached: width and height stay between ${Scene.LIMITS.width[0]} and ${Scene.LIMITS.width[1]} cm, depth between ${Scene.LIMITS.depth[0]} and ${Scene.LIMITS.depth[1]} cm.`);
+        checkpoint(); draft.design = step.design; changed(false, true); api.toast(`Size ${+t.dataset.bsSize > 0 ? '+' : ''}${t.dataset.bsSize}%: ${fmt(step.width)} × ${fmt(step.height)} × ${fmt(step.depth)} cm. Undo reverts.`); return;
+      }
       if (t.dataset.bsRow !== undefined || t.dataset.bay !== undefined) { row = +(t.dataset.bsRow ?? t.dataset.bay); refresh(); return; }
       if (t.dataset.preset) { checkpoint(); const s = draft.design; draft.design = B.preset(t.dataset.preset, s.width, s.height, s.depth, s.thickness, Math.max(2, s.levels.length - 1)); changed(); return; }
       if (t.dataset.removeDivider !== undefined) { checkpoint(); draft.design.levels[row].dividers.splice(+t.dataset.removeDivider, 1); changed(); return; }
@@ -354,7 +325,7 @@ window.BookshelfBuilder = (() => {
       if (act === 'standaloneCopy') return api.copyStandalone(JSON.parse(JSON.stringify(draft)), getWall());
       if (act === 'resetCamera') return update3D(true);
       if (act === 'undo') { if (history.length) { draft = JSON.parse(history.pop()); changed(true); } return; }
-      if (act === 'new') { if (standalone() && api.detach && !api.detach()) return; checkpoint(); const other = draft.alternate, wall = draft.wall; draft = fresh(draft.tab); if (standalone()) draft.wall = wall; if (other) draft.alternate = other; row = 0; changed(true); host.querySelector('[data-bs="name"]').focus(); return; }
+      if (act === 'new') { if (standalone() && api.detach && !api.detach()) return; variant = null; checkpoint(); const other = draft.alternate, wall = draft.wall; draft = fresh(draft.tab); if (standalone()) draft.wall = wall; if (other) draft.alternate = other; row = 0; changed(true); host.querySelector('[data-bs="name"]').focus(); return; }
       if (act === 'copy') { if (standalone() && api.detach && !api.detach()) return; checkpoint(); draft.pieceId = null; draft.itemId = null; draft.itemRoomId = null; draft.name += ' copy'; changed(true); host.querySelector('[data-bs="name"]').focus(); return; }
       if (act === 'addLevel') {
         if (s.levels.length >= 25) return api.toast('Maximum 25 shelves per design.');
@@ -387,17 +358,17 @@ window.BookshelfBuilder = (() => {
         const W = wall.width;
         const origin = wall.flip ? W - draft.target.offset - s.width : draft.target.offset;
         s.levels[row].dividers[index - 1] = Math.round((x - origin) * 10) / 10;
-        host.querySelector('#bsDrawing').innerHTML = drawing(); update3D();
+        host.querySelector('#bsDrawing').innerHTML = drawing(true, view === 'close'); update3D();
       };
       const end = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end); if (interaction === interactionGeneration) changed(); };
       window.addEventListener('pointermove', move); window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end); e.preventDefault();
     });
     return { open, close, isOpen: () => visible, updateStorage: () => { if (visible) refresh(); },
-      reset: () => { interactionGeneration++; proposal = null; history = []; editing = null; draft = null; visible = false; host.hidden = true; host.replaceChildren(); },
-      openShelf: (design, name) => { open(); if (!visible) return; draft.design = JSON.parse(JSON.stringify(design)); draft.name = name || 'Bookshelf'; draft.tab = design.template === 'saetter3' ? 'saetter' : 'custom'; history = []; persist(true); render(); },
+      reset: () => { variant = null; interactionGeneration++; proposal = null; history = []; editing = null; draft = null; visible = false; host.hidden = true; host.replaceChildren(); },
+      openShelf: (design, name) => { open(); if (!visible) return; variant = null; draft.design = JSON.parse(JSON.stringify(design)); draft.name = name || 'Bookshelf'; draft.tab = design.template === 'saetter3' ? 'saetter' : 'custom'; history = []; persist(true); render(); },
       shelf: () => draft ? JSON.parse(JSON.stringify(draft.design)) : null,
       currentDraft: () => draft ? JSON.parse(JSON.stringify(draft)) : null,
-      openDocument: (doc, name) => { open(); if (!visible) return; const tab = doc.activeTab; draft = { ...fresh(tab), name: name || 'Bookshelf', design: JSON.parse(JSON.stringify(doc.shelf)), wall: JSON.parse(JSON.stringify(doc.wall)), target: { roomId: null, wall: 'n', offset: doc.placement.offsetCm, elev: doc.placement.elevationCm, gap: doc.placement.gapCm }, tab }; history = []; render(); }
+      openDocument: (doc, name) => { open(); if (!visible) return; variant = null; const tab = doc.activeTab; draft = { ...fresh(tab), name: name || 'Bookshelf', design: JSON.parse(JSON.stringify(doc.shelf)), wall: JSON.parse(JSON.stringify(doc.wall)), target: { roomId: null, wall: 'n', offset: doc.placement.offsetCm, elev: doc.placement.elevationCm, gap: doc.placement.gapCm }, tab }; history = []; render(); }
     };
   }
   return { init };
