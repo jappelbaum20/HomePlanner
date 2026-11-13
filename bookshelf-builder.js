@@ -482,7 +482,7 @@ window.BookshelfBuilder = (() => {
     host.addEventListener('pointerdown', e => {
       const board = e.target.closest('[data-bs-board]'); if (!board || !board.dataset.bsBoard.startsWith('D')) return;
       const [bay, index] = board.dataset.bsBoard.slice(1).split('.').map(n => parseInt(n, 10));
-      checkpoint(); row = bay - 1; const interaction = interactionGeneration;
+      checkpoint(); row = bay - 1; const interaction = interactionGeneration; let pending3D = 0;
       const move = ev => {
         if (interaction !== interactionGeneration) return;
         const currentSvg = host.querySelector('#bsDrawing svg'), p = currentSvg.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY;
@@ -490,9 +490,10 @@ window.BookshelfBuilder = (() => {
         const W = wall.width;
         const origin = wall.flip ? W - draft.target.offset - s.width : draft.target.offset;
         s.levels[row].dividers[index - 1] = Math.round((x - origin) * 10) / 10;
-        host.querySelector('#bsDrawing').innerHTML = drawing(true, view === 'close'); update3D();
+        host.querySelector('#bsDrawing').innerHTML = drawing(true, view === 'close');
+        if (!pending3D) pending3D = requestAnimationFrame(() => { pending3D = 0; if (interaction === interactionGeneration) update3D(); });
       };
-      const end = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end); if (interaction === interactionGeneration) changed(); };
+      const end = () => { if (pending3D) cancelAnimationFrame(pending3D); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end); if (interaction === interactionGeneration) changed(); };
       window.addEventListener('pointermove', move); window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end); e.preventDefault();
     });
     return { open, close, isOpen: () => visible, updateStorage: () => { if (visible) refresh(); },

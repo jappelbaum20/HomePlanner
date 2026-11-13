@@ -252,7 +252,7 @@
   };
   // Box with UVs scaled to real-world cm so textures keep their size
   function part(g, m, w, h, d, x, y, z, r) {
-    const geo = GEO.box(Math.max(w, 0.2), Math.max(h, 0.2), Math.max(d, 0.2), r);
+    const geo = m.userData.walnut ? walnutGeometry(w, h, d) : GEO.box(Math.max(w, 0.2), Math.max(h, 0.2), Math.max(d, 0.2), r);
     const mesh = new T3.Mesh(geo, m); mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true; g.add(mesh); return mesh;
   }
   // Soft cushion: a rounded box whose top and bottom bulge towards the middle
@@ -298,20 +298,21 @@
     m.envMapIntensity = 0.3; return m;
   };
   const wood = (hex, w, h) => mat(hex, { rough: 0.55, map: texFor('grain', w, h) });
-  // Walnut boards: grain runs along the longer side of the face; satin finish with a little pore relief.
-  // One texture per board size and orientation, kept between rebuilds: a tap no longer re-uploads every board's walnut map.
-  const walnutTex = new Map();
-  const walnut = (hex, w, h) => {
-    const tall = h > w, long = tall ? h : w, short = tall ? w : h, key = `${tall ? 1 : 0}:${long.toFixed(1)}:${short.toFixed(1)}`;
-    let map = walnutTex.get(key);
-    if (!map) {
-      if (walnutTex.size > 120) { walnutTex.forEach(t => t.dispose()); walnutTex.clear(); }
-      map = texFor('walnut', long, short); map.keep = true; walnutTex.set(key, map);
-      if (tall) { map.center.set(0.5, 0.5); map.rotation = Math.PI / 2; }
-    }
-    return mat(hex, { rough: 0.42, map, bump: map, bumpScale: 0.25 });
+  function walnutGeometry(w, h, d) {
+    const geometry = GEO.box(Math.max(w, 0.2), Math.max(h, 0.2), Math.max(d, 0.2));
+    const tall = h > w, long = tall ? h : w, short = tall ? w : h, size = TEX.walnut().cmSize;
+    const matrix = new T3.Matrix3().setUvTransform(0, 0, long / size, short / size, tall ? Math.PI / 2 : 0, tall ? .5 : 0, tall ? .5 : 0);
+    const uv = geometry.attributes.uv, point = new T3.Vector2();
+    for (let index = 0; index < uv.count; index++) { point.fromBufferAttribute(uv, index).applyMatrix3(matrix); uv.setXY(index, point.x, point.y); }
+    return geometry;
+  }
+  const walnut = hex => {
+    const map = TEX.walnut(); map.keep = true;
+    const material = mat(hex, { rough: 0.42, map, bump: map, bumpScale: 0.25 });
+    material.userData.walnut = true; return material;
   };
   HM.walnut = walnut;
+  HM.walnutGeometry = walnutGeometry;
   const METAL_DARK = () => mat('#2A2C2E', { rough: 0.35, metal: 0.8 });
   const METAL_BRASS = () => mat('#B89559', { rough: 0.3, metal: 0.9 });
   const CERAMIC = () => mat('#F7F7F4', { rough: 0.12 });
