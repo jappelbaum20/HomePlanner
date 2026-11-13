@@ -16,7 +16,9 @@ async page => {
     out.saetter = stat(HouseModels.buildItem({ type: 'shelf', w: s.width, d: s.depth, h: s.height, color: '#6B4A36', shelfDesign: s, elev: 100, books: false }, { evening: false }));
     out.expected = Bookshelf.visualBoards(s).length;
     const c = Bookshelf.preset('staggered', 240, 200, 30, 2.4, 5);
-    out.custom = stat(HouseModels.buildItem({ type: 'shelf', w: 240, d: 30, h: 200, color: '#C49A6C', shelfDesign: c, elev: 0, books: false }, { evening: false }));
+    const custom = HouseModels.buildItem({ type: 'shelf', w: 240, d: 30, h: 200, color: '#C49A6C', shelfDesign: c, elev: 0, books: false }, { evening: false });
+    out.custom = stat(custom);
+    out.customUsesWalnut = custom.children[0].material.map === HouseModels.walnut('#C49A6C', c.levels[0].right - c.levels[0].left, c.thickness).map;
     out.customBoards = Bookshelf.boards(c).length;
     return out;
   });
@@ -24,13 +26,14 @@ async page => {
   check(m.saetter.meshes >= m.expected, 'a SAETTER in the house tour builds one mesh per drawn board');
   check(m.saetter.mapped >= m.expected, 'house-tour SAETTER boards carry the walnut grain');
   check(m.custom.meshes >= m.customBoards && m.custom.casting >= m.customBoards, 'a custom shelf in the house tour builds and casts shadows');
-  check(await page.evaluate(() => Bookshelf.visualBoards(Bookshelf.saetter3()).every(b => b.kind !== 'Separator') && Bookshelf.boards(Bookshelf.saetter3()).some(b => b.kind === 'Separator')), 'cut list keeps the inferred separators; only the 3D drawing uses full dividers');
+  check(!m.customUsesWalnut, 'custom shelves keep their original wood material instead of SÆTTER walnut');
+  check(await page.evaluate(() => JSON.stringify(Bookshelf.visualBoards(Bookshelf.saetter3())) === JSON.stringify(Bookshelf.boards(Bookshelf.saetter3())) && Bookshelf.visualBoards(Bookshelf.saetter3()).filter(b => b.kind === 'Separator').length === 18), '3D, drawing and cut list share the paired short separators');
 
   // room-mode builder
   await page.evaluate(() => localStorage.setItem('houseplanner.anonymous.v3', JSON.stringify({version:2,name:'Synthetic fixture',rooms:[{id:'office',seedId:'office',name:'Office',width:600,length:400,height:250,items:[],openings:[{id:'fixture-door',type:'door',wall:'n',offset:340,width:90},{id:'fixture-window',type:'window',wall:'s',offset:20,width:140,sill:90,radiator:true}],photos:[],photoLabels:{}},{id:'living',seedId:'living',name:'Living room',width:600,length:400,height:250,items:[],openings:[],photos:[],photoLabels:{}}],catalog:[]}))); await page.reload(); await page.waitForTimeout(800);
   await page.locator('#bookshelfBtn').click(); await page.locator('#bs3d canvas').waitFor();
   await page.waitForFunction(() => window.__bsDebug && window.__bsDebug.frames > 0); await page.waitForTimeout(400);
-  check(await page.locator('.bs-prop').count() === 8, 'room mode shows the palette');
+  check(await page.locator('.bs-prop').count() === 10, 'room mode shows the palette');
   check(await page.locator('[data-bs-action="place"]').count() === 1, 'room mode keeps Save & place');
   await page.locator('[data-bs-prop="mug"]').click();
   const p = await page.evaluate(() => window.__bsDebug.screenOf(30, 5, 0)); await page.mouse.click(p.x, p.y); await page.waitForTimeout(250);

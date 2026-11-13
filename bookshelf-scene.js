@@ -228,8 +228,13 @@
         const next = new Map();
         rig.furniture = parts.map(board => {
           let entry = furnitureParts.get(board.id), mesh = entry && entry.mesh;
-          if (!mesh) { mesh = new THREE.Mesh(HMm.walnutGeometry(board.w, board.h, board.renderDepth ?? board.depth), HMm.walnut(state.color, board.w, board.h)); mesh.castShadow = true; furniture.add(mesh); }
-          else if (entry.board.w !== board.w || entry.board.h !== board.h || (entry.board.renderDepth ?? entry.board.depth) !== (board.renderDepth ?? board.depth)) { mesh.geometry.dispose(); mesh.geometry = HMm.walnutGeometry(board.w, board.h, board.renderDepth ?? board.depth); }
+          const walnut = s.template === 'saetter3', depth = board.renderDepth ?? board.depth;
+          const geometry = () => walnut ? HMm.walnutGeometry(board.w, board.h, depth, board.kind === 'Back') : new THREE.BoxGeometry(Math.max(board.w, .2), Math.max(board.h, .2), Math.max(depth, .2));
+          if (!mesh) { mesh = new THREE.Mesh(geometry(), walnut ? HMm.walnut(state.color) : HMm.wood(state.color, board.w, board.h)); mesh.castShadow = true; furniture.add(mesh); }
+          else if (entry.board.w !== board.w || entry.board.h !== board.h || (entry.board.renderDepth ?? entry.board.depth) !== depth) {
+            mesh.geometry.dispose(); mesh.geometry = geometry();
+            if (!walnut && mesh.material.map) mesh.material.map.repeat.set(mesh.material.map.repeat.x * board.w / entry.board.w, mesh.material.map.repeat.y * board.h / entry.board.h);
+          }
           mesh.position.set(board.x + board.w / 2 - s.width / 2, board.y + board.h / 2, board.z ?? 0);
           mesh.receiveShadow = !(board.kind === 'Back' && s.template === 'saetter3');
           if (board.kind === 'Back') delete mesh.userData.bay; else mesh.userData.bay = Number(board.id.slice(1).split('.')[0]) - 1;
@@ -303,8 +308,48 @@
       if (keys.labels !== labelKey) {
         remove(labelNodes); const start = g.children.length; addLines(lines, g); labelNodes = g.children.slice(start);
         while (labelTextures.size > 32) { const oldest = labelTextures.keys().next().value; labelTextures.get(oldest).tex.dispose(); labelTextures.delete(oldest); }
-        rig.labels = lines.map(l => ({ key: l.key, text: l.text })); keys.labels = labelKey;
+        keys.labels = labelKey;
       }
+      if (!rig.comparisonLayer) {
+        rig.comparisonLayer = document.createElement('div');
+        rig.comparisonLayer.className = 'bs-comparison-labels';
+        controls.addEventListener('change', () => rig.layoutComparisonLabels?.());
+      }
+      const reparentedLabels = !el.contains(rig.comparisonLayer);
+      if (reparentedLabels) el.appendChild(rig.comparisonLayer);
+      const comparison = [], addLabel = (key, text, point) => comparison.push({ key, text, point });
+      if (state.showSizes && P) {
+        placed.forEach(p => addLabel(`item-${p.id}`, `${P.PROPS[p.kind].name} · ${fmtCm(p.h)} high`, [offset + p.x, target.elev + p.y + p.h, front - p.z]));
+        if (s.template === 'saetter3') {
+          const sf = P.surfaces(s).filter(x => Number.isFinite(x.ceiling)).sort((a, b) => b.level - a.level || b.x1 - a.x1)[0];
+          if (sf) {
+            const near = n => Math.abs(n - Math.round(n)) < .11 ? Math.round(n) : round1(n);
+            addLabel('compartment', `≈ ${near(sf.x1 - sf.x0)} × ${near(sf.ceiling - sf.y)} cm inside`, [offset + (sf.x0 + sf.x1) / 2, target.elev + (sf.y + sf.ceiling) / 2, front]);
+          }
+        }
+      }
+      const comparisonKey = JSON.stringify([state.view, comparison]), comparisonChanged = keys.comparison !== comparisonKey;
+      if (comparisonChanged) {
+        rig.comparisonLayer.replaceChildren();
+        const labels = comparison.map(({ key, text, point }) => {
+          const node = document.createElement('span'); node.textContent = text; node.dataset.bsLabel = key;
+          rig.comparisonLayer.appendChild(node); return { node, point };
+        });
+        rig.layoutComparisonLabels = () => {
+          const used = [], width = el.clientWidth, height = el.clientHeight;
+          labels.forEach(({ node, point }) => {
+            const projected = new THREE.Vector3(...point).project(camera), x = (projected.x + 1) * width / 2, y = (1 - projected.y) * height / 2;
+            const w = node.offsetWidth, h = node.offsetHeight, choices = [[x + 6, y - h - 4], [x - w - 6, y - h - 4], [x + 6, y + 5], [x - w - 6, y + 5]];
+            for (let step = 1; step <= 8; step++) choices.push([x + 6, y - h - 4 - step * (h + 2)], [x - w - 6, y - h - 4 - step * (h + 2)], [x + 6, y + 5 + step * (h + 2)], [x - w - 6, y + 5 + step * (h + 2)]);
+            const candidates = choices.map(([left, top]) => ({ left: clamp(left, 2, Math.max(2, width - w - 2)), top: clamp(top, 2, Math.max(2, height - h - 2)), w, h }));
+            const overlap = r => used.reduce((sum, o) => sum + Math.max(0, Math.min(r.left + r.w, o.left + o.w) - Math.max(r.left, o.left)) * Math.max(0, Math.min(r.top + r.h, o.top + o.h) - Math.max(r.top, o.top)), 0);
+            const best = candidates.reduce((a, b) => overlap(b) < overlap(a) ? b : a); used.push(best);
+            node.style.left = `${best.left}px`; node.style.top = `${best.top}px`;
+          });
+        };
+        keys.comparison = comparisonKey;
+      }
+      rig.labels = lines.map(l => ({ key: l.key, text: l.text })).concat(comparison.map(({ key, text }) => ({ key, text })));
       debug.labels = rig.labels; debug.view = state.view;
       const wallBox = { minX: 0, maxX: W, minY: 0, maxY: wall.height, minZ: 0, maxZ: 0 };
       const focus = state.view === 'wall' ? lineExtents(lines.length ? lines : [], wallBox) : lineExtents(lines, reach);
@@ -313,6 +358,7 @@
       if (reset || resized || keys.focus !== focusKey) fitCamera(focus, state.view, state, !!reset);
       else last = { box: focus, view: state.view, state };
       keys.focus = focusKey;
+      if (comparisonChanged || reparentedLabels || resized) requestAnimationFrame(() => rig.layoutComparisonLabels?.());
       request(300);
     }
     function refit() { if (last && !rig.userMoved) { resize(); fitCamera(last.box, last.view, last.state, true); request(300); } }

@@ -109,3 +109,18 @@ test('SÆTTER invalid back and overlapping separator lengths are rejected', () =
   assert.match(B.validate(s).errors.join(' '), /separators must not overlap/);
   assert.equal(B.normalize(B.preset()).template, undefined);
 });
+
+test('all SÆTTER previews use the manufacturer dimensions and the same parts in 3D', () => {
+  const expected = { '3': [3, 4, 45.5, 40.6, 10.5], '5': [5, 4, 45.5, 66.7, 11.2], '7': [7, 4, 45.5, 92.4, 11.2], '15': [5, 3, 34.4, 66.7, 11.2] };
+  for (const variant of B.SAETTER_VARIANTS) {
+    const s = B.saetterVariant(variant.id), [rows, cols, width, height, depth] = expected[variant.id];
+    assert.deepEqual([variant.rows, variant.cols, s.width, s.height, s.depth], [rows, cols, width, height, depth]);
+    assert.equal(s.levels.length, rows + 1);
+    assert.equal(s.levels[0].dividers.length, cols + 1);
+    assert.ok(s.levels[0].dividers.slice(1).every((x, index) => Math.abs(x - s.levels[0].dividers[index] - s.thickness - 10) < .001));
+    assert.equal(B.round(s.depth - s.backThickness), 10);
+    assert.ok(Math.abs(s.levels[1].y - s.thickness - 12) < .1);
+    assert.deepEqual(B.visualBoards(s), B.boards(s));
+    assert.equal(B.visualBoards(s).filter(p => p.kind === 'Separator').length, rows * (cols - 1) * 2);
+  }
+});

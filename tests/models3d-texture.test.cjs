@@ -29,11 +29,24 @@ test('walnut boards share one texture and preserve the original UV transforms', 
   }
 });
 
-test('shelf construction applies the shared texture to every board', () => {
+test('SÆTTER boards share walnut and orient the back grain vertically', () => {
+  const house = models(), design = Bookshelf.saetter3();
+  const group = house.buildItem({ type: 'shelf', w: design.width, h: design.height, d: design.depth, color: '#76513D', shelfDesign: design, elev: 1 }, {});
+  const boards = group.children.filter(child => child.isMesh), parts = Bookshelf.visualBoards(design);
+  assert.equal(boards.length, parts.length);
+  assert.ok(boards.every(board => board.material.map === boards[0].material.map));
+  const index = parts.findIndex(part => part.kind === 'Back'), back = parts[index];
+  const actual = boards[index].geometry.attributes.uv.array;
+  const expected = house.walnutGeometry(back.w, back.h, back.renderDepth ?? back.depth, true).attributes.uv.array;
+  const unrotated = house.walnutGeometry(back.w, back.h, back.renderDepth ?? back.depth).attributes.uv.array;
+  assert.deepEqual(actual, expected);
+  assert.notDeepEqual(actual, unrotated);
+});
+
+test('custom shelves retain the original non-walnut wood material', () => {
   const house = models(), design = Bookshelf.preset('staggered', 240, 200);
   const group = house.buildItem({ type: 'shelf', w: design.width, h: design.height, d: design.depth, color: '#76513D', shelfDesign: design, elev: 1 }, {});
   const boards = group.children.filter(child => child.isMesh);
   assert.equal(boards.length, Bookshelf.visualBoards(design).length);
-  assert.ok(boards.every(board => board.material.map === boards[0].material.map));
-  assert.ok(boards.every(board => board.geometry.attributes.uv));
+  assert.ok(boards.every(board => !board.material.userData.walnut && !board.material.bumpMap && board.material.map));
 });

@@ -33,6 +33,17 @@ async page => {
     const maps = __testScene.rig.furniture.map(mesh => mesh.material.map);
     return maps.length > 1 && maps.every(map => map === maps[0]) && !__testScene.rig.renderer.shadowMap.autoUpdate;
   }), 'boards share one walnut map and shadows update on demand');
+  const comparisonLabels = await page.evaluate(() => {
+    const scene = __testScene, state = scene.rig.state, layer = scene.rig.comparisonLayer;
+    const item = layer.querySelector('[data-bs-label^="item-"]'), compartment = layer.querySelector('[data-bs-label="compartment"]');
+    scene.update({ ...state }, false);
+    const retained = item && compartment && layer.contains(item) && layer.contains(compartment);
+    scene.update({ ...state, props: state.props.map(prop => ({ ...prop, h: prop.h + 1 })) }, false);
+    const rebuilt = !layer.contains(item) && layer.querySelector('[data-bs-label^="item-"]');
+    scene.update(state, false);
+    return !!(retained && rebuilt);
+  });
+  check(comparisonLabels, 'comparison labels are retained for unchanged updates and rebuilt for item size changes');
   await page.waitForTimeout(500);
   check(await page.evaluate(() => { __bsDebug.orbit(10); return !__testScene.rig.renderer.shadowMap.needsUpdate; }), 'orbiting alone does not invalidate the shadow map');
   const delta = await page.evaluate(() => {
