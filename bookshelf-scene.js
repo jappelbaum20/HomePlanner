@@ -361,7 +361,13 @@
       if (comparisonChanged || reparentedLabels || resized) requestAnimationFrame(() => rig.layoutComparisonLabels?.());
       request(300);
     }
-    function refit() { if (last && !rig.userMoved) { resize(); fitCamera(last.box, last.view, last.state, true); request(300); } }
+    // The canvas size, projection and overlay labels always follow the container; only re-framing waits for an untouched camera.
+    function refit() {
+      if (!last) return;
+      const resized = resize(), frame = !rig.userMoved;
+      if (frame) fitCamera(last.box, last.view, last.state, true);
+      if (resized || frame) { requestAnimationFrame(() => rig.layoutComparisonLabels?.()); request(300); }
+    }
     function resize() {
       if (!rig.state || !rig.state.visible()) return false;
       const w = el.clientWidth, h = el.clientHeight; if (!w || !h) return false;

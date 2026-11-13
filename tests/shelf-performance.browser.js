@@ -106,6 +106,20 @@ async page => {
       scene.rig.furniture.every(mesh => !mesh.material.userData.walnut && mesh.material.map && !mesh.material.bumpMap);
   });
   check(customWood, 'incrementally added custom boards retain the non-walnut material');
+  // Resizing the window: overlay labels and the projection follow the container, also after the camera was moved by hand.
+  await page.locator('#bs-tab-saetter').click(); await page.setViewportSize({ width: 1280, height: 900 }); await page.waitForTimeout(600);
+  const view = () => page.evaluate(() => {
+    const rig = window.__testScene.rig, canvas = rig.renderer.domElement, host = canvas.parentElement, node = document.querySelector('[data-bs-label="compartment"]');
+    return { left: node ? parseFloat(node.style.left) : null, aspect: rig.camera.aspect, host: host.clientWidth / host.clientHeight, css: canvas.clientWidth, width: host.clientWidth };
+  });
+  const narrow = await view();
+  await page.setViewportSize({ width: 1500, height: 900 }); await page.waitForTimeout(600);
+  const wide = await view();
+  check(narrow.left !== null && wide.width > narrow.width + 100 && wide.left > narrow.left + 40, `the compartment label follows a wider window without further interaction (${narrow.left} -> ${wide.left})`);
+  await page.evaluate(() => window.__bsDebug.orbit(30)); await page.waitForTimeout(200);
+  await page.setViewportSize({ width: 1100, height: 900 }); await page.waitForTimeout(600);
+  const after = await view();
+  check(Math.abs(after.aspect - after.host) < .01 && Math.abs(after.css - after.width) <= 1, `after orbiting, a resize still updates the projection (${after.aspect.toFixed(3)} vs ${after.host.toFixed(3)})`);
   check(errors.length === 0, 'no browser errors: ' + errors.join(' | '));
   return checks;
 }
