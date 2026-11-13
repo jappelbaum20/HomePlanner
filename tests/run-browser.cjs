@@ -17,7 +17,7 @@
  */
 'use strict';
 const fs = require('fs'), path = require('path'), http = require('http'), os = require('os');
-const root = path.resolve(__dirname, '..'), dist = path.join(root, 'dist-vps'), PORT = 8765;
+const root = path.resolve(__dirname, '..'), dist = process.env.HOMEPLANNER_BUILD_DIR || path.join(root, 'dist-vps'), PORT = 8765;
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp' };
 
 function loadPlaywright() {
@@ -60,6 +60,7 @@ async function main() {
   for (const file of files) {
     const started = Date.now(); let status = 'PASS', detail = '';
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } }), page = await context.newPage();
+    page.setDefaultNavigationTimeout(60000);
     try {
       await page.goto(`http://127.0.0.1:${PORT}/`); // some suites touch localStorage before their own goto
       const src = fs.readFileSync(path.join(__dirname, file), 'utf8');

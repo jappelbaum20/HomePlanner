@@ -88,22 +88,24 @@
     const quality = { pixelRatio: Math.min(window.devicePixelRatio || 1, small ? 1.25 : 1.5), shadowMapSize: small ? 1024 : 2048, shadows: renderer.capabilities.maxTextureSize >= 4096 };
     renderer.setPixelRatio(quality.pixelRatio); renderer.outputEncoding = THREE.sRGBEncoding;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    if (quality.shadows) { renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; }
+    if (quality.shadows) { renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true; }
     const scene = new THREE.Scene(); scene.background = new THREE.Color('#E8E9E4');
     scene.add(new THREE.HemisphereLight(0xfff6ea, 0x8a7a68, .62));
     // Warm sun from the front left and above, like a window beside the shelf.
     const sun = new THREE.DirectionalLight(0xfff1dc, 1.05); sun.position.set(-60, 320, 420); scene.add(sun, sun.target);
     if (quality.shadows) { sun.castShadow = true; sun.shadow.mapSize.set(quality.shadowMapSize, quality.shadowMapSize); sun.shadow.bias = -.0005; sun.shadow.normalBias = .35; sun.shadow.radius = 4; }
     const camera = new THREE.PerspectiveCamera(FOV, 1, 1, 20000);
-    const controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.maxPolarAngle = Math.PI * .85;
+    const controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.dampingFactor = .1; controls.maxPolarAngle = Math.PI * .85;
     controls.minAzimuthAngle = -rad(MAX_AZIMUTH); controls.maxAzimuthAngle = rad(MAX_AZIMUTH);
     const rig = { renderer, scene, camera, controls, group: null, boards: [], furniture: [], propMeshes: [], frame: null, labels: [], state: null, userMoved: false };
-    const debug = window.__bsDebug = { frames: 0, labels: [], view: 'close', fit: null, quality, props: 0, person: false, info: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, textures: renderer.info.memory.textures }) };
+    const shell = { wall: [], skirt: [] }, templates = new Map(), shapes = new Map(), labelTextures = new Map(), instances = new Map();
+    let furniture = null, furnitureParts = new Map(), personMesh = null, labelNodes = [], keys = {}, lastSize = {};
+    const debug = window.__bsDebug = { frames: 0, labels: [], view: 'close', fit: null, quality, props: 0, person: false, info: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, textures: renderer.info.memory.textures, geometries: renderer.info.memory.geometries }) };
     // Test hook: place the camera at an azimuth/elevation around the current target at the current distance.
     debug.orbit = (az, el = 10) => { const t = controls.target, d = camera.position.distanceTo(t), p = cameraPosition([t.x, t.y, t.z], d, clampAzimuth(az), el); camera.position.set(...p); controls.update(); request(300); };
     // Test hook: client coordinates of a furniture-local point (cm) so a test can click a given compartment.
     debug.screenOf = (x, y, z = 0) => { const f = rig.frame, v = new THREE.Vector3(f.offset + x, f.elev + y, f.gap + f.depth - z).project(camera), r = renderer.domElement.getBoundingClientRect(); return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; };
-    debug.realism = () => { const f = rig.furniture, mats = o => [].concat(o.material), g = rig.group, wall = g && g.children[0], floor = g && g.children[1], skirt = g && g.children[2];
+    debug.realism = () => { const f = rig.furniture, mats = o => [].concat(o.material), wall = shell.wall[0], floor = shell.wall[1], skirt = shell.skirt[0];
       return { shadowsOn: renderer.shadowMap.enabled, sunCasts: sun.castShadow, shadowMap: sun.shadow.mapSize.x, pixelRatio: renderer.getPixelRatio(), wallTextured: !!(wall && wall.material.map), wallReceives: !!(wall && wall.receiveShadow), floorTextured: !!(floor && floor.material.map), skirting: !!(skirt && skirt.geometry.parameters.height === 9), furnitureCasts: f.length > 0 && f.every(o => o.castShadow), furnitureTextured: f.length > 0 && f.every(o => mats(o).every(m => !!m.map)), sunColor: sun.color.getHexString() }; };
     debug.propsInfo = () => rig.propMeshes.length;
     debug.projectLabels = () => rig.group ? rig.group.children.filter(o => o.isSprite).map(o => { const v = o.position.clone().project(camera), r = renderer.domElement.getBoundingClientRect(); return { key: o.userData.key, x: (v.x + 1) / 2 * r.width, y: (1 - v.y) / 2 * r.height, w: r.width, h: r.height }; }) : [];
@@ -111,21 +113,21 @@
     function frame() {
       raf = 0; if (!rig.state || !rig.state.visible()) return;
       const moved = controls.update(); renderer.render(scene, camera); debug.frames++;
-      if (moved || performance.now() < keepUntil) raf = requestAnimationFrame(frame);
+      if (moved || performance.now() < keepUntil) request();
     }
     function request(ms = 0) { keepUntil = Math.max(keepUntil, performance.now() + ms); if (!raf) raf = requestAnimationFrame(frame); }
-    controls.addEventListener('change', () => { rig.userMoved = true; request(700); });
+    controls.addEventListener('change', () => { rig.userMoved = true; request(); });
 
     // Rendering is on demand, so a lost and restored context must trigger a redraw itself.
     renderer.domElement.addEventListener('webglcontextlost', e => e.preventDefault());
-    renderer.domElement.addEventListener('webglcontextrestored', () => { debug.restored = (debug.restored || 0) + 1; request(300); });
+    renderer.domElement.addEventListener('webglcontextrestored', () => { debug.restored = (debug.restored || 0) + 1; renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true; request(300); });
     let drag = null;
     renderer.domElement.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; });
     renderer.domElement.addEventListener('pointerup', e => {
       if (!drag || Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 6) return;
       const rect = renderer.domElement.getBoundingClientRect(), ray = new THREE.Raycaster();
       ray.setFromCamera(new THREE.Vector2((e.clientX - rect.left) / rect.width * 2 - 1, -(e.clientY - rect.top) / rect.height * 2 + 1), camera);
-      const wallMesh = rig.group && rig.group.children[0];
+      const wallMesh = shell.wall[0];
       const hit = ray.intersectObjects(rig.propMeshes.concat(rig.furniture, wallMesh ? [wallMesh] : []), false)[0];
       if (!onPick) return;
       if (!hit) return onPick({ none: true });
@@ -139,12 +141,17 @@
     function bayAt(y) { const lv = rig.frame.design.levels; let b = 0; lv.forEach((l, i) => { if (l.y <= y + .01 && i < lv.length - 1) b = i; }); return b; }
 
     function sprite(text) {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2), font = '700 42px system-ui, sans-serif', m = document.createElement('canvas').getContext('2d'); m.font = font;
-      const cw = Math.max(256, Math.ceil(m.measureText(text).width + 28)), c = document.createElement('canvas'); c.width = cw * dpr; c.height = 64 * dpr; // long texts get a wider sprite, same letter size
-      const g = c.getContext('2d'); g.scale(dpr, dpr); g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle';
-      { const tw = m.measureText(text).width + 26, x0 = cw / 2 - tw / 2, r = 14; g.fillStyle = 'rgba(255,255,255,.94)'; g.beginPath(); g.moveTo(x0 + r, 6); g.arcTo(x0 + tw, 6, x0 + tw, 58, r); g.arcTo(x0 + tw, 58, x0, 58, r); g.arcTo(x0, 58, x0, 6, r); g.arcTo(x0, 6, x0 + tw, 6, r); g.closePath(); g.fill(); }
-      g.lineJoin = 'round'; g.lineWidth = 10; g.strokeStyle = 'rgba(255,255,255,.95)'; g.strokeText(text, cw / 2, 33); g.fillStyle = '#1D2B26'; g.fillText(text, cw / 2, 33);
-      const tex = new THREE.CanvasTexture(c);
+      const dpr = Math.min(window.devicePixelRatio || 1, 2), key = `${dpr}:${text}`;
+      let cached = labelTextures.get(key);
+      if (!cached) {
+        const font = '700 42px system-ui, sans-serif', m = document.createElement('canvas').getContext('2d'); m.font = font;
+        const cw = Math.max(256, Math.ceil(m.measureText(text).width + 28)), c = document.createElement('canvas'); c.width = cw * dpr; c.height = 64 * dpr;
+        const g = c.getContext('2d'); g.scale(dpr, dpr); g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle';
+        { const tw = m.measureText(text).width + 26, x0 = cw / 2 - tw / 2, r = 14; g.fillStyle = 'rgba(255,255,255,.94)'; g.beginPath(); g.moveTo(x0 + r, 6); g.arcTo(x0 + tw, 6, x0 + tw, 58, r); g.arcTo(x0 + tw, 58, x0, 58, r); g.arcTo(x0, 58, x0, 6, r); g.arcTo(x0, 6, x0 + tw, 6, r); g.closePath(); g.fill(); }
+        g.lineJoin = 'round'; g.lineWidth = 10; g.strokeStyle = 'rgba(255,255,255,.95)'; g.strokeText(text, cw / 2, 33); g.fillStyle = '#1D2B26'; g.fillText(text, cw / 2, 33);
+        const tex = new THREE.CanvasTexture(c); tex.keep = true; cached = { tex, cw }; labelTextures.set(key, cached);
+      } else { labelTextures.delete(key); labelTextures.set(key, cached); }
+      const { tex, cw } = cached;
       const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false, sizeAttenuation: false, transparent: true });
       const s = new THREE.Sprite(mat); const h = .1 * Math.tan(rad(FOV) / 2); s.scale.set(h * cw / 64, h, 1); s.renderOrder = 999; s.raycast = () => {};
       return s;
@@ -154,14 +161,15 @@
       list.forEach(l => {
         const [a, b, t] = [l.a, l.b, l.tick], v = p => new THREE.Vector3(...p), sub = (p, k) => [p[0] - t[0] * k, p[1] - t[1] * k, p[2] - t[2] * k], add = (p, k) => [p[0] + t[0] * k, p[1] + t[1] * k, p[2] + t[2] * k];
         const pts = [a, b, sub(a, 1), add(a, 1), sub(b, 1), add(b, 1)].map(v);
-        const geo = new THREE.BufferGeometry().setFromPoints(pts); geo.setIndex([0, 1, 2, 3, 4, 5]);
-        if (!l.noLine) { const line = new THREE.LineSegments(geo, mat); line.renderOrder = 998; group.add(line); }
+        if (!l.noLine) { const geo = new THREE.BufferGeometry().setFromPoints(pts); geo.setIndex([0, 1, 2, 3, 4, 5]); const line = new THREE.LineSegments(geo, mat); line.renderOrder = 998; group.add(line); }
         const s = sprite(l.text); s.position.set(...l.mid); s.userData.key = l.key; s.userData.text = l.text; group.add(s);
       });
     }
-    function dispose(group) {
-      group.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach(m => {
-        ['map', 'bumpMap'].forEach(k => { if (m[k] && !m[k].keep && o.geometry?.type !== 'PlaneGeometry') m[k].dispose(); }); m.dispose(); }); });
+    function dispose(groups) {
+      const geometries = new Set(), materials = new Set(), textures = new Set();
+      [].concat(groups).forEach(group => group.traverse(o => { if (o.geometry) geometries.add(o.geometry); if (o.material) [].concat(o.material).forEach(material => {
+        materials.add(material); ['map', 'bumpMap'].forEach(key => { if (material[key] && !material[key].keep && o.geometry?.type !== 'PlaneGeometry') textures.add(material[key]); }); }); }));
+      geometries.forEach(geometry => geometry.dispose()); materials.forEach(material => material.dispose()); textures.forEach(texture => texture.dispose());
     }
     let last = null;
     function fitCamera(box, view, state, force) {
@@ -179,79 +187,195 @@
     function update(state, reset, element) {
       rig.state = state; if (element) el = element;
       if (!el.contains(renderer.domElement)) el.appendChild(renderer.domElement);
-      if (rig.group) { scene.remove(rig.group); dispose(rig.group); }
       const s = state.design, wall = state.wall, target = state.target, W = wall.width;
       const offset = wall.flip ? W - target.offset - s.width : target.offset;
-      const g = rig.group = new THREE.Group(); scene.add(g);
-      let personLabel = null;
-      const HMm = HM(), flat = (m, cast, recv = true) => { m.castShadow = cast; m.receiveShadow = recv; return m; };
-      const addBox = (w, h, d, x, y, z, color, material, cast = false) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material || new THREE.MeshStandardMaterial({ color })); m.position.set(x, y, z); flat(m, cast); g.add(m); return m; };
-      // Painted plaster wall (subtle texture), wooden floor and a skirting board along the wall base.
-      addBox(W, wall.height, 3, W / 2, wall.height / 2, -1.5, null, HMm.wallMaterial(wall.color, 'paint', W, wall.height));
-      addBox(W + 50, 2, 190, W / 2, -1, 80, null, HMm.floorMaterial('#CDB28F', 'wood', W + 50, 190));
-      const doors = wall.openings.filter(o => o.type === 'door').map(o => { const x = wall.flip ? W - o.offset - o.width : o.offset; return [x, x + o.width]; }).sort((a, b) => a[0] - b[0]);
-      if (target.elev < 10 && target.gap < 2) { doors.push([offset - .2, offset + s.width + .2]); doors.sort((a, b) => a[0] - b[0]); } // the furniture stands where the skirting would be
-      let sx = 0; const skirtMat = HMm.mat('#F3F1EA', { rough: .55 });
-      [...doors, [W, W]].forEach(([a, b]) => { if (a - sx > 1) addBox(a - sx, 9, 1.5, (sx + a) / 2, 4.5, .75, null, skirtMat, true); sx = Math.max(sx, b); });
-      wall.openings.forEach(o => {
-        const x = wall.flip ? W - o.offset - o.width : o.offset;
-        addBox(o.width, o.height, 1, x + o.width / 2, o.sill + o.height / 2, .6, o.type === 'door' ? '#BFA98C' : '#C3DBE5');
-        if (o.radiator) addBox(o.width * .9, Math.max(1, o.sill - 22), 12, x + o.width / 2, 10 + (o.sill - 22) / 2, 6, '#E8E9E5');
-      });
-      const obj = HMm.buildItem({ type: 'shelf', w: s.width, d: s.depth, h: s.height, color: state.color, shelfDesign: s, elev: target.elev }, { evening: false });
-      obj.position.set(offset + s.width / 2, target.elev, target.gap + s.depth / 2); g.add(obj);
-      const parts = (Bookshelf.visualBoards || Bookshelf.boards)(s).filter(b => b.w > 0 && b.h > 0);
-      rig.furniture = obj.children.filter(o => o.isMesh && o.geometry?.type !== 'PlaneGeometry');
-      rig.furniture.forEach((o, i) => { const b = parts[i]; if (b && b.kind !== 'Back') o.userData.bay = Number(b.id.slice(1).split('.')[0]) - 1; if (b && b.kind === 'Back' && s.template === 'saetter3') o.receiveShadow = false; }); // no hard sun shadows on the dark back panel inside the small SAETTER compartments
-      rig.boards = rig.furniture.filter(o => Number.isInteger(o.userData.bay));
+      if (!rig.group) { rig.group = new THREE.Group(); scene.add(rig.group); }
+      const g = rig.group, HMm = HM(); let moved = false, personLabel = null;
+      const remove = nodes => { nodes.forEach(node => g.remove(node)); dispose(nodes); };
+      const addBox = (nodes, w, h, d, x, y, z, color, material, cast = false) => { const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material || new THREE.MeshStandardMaterial({ color })); mesh.position.set(x, y, z); mesh.castShadow = cast; mesh.receiveShadow = true; g.add(mesh); nodes.push(mesh); };
+      const wallKey = JSON.stringify(wall);
+      if (keys.wall !== wallKey) {
+        remove(shell.wall); shell.wall = [];
+        addBox(shell.wall, W, wall.height, 3, W / 2, wall.height / 2, -1.5, null, HMm.wallMaterial(wall.color, 'paint', W, wall.height));
+        addBox(shell.wall, W + 50, 2, 190, W / 2, -1, 80, null, HMm.floorMaterial('#CDB28F', 'wood', W + 50, 190));
+        wall.openings.forEach(opening => {
+          const x = wall.flip ? W - opening.offset - opening.width : opening.offset;
+          addBox(shell.wall, opening.width, opening.height, 1, x + opening.width / 2, opening.sill + opening.height / 2, .6, opening.type === 'door' ? '#BFA98C' : '#C3DBE5');
+          if (opening.radiator) addBox(shell.wall, opening.width * .9, Math.max(1, opening.sill - 22), 12, x + opening.width / 2, 10 + (opening.sill - 22) / 2, 6, '#E8E9E5');
+        });
+        keys.wall = wallKey; moved = true;
+      }
+      const skirtKey = JSON.stringify([W, wall.flip, wall.openings, target.elev < 10 && target.gap < 2 ? [offset, s.width] : null]);
+      if (keys.skirt !== skirtKey) {
+        remove(shell.skirt); shell.skirt = [];
+        const doors = wall.openings.filter(opening => opening.type === 'door').map(opening => { const x = wall.flip ? W - opening.offset - opening.width : opening.offset; return [x, x + opening.width]; }).sort((left, right) => left[0] - right[0]);
+        if (target.elev < 10 && target.gap < 2) { doors.push([offset - .2, offset + s.width + .2]); doors.sort((left, right) => left[0] - right[0]); }
+        let start = 0; const material = HMm.mat('#F3F1EA', { rough: .55 });
+        [...doors, [W, W]].forEach(([left, right]) => { if (left - start > 1) addBox(shell.skirt, left - start, 9, 1.5, (start + left) / 2, 4.5, .75, null, material, true); start = Math.max(start, right); });
+        if (!shell.skirt.length) material.dispose();
+        keys.skirt = skirtKey; moved = true;
+      }
+      const designKey = JSON.stringify(s), appearanceKey = JSON.stringify([state.color, s.width, s.depth, s.template, target.elev > 0]);
+      if (keys.appearance !== appearanceKey) {
+        if (furniture) { g.remove(furniture); dispose(furniture); }
+        furniture = HMm.buildItem({ type: 'shelf', w: s.width, d: s.depth, h: s.height, color: state.color, shelfDesign: s, elev: target.elev }, { evening: false });
+        g.add(furniture); furnitureParts = new Map(); keys.design = null; keys.position = null; keys.appearance = appearanceKey; moved = true;
+      }
+      if (keys.design !== designKey) {
+        const parts = (Bookshelf.visualBoards || Bookshelf.boards)(s).filter(board => board.w > 0 && board.h > 0);
+        const built = furniture.children.filter(child => child.isMesh && child.geometry?.type !== 'PlaneGeometry');
+        if (!furnitureParts.size) parts.forEach((board, index) => furnitureParts.set(board.id, { board, mesh: built[index] }));
+        const next = new Map();
+        rig.furniture = parts.map(board => {
+          let entry = furnitureParts.get(board.id), mesh = entry && entry.mesh;
+          const walnut = s.template === 'saetter3', depth = board.renderDepth ?? board.depth;
+          const geometry = () => walnut ? HMm.walnutGeometry(board.w, board.h, depth, board.kind === 'Back') : new THREE.BoxGeometry(Math.max(board.w, .2), Math.max(board.h, .2), Math.max(depth, .2));
+          if (!mesh) { mesh = new THREE.Mesh(geometry(), walnut ? HMm.walnut(state.color) : HMm.wood(state.color, board.w, board.h)); mesh.castShadow = true; furniture.add(mesh); }
+          else if (entry.board.w !== board.w || entry.board.h !== board.h || (entry.board.renderDepth ?? entry.board.depth) !== depth) {
+            mesh.geometry.dispose(); mesh.geometry = geometry();
+            if (!walnut && mesh.material.map) mesh.material.map.repeat.set(mesh.material.map.repeat.x * board.w / entry.board.w, mesh.material.map.repeat.y * board.h / entry.board.h);
+          }
+          mesh.position.set(board.x + board.w / 2 - s.width / 2, board.y + board.h / 2, board.z ?? 0);
+          mesh.receiveShadow = !(board.kind === 'Back' && s.template === 'saetter3');
+          if (board.kind === 'Back') delete mesh.userData.bay; else mesh.userData.bay = Number(board.id.slice(1).split('.')[0]) - 1;
+          next.set(board.id, { board, mesh }); return mesh;
+        });
+        furnitureParts.forEach((entry, id) => { if (!next.has(id)) { furniture.remove(entry.mesh); dispose(entry.mesh); } });
+        furnitureParts = next; rig.boards = rig.furniture.filter(mesh => Number.isInteger(mesh.userData.bay)); keys.design = designKey; moved = true;
+      }
+      const positionKey = JSON.stringify([offset, target.elev, target.gap, s.width, s.depth]);
+      if (keys.position !== positionKey) { furniture.position.set(offset + s.width / 2, target.elev, target.gap + s.depth / 2); keys.position = positionKey; moved = true; }
       rig.frame = { offset, elev: target.elev, gap: target.gap, depth: s.depth, design: s };
       const box = { minX: offset, maxX: offset + s.width, minY: target.elev, maxY: target.elev + s.height, minZ: target.gap, maxZ: target.gap + s.depth };
-      // Items to compare against, at true size, in furniture-local cm (x from the left, y up, z from the front).
       rig.propMeshes = []; const sizes = []; debug.propBounds = sizes;
       const P = window.BookshelfProps, placed = state.props || [];
       const front = target.gap + s.depth;
-      if (P) placed.forEach(p => {
-        const m = P.make(THREE, p.kind, { rot: p.rot, color: p.color });
-        m.position.set(offset + p.x, target.elev + p.y, front - p.z);
-        m.traverse(o => { if (o.isMesh) { o.userData.propId = p.id; rig.propMeshes.push(o); } }); g.add(m); m.updateMatrixWorld(true);
-        const bb = new THREE.Box3().setFromObject(m), sz = bb.getSize(new THREE.Vector3()); sizes.push({ kind: p.kind, id: p.id, w: Math.round(sz.x * 100) / 100, h: Math.round(sz.y * 100) / 100, d: Math.round(sz.z * 100) / 100, baseY: Math.round((bb.min.y - target.elev) * 100) / 100 });
+      const template = (kind, rot, color) => {
+        const key = JSON.stringify([kind, rot || 0, kind === 'book' ? color : null]);
+        if (!templates.has(key)) {
+          const model = P.make(THREE, kind, { rot, color }), shapeKey = JSON.stringify([kind, rot || 0]), geometries = [];
+          model.traverse(mesh => { if (mesh.geometry) geometries.push(mesh.geometry); });
+          if (shapes.has(shapeKey)) {
+            let index = 0; const shared = shapes.get(shapeKey);
+            model.traverse(mesh => { if (mesh.geometry) { mesh.geometry.dispose(); mesh.geometry = shared[index++]; } });
+          } else shapes.set(shapeKey, geometries);
+          templates.set(key, model);
+        }
+        return { key, mesh: templates.get(key).clone(true) };
+      };
+      const ids = new Set(placed.map(prop => prop.id));
+      instances.forEach((entry, id) => { if (!ids.has(id)) { g.remove(entry.mesh); instances.delete(id); moved = true; } });
+      if (P) placed.forEach(prop => {
+        const modelKey = JSON.stringify([prop.kind, prop.rot || 0, prop.kind === 'book' ? prop.color : null]);
+        let entry = instances.get(prop.id);
+        if (!entry || entry.key !== modelKey) {
+          if (entry) g.remove(entry.mesh);
+          entry = template(prop.kind, prop.rot, prop.color); entry.mesh.traverse(mesh => { if (mesh.isMesh) mesh.userData.propId = prop.id; });
+          instances.set(prop.id, entry); g.add(entry.mesh); moved = true;
+        }
+        const propPosition = JSON.stringify([offset + prop.x, target.elev + prop.y, front - prop.z, target.elev]);
+        if (entry.position !== propPosition) {
+          entry.mesh.position.set(offset + prop.x, target.elev + prop.y, front - prop.z); entry.mesh.updateMatrixWorld(true);
+          const bounds = new THREE.Box3().setFromObject(entry.mesh), size = bounds.getSize(new THREE.Vector3());
+          entry.bounds = { kind: prop.kind, id: prop.id, w: Math.round(size.x * 100) / 100, h: Math.round(size.y * 100) / 100, d: Math.round(size.z * 100) / 100, baseY: Math.round((bounds.min.y - target.elev) * 100) / 100 };
+          entry.position = propPosition; moved = true;
+        }
+        entry.mesh.traverse(mesh => { if (mesh.isMesh) rig.propMeshes.push(mesh); }); sizes.push(entry.bounds);
       });
       debug.props = placed.length; debug.person = false;
       let reach = { ...box };
       placed.forEach(p => { reach.maxY = Math.max(reach.maxY, target.elev + p.y + p.h); reach.minX = Math.min(reach.minX, offset + p.x - p.w / 2); reach.maxX = Math.max(reach.maxX, offset + p.x + p.w / 2); });
       if (P && state.person) {
         const room = W - (offset + s.width), px = room >= 50 ? offset + s.width + 30 : offset - 30, pz = target.gap + s.depth / 2 + 4;
-        const m = P.make(THREE, 'person'); m.position.set(px, 0, pz); g.add(m); debug.person = true;
+        if (!personMesh) { personMesh = template('person').mesh; g.add(personMesh); moved = true; }
+        if (personMesh.position.x !== px || personMesh.position.z !== pz) { personMesh.position.set(px, 0, pz); moved = true; }
+        debug.person = true;
         reach = { ...reach, minX: Math.min(reach.minX, px - 23), maxX: Math.max(reach.maxX, px + 23), minY: 0, maxY: Math.max(reach.maxY, 176) };
         personLabel = { x: px, z: pz };
-      }
-      // Sun and its shadow frustum follow the furniture (and the person) so the shadow map stays sharp.
-      { const cx = (reach.minX + reach.maxX) / 2, cy = (reach.minY + reach.maxY) / 2, half = Math.max(reach.maxX - reach.minX, reach.maxY - reach.minY) / 2 + 60;
+      } else if (personMesh) { g.remove(personMesh); personMesh = null; moved = true; }
+      const shadowKey = JSON.stringify([reach, target.gap, s.depth]);
+      if (keys.shadow !== shadowKey) { const cx = (reach.minX + reach.maxX) / 2, cy = (reach.minY + reach.maxY) / 2, half = Math.max(reach.maxX - reach.minX, reach.maxY - reach.minY) / 2 + 60;
         sun.target.position.set(cx, cy, target.gap + s.depth / 2); sun.position.set(cx - 60, cy + 320, target.gap + s.depth / 2 + 420); sun.target.updateMatrixWorld();
-        const c = sun.shadow.camera; c.left = -half; c.right = half; c.top = half; c.bottom = -half; c.near = 50; c.far = 1200; c.updateProjectionMatrix(); }
+        const c = sun.shadow.camera; c.left = -half; c.right = half; c.top = half; c.bottom = -half; c.near = 50; c.far = 1200; c.updateProjectionMatrix(); keys.shadow = shadowKey; moved = true; }
+      if (moved && quality.shadows) renderer.shadowMap.needsUpdate = true;
       let lines = state.showSizes ? dimensionLines(box) : [];
       if (state.showSizes && (state.view === 'wall' || personLabel)) { // the furniture is small here: one summary label instead of three crowded ones
         const mid = state.view === 'wall' ? [(box.minX + box.maxX) / 2, box.maxY + 10, box.maxZ] : [(box.minX + box.maxX) / 2, Math.max(box.minY - 7, 3), box.maxZ + 2];
         lines = (state.view === 'wall' ? wallLines({ width: W, height: wall.height }, box) : []).concat([{ key: 'furniture', text: `${fmtCm(s.width).replace(' cm', '')} × ${fmtCm(s.height).replace(' cm', '')} × ${fmtCm(s.depth)}`, a: mid, b: mid, mid, tick: [0, 0, 0], noLine: true }]);
       }
       if (state.showSizes && personLabel) { const mid = [personLabel.x, 183, personLabel.z]; lines.push({ key: 'person', text: '175 cm', a: mid, b: mid, mid, tick: [0, 0, 0], noLine: true }); }
-      addLines(lines, g);
-      rig.labels = lines.map(l => ({ key: l.key, text: l.text }));
+      const labelKey = JSON.stringify(lines);
+      if (keys.labels !== labelKey) {
+        remove(labelNodes); const start = g.children.length; addLines(lines, g); labelNodes = g.children.slice(start);
+        while (labelTextures.size > 32) { const oldest = labelTextures.keys().next().value; labelTextures.get(oldest).tex.dispose(); labelTextures.delete(oldest); }
+        keys.labels = labelKey;
+      }
+      if (!rig.comparisonLayer) {
+        rig.comparisonLayer = document.createElement('div');
+        rig.comparisonLayer.className = 'bs-comparison-labels';
+        controls.addEventListener('change', () => rig.layoutComparisonLabels?.());
+      }
+      const reparentedLabels = !el.contains(rig.comparisonLayer);
+      if (reparentedLabels) el.appendChild(rig.comparisonLayer);
+      const comparison = [], addLabel = (key, text, point) => comparison.push({ key, text, point });
+      if (state.showSizes && P) {
+        placed.forEach(p => addLabel(`item-${p.id}`, `${P.PROPS[p.kind].name} · ${fmtCm(p.h)} high`, [offset + p.x, target.elev + p.y + p.h, front - p.z]));
+        if (s.template === 'saetter3') {
+          const sf = P.surfaces(s).filter(x => Number.isFinite(x.ceiling)).sort((a, b) => b.level - a.level || b.x1 - a.x1)[0];
+          if (sf) {
+            const near = n => Math.abs(n - Math.round(n)) < .11 ? Math.round(n) : round1(n);
+            addLabel('compartment', `≈ ${near(sf.x1 - sf.x0)} × ${near(sf.ceiling - sf.y)} cm inside`, [offset + (sf.x0 + sf.x1) / 2, target.elev + (sf.y + sf.ceiling) / 2, front]);
+          }
+        }
+      }
+      const comparisonKey = JSON.stringify([state.view, comparison]), comparisonChanged = keys.comparison !== comparisonKey;
+      if (comparisonChanged) {
+        rig.comparisonLayer.replaceChildren();
+        const labels = comparison.map(({ key, text, point }) => {
+          const node = document.createElement('span'); node.textContent = text; node.dataset.bsLabel = key;
+          rig.comparisonLayer.appendChild(node); return { node, point };
+        });
+        rig.layoutComparisonLabels = () => {
+          const used = [], width = el.clientWidth, height = el.clientHeight;
+          labels.forEach(({ node, point }) => {
+            const projected = new THREE.Vector3(...point).project(camera), x = (projected.x + 1) * width / 2, y = (1 - projected.y) * height / 2;
+            const w = node.offsetWidth, h = node.offsetHeight, choices = [[x + 6, y - h - 4], [x - w - 6, y - h - 4], [x + 6, y + 5], [x - w - 6, y + 5]];
+            for (let step = 1; step <= 8; step++) choices.push([x + 6, y - h - 4 - step * (h + 2)], [x - w - 6, y - h - 4 - step * (h + 2)], [x + 6, y + 5 + step * (h + 2)], [x - w - 6, y + 5 + step * (h + 2)]);
+            const candidates = choices.map(([left, top]) => ({ left: clamp(left, 2, Math.max(2, width - w - 2)), top: clamp(top, 2, Math.max(2, height - h - 2)), w, h }));
+            const overlap = r => used.reduce((sum, o) => sum + Math.max(0, Math.min(r.left + r.w, o.left + o.w) - Math.max(r.left, o.left)) * Math.max(0, Math.min(r.top + r.h, o.top + o.h) - Math.max(r.top, o.top)), 0);
+            const best = candidates.reduce((a, b) => overlap(b) < overlap(a) ? b : a); used.push(best);
+            node.style.left = `${best.left}px`; node.style.top = `${best.top}px`;
+          });
+        };
+        keys.comparison = comparisonKey;
+      }
+      rig.labels = lines.map(l => ({ key: l.key, text: l.text })).concat(comparison.map(({ key, text }) => ({ key, text })));
       debug.labels = rig.labels; debug.view = state.view;
       const wallBox = { minX: 0, maxX: W, minY: 0, maxY: wall.height, minZ: 0, maxZ: 0 };
       const focus = state.view === 'wall' ? lineExtents(lines.length ? lines : [], wallBox) : lineExtents(lines, reach);
-      resize();
-      fitCamera(focus, state.view, state, !!reset);
+      const resized = resize();
+      const focusKey = JSON.stringify([focus, state.view, state.standalone, target.elev]);
+      if (reset || resized || keys.focus !== focusKey) fitCamera(focus, state.view, state, !!reset);
+      else last = { box: focus, view: state.view, state };
+      keys.focus = focusKey;
+      if (comparisonChanged || reparentedLabels || resized) requestAnimationFrame(() => rig.layoutComparisonLabels?.());
       request(300);
     }
-    function refit() { if (last && !rig.userMoved) { resize(); fitCamera(last.box, last.view, last.state, true); request(300); } }
+    // The canvas size, projection and overlay labels always follow the container; only re-framing waits for an untouched camera.
+    function refit() {
+      if (!last) return;
+      const resized = resize(), frame = !rig.userMoved;
+      if (frame) fitCamera(last.box, last.view, last.state, true);
+      if (resized || frame) { requestAnimationFrame(() => rig.layoutComparisonLabels?.()); request(300); }
+    }
     function resize() {
-      if (!rig.state || !rig.state.visible()) return;
-      const w = el.clientWidth, h = el.clientHeight; if (!w || !h) return;
-      renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+      if (!rig.state || !rig.state.visible()) return false;
+      const w = el.clientWidth, h = el.clientHeight; if (!w || !h) return false;
+      if (lastSize.w !== w || lastSize.h !== h) { renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); lastSize = { w, h }; return true; }
+      return false;
     }
     const HM = () => window.HouseModels;
-    return { rig, update, resize, refit, request, debug, dispose: () => { if (rig.group) dispose(rig.group); renderer.dispose(); } };
+    return { rig, update, resize, refit, request, debug, dispose: () => { if (raf) cancelAnimationFrame(raf); raf = 0; rig.state = null; const groups = [...templates.values()]; if (rig.group) { scene.remove(rig.group); groups.push(rig.group); } dispose(groups); labelTextures.forEach(entry => entry.tex.dispose()); controls.dispose(); renderer.dispose(); } };
   }
   const api = { ...pure, create };
   root.BookshelfScene = api;

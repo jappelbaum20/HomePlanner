@@ -16,6 +16,32 @@ test('catalogue sizes are the real sizes in cm', () => {
   assert.equal(P.size('vase').h, 25); assert.equal(P.PERSON.h, 175); assert.equal(P.size('nope'), null);
 });
 
+test('catalogue models have their stated bounds and stand on their surface', () => {
+  const THREE = require('three');
+  for (const kind of P.KINDS) {
+    const spec = P.PROPS[kind];
+    for (const rot of [0, 1]) {
+      const model = P.make(THREE, kind, { rot }), box = new THREE.Box3().setFromObject(model);
+      const actual = box.getSize(new THREE.Vector3()), target = rot ? (spec.flat || spec.turned || spec) : spec;
+      for (const [axis, expected] of [['x', target.w], ['y', target.h], ['z', target.d]])
+        assert.ok(Math.abs(actual[axis] - expected) < .001, `${kind} rotation ${rot} ${axis}: ${actual[axis]} != ${expected}`);
+      assert.ok(Math.abs(box.min.y) < .001, `${kind} rotation ${rot} base ${box.min.y}`);
+      assert.ok(Math.abs(box.min.x + box.max.x) < .001 && Math.abs(box.min.z + box.max.z) < .001, `${kind} is centred`);
+    }
+  }
+});
+
+test('fit indicators follow compartment and top geometry, including preview variants', () => {
+  for (const variant of B.SAETTER_VARIANTS) {
+    const s = B.saetterVariant(variant.id);
+    for (const kind of ['mug', 'cup', 'water', 'jar', 'tealight']) assert.equal(P.fitLocation(s, kind), 'compartment', `${variant.id} ${kind}`);
+    for (const kind of ['wine', 'book', 'plant', 'vase']) assert.equal(P.fitLocation(s, kind), 'top', `${variant.id} ${kind}`);
+  }
+  assert.equal(P.fitLocation(saetter, 'missing'), 'none');
+  const shallow = B.normalize({ width: 20, height: 20, depth: 10, thickness: 1, levels: [{ y: 0, left: 0, right: 5, dividers: [] }, { y: 19, left: 0, right: 5, dividers: [] }] });
+  assert.equal(P.fitLocation(shallow, 'plant'), 'none');
+});
+
 test('SAETTER 3: a compartment takes a mug at the shelf top, centred in the bay', () => {
   const r = P.fitProp(saetter, 'mug', { x: 6, y: 5 });
   assert.equal(r.ok, true); assert.equal(r.y, 1.1); assert.ok(Math.abs(r.x - 6.1) < 1.5, 'inside first bay');

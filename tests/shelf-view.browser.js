@@ -76,7 +76,7 @@ async page => {
   // SAETTER: comparison preview only
   await page.locator('#bs-tab-saetter').click();
   check(await input('elev').inputValue() === '0', 'SAETTER stands on the floor by default in the standalone builder');
-  check(await page.locator('[data-bs-size]').count() === 0 && await page.locator('.bs-badge').innerText() === 'Comparison only · not saved', 'SAETTER offers labelled comparison sizes, not percent steps');
+  check(await page.locator('[data-bs-size]').count() === 0 && await page.locator('.bs-badge').innerText() === 'Preview only · not saved', 'SAETTER offers labelled comparison models, not percent steps');
   check((await page.locator('#bsReadout').innerText()).includes('45.5 × 40.6 × 10.5 cm'), 'SAETTER readout shows the real size');
   await page.locator('[data-bs-variant="5"]').click(); await page.waitForTimeout(200); d = await dbg();
   const readout5 = await page.locator('#bsReadout').innerText();

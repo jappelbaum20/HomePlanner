@@ -37,7 +37,7 @@
     const v = SAETTER_VARIANTS.find(x => x.id === String(id)) || SAETTER_VARIANTS[0];
     if (v.id === '3') return saetter3();
     const t = 1.1, dividers = Array.from({ length: v.cols + 1 }, (_, j) => round(t / 2 + j * (10 + t)));
-    return normalize({ template: 'saetter3', width: v.width, height: v.height, depth: v.depth, thickness: t, separatorHeight: 3, backThickness: .5,
+    return normalize({ template: 'saetter3', width: v.width, height: v.height, depth: v.depth, thickness: t, separatorHeight: 3, backThickness: round(v.depth - 10),
       levels: Array.from({ length: v.rows + 1 }, (_, i) => ({ y: round(i * (v.height - t) / v.rows), left: 0, right: v.width, dividers: i < v.rows ? [...dividers] : [] })) });
   }
   function preset(kind = 'staggered', width = 240, height = 200, depth = 30, thickness = 2.4, rows = 5) {
@@ -81,16 +81,8 @@
     });
     return out;
   }
-  // What 3D draws. The SÆTTER is a type case: every compartment is closed by full-height walls and open at the
-  // front, so its inferred short separators are drawn as one full divider. Cut list and drawing keep boards().
   function visualBoards(s) {
-    const all = boards(s).filter(b => b.w > 0 && b.h > 0);
-    if (s.template !== 'saetter3') return all;
-    return all.filter(b => !/T$/.test(b.id)).map(b => {
-      if (b.kind !== 'Separator') return b;
-      const row = Number(b.id.slice(1).split(".")[0]), h = round(s.levels[row].y - b.y);
-      return { ...b, kind: 'Divider', h, length: h };
-    });
+    return boards(s).filter(b => b.w > 0 && b.h > 0);
   }
   function validate(s) {
     const errors = [], warnings = [], t = s.thickness;

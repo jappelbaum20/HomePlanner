@@ -19,7 +19,11 @@ async page => {
   // ---------- palette ----------
   await open('saetter');
   const names = await page.locator('.bs-prop span').allInnerTexts();
-  check(['Mug', 'Coffee cup', 'Wine glass', 'Water glass', 'Book', 'Small plant', 'Vase'].every(n => names.includes(n)) && names.some(n => /Person/.test(n)), 'palette shows the seven items with plain names plus a person');
+  check(['Mug', 'Coffee cup', 'Wine glass', 'Water glass', 'Book', 'Small plant', 'Vase', 'Small jar', 'Tea light', 'Person'].every(n => names.includes(n)), 'palette shows the items with plain names plus a person');
+  check((await page.locator('[data-bs-prop="mug"]').innerText()).includes('9.5 cm tall') && (await page.locator('[data-bs-prop="mug"]').innerText()).includes('Fits inside'), 'the mug button shows its size and compartment fit');
+  check((await page.locator('[data-bs-prop="wine"]').innerText()).includes('21 cm tall') && (await page.locator('[data-bs-prop="wine"]').innerText()).includes('Top only'), 'the wine button shows its size and top-only fit');
+  check((await page.locator('[data-bs-prop="jar"]').innerText()).includes('Fits inside') && (await page.locator('[data-bs-prop="tealight"]').innerText()).includes('Fits inside'), 'small everyday items fit inside');
+  check(await page.locator('[data-bs-label="compartment"]').innerText() === '≈ 10 × 12 cm inside', 'the 3D view labels a compartment');
   const box = await page.locator('[data-bs-prop="mug"]').boundingBox();
   check(box.width >= 64 && box.height >= 56, 'palette buttons are big (>= 64 x 56 px)');
   check(await page.locator('[data-bs-action="clearItems"]').isDisabled(), 'Clear items is disabled while nothing is placed');
@@ -36,6 +40,8 @@ async page => {
   const b = d.bounds[0];
   check(Math.abs(b.h - 9.5) < 0.3 && Math.max(b.w, b.d) >= 10 && Math.max(b.w, b.d) <= 11.3, `the mug model is real size (got ${b.w} x ${b.h} x ${b.d} cm)`);
   check(Math.abs(b.baseY - 1.1) < 0.05, 'the mug model sits on the surface');
+  check((await page.locator('[data-bs-label^="item-"]').innerText()).includes('Mug · 9.5 cm high'), 'the placed mug has a size label next to it');
+  check(await page.evaluate(() => { const boxes = [...document.querySelectorAll('.bs-comparison-labels span')].map(n => n.getBoundingClientRect()); return boxes.every((a, i) => boxes.slice(i + 1).every(b => a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top)); }), 'comparison labels do not overlap');
   await click(6, 5 + 4); // click the mug itself
   d = await dbg();
   check(d.props === 0, 'clicking a placed item removes it');
@@ -44,11 +50,8 @@ async page => {
   // ---------- fit messages ----------
   await pick('wine'); await click(17, 20);
   d = await dbg();
-  check(d.props === 0 && /Too tall for this shelf/.test(await help()), 'a wine glass does not fit a 12 cm compartment: "Too tall for this shelf"');
-  check(await page.locator('#bsPropHelp.warn').count() === 1, 'the message is shown as a warning');
-  await click(22, 40.6);
-  d = await dbg();
-  check(d.props === 1 && Math.abs(d.items[0].y - 40.6) < 0.01 && Math.abs(d.bounds[0].h - 21) < 0.4, 'the same glass stands on top of the shelf at 21 cm');
+  check(d.props === 1 && /placed on top/.test(await help()), 'clicking a compartment puts a top-only wine glass on top with an explanation');
+  check(Math.abs(d.items[0].y - 40.6) < 0.01 && Math.abs(d.bounds[0].h - 21) < 0.01, 'the redirected glass stands on top at its true size');
   await pick('plant'); await click(8, 40.6); await pick('vase'); await click(36, 40.6);
   d = await dbg();
   check(d.props === 3 && Math.abs(d.bounds.find(x => x.kind === 'vase').h - 25) < 0.6 && Math.abs(d.bounds.find(x => x.kind === 'plant').h - 22) < 0.8, 'plant and vase are placed at 22 and 25 cm');
@@ -56,7 +59,7 @@ async page => {
   d = await dbg();
   check(d.items.some(i => i.kind === 'cup' && i.level === 1), 'a coffee cup goes into a middle-row compartment');
   await pick('book'); await click(17, 5);
-  check(/Too tall/.test(await help()), 'a 18 cm book is too tall for the compartments');
+  check(/placed on top/.test(await help()) && (await dbg()).items.some(i => i.kind === 'book' && i.y === 40.6), 'a book clicked inside is placed on top');
 
   // ---------- person, clear ----------
   await page.locator('[data-bs-person]').click();
@@ -65,6 +68,16 @@ async page => {
   await page.locator('[data-bs-action="clearItems"]').click();
   d = await dbg();
   check(d.props === 0 && d.person === false && await page.locator('[data-bs-action="clearItems"]').isDisabled(), 'Clear items removes everything');
+
+  for (const kind of ['mug', 'cup', 'wine', 'water', 'book', 'plant', 'vase', 'jar', 'tealight']) {
+    await pick(kind); await click(17, 5); d = await dbg();
+    const item = d.items[0], bound = d.bounds[0];
+    check(d.props === 1 && item && bound && ['w', 'h', 'd'].every(axis => Math.abs(item[axis] - bound[axis]) < .02) && Math.abs(item.y - bound.baseY) < .02, `${kind} 3D bounds match its placement dimensions`);
+    if (d.props) await page.locator('[data-bs-action="clearItems"]').click();
+  }
+  await page.locator('#bsMore summary').click(); await page.locator('[data-bs-sizes]').uncheck();
+  check(await page.locator('[data-bs-label]').count() === 0, 'turning sizes off also hides comparison labels');
+  await page.locator('[data-bs-sizes]').check(); await page.locator('#bsMore summary').click();
 
   // ---------- size change keeps item size (custom shelf, direct size step) ----------
   await open('custom');

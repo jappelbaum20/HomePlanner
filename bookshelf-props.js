@@ -13,7 +13,9 @@
     water: { name: 'Water glass', w: 7, d: 7, h: 11 },
     book: { name: 'Book', w: 2.5, d: 12, h: 18, flat: { w: 18, d: 12, h: 2.5 } }, // paperback, standing or (if it does not fit) lying
     plant: { name: 'Small plant', w: 12, d: 12, h: 22 },
-    vase: { name: 'Vase', w: 10, d: 10, h: 25 }
+    vase: { name: 'Vase', w: 10, d: 10, h: 25 },
+    jar: { name: 'Small jar', w: 7, d: 7, h: 8 },
+    tealight: { name: 'Tea light', w: 4, d: 4, h: 2 }
   };
   const KINDS = Object.keys(PROPS);
   const size = kind => PROPS[kind] ? { w: PROPS[kind].w, d: PROPS[kind].d, h: PROPS[kind].h } : null;
@@ -42,6 +44,14 @@
   }
 
   const overlaps = (a, b) => Math.abs(a.x - b.x) < (a.w + b.w) / 2 - .1 && Math.abs(a.z - b.z) < (a.d + b.d) / 2 - .1;
+  const orientations = spec => [{ w: spec.w, d: spec.d, h: spec.h, rot: 0 }].concat(spec.flat || spec.turned ? [{ ...(spec.flat || spec.turned), rot: 1 }] : []);
+  const fitsSurface = (sf, v) => sf.ceiling - sf.y >= v.h - .01 && sf.x1 - sf.x0 >= v.w - .05 && sf.depth >= v.d * .8 - .001;
+  function fitLocation(design, kind) {
+    const spec = PROPS[kind]; if (!spec) return 'none';
+    const options = orientations(spec), all = surfaces(design), top = design.levels.length - 1;
+    if (all.some(sf => sf.level < top && options.some(v => fitsSurface(sf, v)))) return 'compartment';
+    return all.some(sf => sf.level === top && options.some(v => fitsSurface(sf, v))) ? 'top' : 'none';
+  }
 
   // Where would `kind` stand if the user clicked at hit {x, y, z?, level?} on the furniture `design`?
   // existing = items already placed [{x, y, z, w, d}]. Returns {ok:true, x, y, z, w, d, h, rot, level} or {ok:false, reason, message}.
@@ -54,7 +64,7 @@
     if (!cands.length) return { ok: false, reason: 'noSurface', message: MESSAGES.noSurface };
     const dx = sf => hit.x < sf.x0 ? sf.x0 - hit.x : hit.x > sf.x1 ? hit.x - sf.x1 : 0;
     const best = cands.reduce((a, b) => { const da = Math.round(dx(a) * 100), db = Math.round(dx(b) * 100); return db < da || (db === da && b.y > a.y) ? b : a; });
-    const variants = [{ w: spec.w, d: spec.d, h: spec.h, rot: 0 }].concat(spec.flat || spec.turned ? [{ ...(spec.flat || spec.turned), rot: 1 }] : []);
+    const variants = orientations(spec);
     let failure = null;
     for (const v of variants) {
       const tooTall = best.ceiling - best.y < v.h - .01, tooWide = best.x1 - best.x0 < v.w - .05, tooDeep = best.depth < v.d * .8 - .001;
@@ -88,7 +98,7 @@
   // Axis-aligned box of an item in furniture-local coordinates (x, y, z from the front), for collision checks.
   function itemBox(p) { return { x0: p.x - p.w / 2, x1: p.x + p.w / 2, y0: p.y, y1: p.y + p.h, z0: p.z - p.d / 2, z1: p.z + p.d / 2 }; }
 
-  const pure = { PROPS, KINDS, PERSON, MAX_ITEMS, MESSAGES, size, surfaces, fitProp, resnap, itemBox };
+  const pure = { PROPS, KINDS, PERSON, MAX_ITEMS, MESSAGES, size, surfaces, fitProp, fitLocation, resnap, itemBox };
 
   // ---------- 3D models (browser only). Group origin: centre of the footprint, y = 0 on the supporting surface. ----------
   const BOOK_COLORS = ['#8C3B32', '#2F4858', '#3E5544', '#B08D57', '#5B4A7A', '#C26A3D'];
@@ -140,6 +150,12 @@
         const len = top - 14, c = new THREE.Mesh(new THREE.CylinderGeometry(.2, .2, len, 6), stem); c.position.set(x * .55, 14 + len / 2, 0); c.rotation.z = lean; c.castShadow = true; g.add(c);
         const b = new THREE.Mesh(new THREE.SphereGeometry(1.6, 14, 10), std(blooms[i], { rough: .6 })); b.position.set(x, top - 1.3, 0); b.scale.y = .8; b.castShadow = true; g.add(b);
       });
+    } else if (kind === 'jar') {
+      add(new THREE.CylinderGeometry(3.2, 3.2, 6.7, 32), std('#B9D8CF', { rough: .2, alpha: .65 }), 0, 3.35, 0);
+      add(new THREE.CylinderGeometry(3.5, 3.5, 1.3, 32), std('#A7855E', { rough: .65 }), 0, 7.35, 0);
+    } else if (kind === 'tealight') {
+      add(new THREE.CylinderGeometry(2, 2, 2, 32), std('#B8B9B6', { rough: .5, metal: .55 }), 0, 1, 0);
+      add(new THREE.CylinderGeometry(1.8, 1.8, .15, 32), std('#F6F0E5', { rough: .8 }), 0, 1.94, 0);
     } else if (kind === 'person') {
       const mat = new THREE.MeshStandardMaterial({ color: lin('#8C918E'), roughness: .9 });
       const R = [[1.5, 0], [10, 0], [11.5, 82], [13, 93], [19, 92], [22, 100], [23, 140], [19, 148], [8, 153], [4, 160]];
@@ -149,7 +165,17 @@
       const head = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 2.5, 24), mat); head.rotation.x = Math.PI / 2; head.position.y = 167; head.castShadow = true; g.add(head);
     }
     g.userData.kind = kind;
-    return g;
+    const spec = PROPS[kind];
+    if (!spec) return g;
+    const box = new THREE.Box3().setFromObject(g), measured = box.getSize(new THREE.Vector3());
+    const target = opts.rot === 1 ? (spec.flat || spec.turned || spec) : spec;
+    g.position.x -= (box.min.x + box.max.x) / 2;
+    g.position.y -= box.min.y;
+    g.position.z -= (box.min.z + box.max.z) / 2;
+    const model = new THREE.Group(); model.add(g);
+    model.scale.set(target.w / measured.x, target.h / measured.y, target.d / measured.z);
+    model.userData.kind = kind;
+    return model;
   }
   const api = { ...pure, BOOK_COLORS, make };
   root.BookshelfProps = api;
