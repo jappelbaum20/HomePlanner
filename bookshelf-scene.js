@@ -95,7 +95,7 @@
     const sun = new THREE.DirectionalLight(0xfff1dc, 1.05); sun.position.set(-60, 320, 420); scene.add(sun, sun.target);
     if (quality.shadows) { sun.castShadow = true; sun.shadow.mapSize.set(quality.shadowMapSize, quality.shadowMapSize); sun.shadow.bias = -.0005; sun.shadow.normalBias = .35; sun.shadow.radius = 4; }
     const camera = new THREE.PerspectiveCamera(FOV, 1, 1, 20000);
-    const controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.maxPolarAngle = Math.PI * .85;
+    const controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.dampingFactor = .1; controls.maxPolarAngle = Math.PI * .85;
     controls.minAzimuthAngle = -rad(MAX_AZIMUTH); controls.maxAzimuthAngle = rad(MAX_AZIMUTH);
     const rig = { renderer, scene, camera, controls, group: null, boards: [], furniture: [], propMeshes: [], frame: null, labels: [], state: null, userMoved: false };
     const shell = { wall: [], skirt: [] }, templates = new Map(), shapes = new Map(), labelTextures = new Map(), instances = new Map();
