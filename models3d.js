@@ -1524,7 +1524,8 @@
       if (it.type === 'shelf' && it.shelfDesign && window.Bookshelf) {
         const s = Bookshelf.normalize(it.shelfDesign);
         (Bookshelf.visualBoards || Bookshelf.boards)(s).filter(b => b.w > 0 && b.h > 0).forEach(b => {
-          part(g, walnut(it.color, b.w, b.h), b.w, b.h, b.renderDepth ?? b.depth,
+          const back = b.kind === 'Back';
+          part(g, s.template === 'saetter3' ? walnut(it.color, back ? Math.min(b.w, b.h) : b.w, back ? Math.max(b.w, b.h) + .001 : b.h) : wood(it.color, b.w, b.h), b.w, b.h, b.renderDepth ?? b.depth,
             b.x + b.w / 2 - s.width / 2, b.y + b.h / 2, b.z ?? 0, 0);
         });
       } else (B[it.type] || B.box)(g, w, d, h, it.color, it, opts);

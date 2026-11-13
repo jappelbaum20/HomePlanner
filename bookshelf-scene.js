@@ -237,6 +237,43 @@
       if (state.showSizes && personLabel) { const mid = [personLabel.x, 183, personLabel.z]; lines.push({ key: 'person', text: '175 cm', a: mid, b: mid, mid, tick: [0, 0, 0], noLine: true }); }
       addLines(lines, g);
       rig.labels = lines.map(l => ({ key: l.key, text: l.text }));
+      {
+        if (!rig.comparisonLayer) {
+          rig.comparisonLayer = document.createElement('div');
+          rig.comparisonLayer.className = 'bs-comparison-labels';
+          controls.addEventListener('change', () => rig.layoutComparisonLabels?.());
+        }
+        if (!el.contains(rig.comparisonLayer)) el.appendChild(rig.comparisonLayer);
+        rig.comparisonLayer.replaceChildren();
+        const labels = [];
+        const addLabel = (key, text, point) => {
+          const node = document.createElement('span'); node.textContent = text; node.dataset.bsLabel = key;
+          rig.comparisonLayer.appendChild(node); labels.push({ node, point }); rig.labels.push({ key, text });
+        };
+        if (state.showSizes && P) {
+          placed.forEach(p => addLabel(`item-${p.id}`, `${P.PROPS[p.kind].name} · ${fmtCm(p.h)} high`, [offset + p.x, target.elev + p.y + p.h, front - p.z]));
+          if (s.template === 'saetter3') {
+            const sf = P.surfaces(s).filter(x => Number.isFinite(x.ceiling)).sort((a, b) => b.level - a.level || b.x1 - a.x1)[0];
+            if (sf) {
+              const near = n => Math.abs(n - Math.round(n)) < .11 ? Math.round(n) : round1(n);
+              addLabel('compartment', `≈ ${near(sf.x1 - sf.x0)} × ${near(sf.ceiling - sf.y)} cm inside`, [offset + (sf.x0 + sf.x1) / 2, target.elev + (sf.y + sf.ceiling) / 2, front]);
+            }
+          }
+        }
+        rig.layoutComparisonLabels = () => {
+          const used = [], width = el.clientWidth, height = el.clientHeight;
+          labels.forEach(({ node, point }) => {
+            const projected = new THREE.Vector3(...point).project(camera), x = (projected.x + 1) * width / 2, y = (1 - projected.y) * height / 2;
+            const w = node.offsetWidth, h = node.offsetHeight, choices = [[x + 6, y - h - 4], [x - w - 6, y - h - 4], [x + 6, y + 5], [x - w - 6, y + 5]];
+            for (let step = 1; step <= 8; step++) choices.push([x + 6, y - h - 4 - step * (h + 2)], [x - w - 6, y - h - 4 - step * (h + 2)], [x + 6, y + 5 + step * (h + 2)], [x - w - 6, y + 5 + step * (h + 2)]);
+            const candidates = choices.map(([left, top]) => ({ left: clamp(left, 2, Math.max(2, width - w - 2)), top: clamp(top, 2, Math.max(2, height - h - 2)), w, h }));
+            const overlap = r => used.reduce((sum, o) => sum + Math.max(0, Math.min(r.left + r.w, o.left + o.w) - Math.max(r.left, o.left)) * Math.max(0, Math.min(r.top + r.h, o.top + o.h) - Math.max(r.top, o.top)), 0);
+            const best = candidates.reduce((a, b) => overlap(b) < overlap(a) ? b : a); used.push(best);
+            node.style.left = `${best.left}px`; node.style.top = `${best.top}px`;
+          });
+        };
+        requestAnimationFrame(() => rig.layoutComparisonLabels?.());
+      }
       debug.labels = rig.labels; debug.view = state.view;
       const wallBox = { minX: 0, maxX: W, minY: 0, maxY: wall.height, minZ: 0, maxZ: 0 };
       const focus = state.view === 'wall' ? lineExtents(lines.length ? lines : [], wallBox) : lineExtents(lines, reach);

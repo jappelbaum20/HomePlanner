@@ -24,6 +24,7 @@ window.BookshelfBuilder = (() => {
   const numeric = (name, label, value, min = 0, max = 1000) => field(name, label, value, `type="number" step="any" min="${min}" max="${max}" required`);
   const PROP_ICONS = { mug: `<path d="M6 9h15v13a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4z"/><path d="M21 12h3a3 3 0 0 1 0 8h-3"/>`, cup: `<path d="M5 14h18v3a7 7 0 0 1-7 7h-4a7 7 0 0 1-7-7z"/><path d="M23 15h2a3 3 0 0 1 0 6h-2.5"/><path d="M3 27h24"/>`, wine: `<path d="M9 4h12c0 7-2 11-6 11S9 11 9 4z"/><path d="M15 15v11M10 27h10"/>`, water: `<path d="M8 6h16l-2 20H10z"/><path d="M9 13h14"/>`, book: `<path d="M9 4h14v24H9z"/><path d="M9 9h14M12 4v24"/>`, plant: `<path d="M10 20h12l-2 8h-8z"/><path d="M16 20c0-6-1-9-5-12 4 0 6 2 5 8 0-5 2-8 6-9-1 5-2 9-6 13"/>`, vase: `<path d="M13 4h6l-1 5c5 3 6 10 4 16H10c-2-6-1-13 4-16z"/>`, person: `<path d="M10 28V15c0-3 2-5 6-5s6 2 6 5v13"/><circle cx="16" cy="7" r="3.5"/>` };
   const propSvg = k => `<svg viewBox="0 0 32 32" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PROP_ICONS[k]}</svg>`;
+  Object.assign(PROP_ICONS, { jar: `<rect x="9" y="9" width="14" height="19" rx="3"/><path d="M8 6h16v4H8z"/>`, tealight: `<path d="M7 17h18l-2 9H9z"/><path d="M8 17c0-2 16-2 16 0M16 12v3"/>` });
   function clearScene() { items = []; selected = null; person = false; itemsOn = null; lastRemoved = null; }
   function checkpoint() { history.push(JSON.stringify(draft)); if (history.length > 50) history.shift(); }
   function persist(immediate = false) { return api.draft(JSON.parse(JSON.stringify(draft)), immediate); }
@@ -32,7 +33,7 @@ window.BookshelfBuilder = (() => {
   function fresh(tab = 'custom') {
     const r = standalone() ? null : (api.rooms().find(r => r.id === api.activeRoom()) || api.rooms()[0]);
     const saetter = tab === 'saetter';
-    return { tab, name: saetter ? 'SÆTTER 3 · walnut' : 'Custom bookshelf', color: saetter ? '#76513D' : '#A46B42',
+    return { tab, name: saetter ? 'SÆTTER 3 · walnut' : 'Custom bookshelf', color: saetter ? '#6C5141' : '#A46B42',
       design: saetter ? B.saetter3() : B.preset('staggered', Math.min(240, r?.width ?? 500), Math.min(200, (r?.height ?? 500) - 8)),
       ...(standalone() ? { wall: defaultWall(tab) } : {}),
       target: { roomId: r?.id || null, wall: 'n', offset: standalone() ? 0 : 20, gap: standalone() ? 0 : saetter ? 0 : 2, elev: standalone() ? 0 : saetter ? 120 : 0 }, pieceId: null, itemId: null, itemRoomId: null };
@@ -116,17 +117,17 @@ window.BookshelfBuilder = (() => {
   // ---- shared pieces of the template (standalone page and room mode) ----
   const CARD_ART = {
     custom: `<svg viewBox="0 0 120 84" aria-hidden="true"><rect x="12" y="6" width="96" height="72" rx="2" fill="#F1E2C8" stroke="#8A5A36" stroke-width="4"/><path d="M12 30h58M50 54h58" stroke="#8A5A36" stroke-width="4"/><path d="M38 30v24M82 54v24M70 6v24" stroke="#8A5A36" stroke-width="3"/><rect x="18" y="14" width="8" height="16" fill="#B5543F"/><rect x="28" y="18" width="7" height="12" fill="#3F6F8A"/><rect x="56" y="38" width="9" height="16" fill="#6E8A3F"/></svg>`,
-    saetter: `<svg viewBox="0 0 120 84" aria-hidden="true"><rect x="10" y="10" width="100" height="64" rx="2" fill="#E3CDB4" stroke="#5E3F2E" stroke-width="4"/>${[0, 1, 2, 3].map(i => [0, 1, 2].map(j => `<rect x="${14 + i * 24}" y="${14 + j * 20}" width="20" height="16" fill="#9A7358"/>`).join('')).join('')}</svg>`
+    saetter: `<svg viewBox="0 0 120 84" aria-hidden="true"><rect x="10" y="10" width="100" height="64" rx="2" fill="#9A7358" stroke="#5E3F2E" stroke-width="4"/><path d="M12 31h96M12 52h96" stroke="#5E3F2E" stroke-width="3"/>${[35, 60, 85].map(x => [12, 33, 54].map(y => `<path d="M${x} ${y}v5m0 11v5" stroke="#5E3F2E" stroke-width="3"/>`).join('')).join('')}</svg>`
   };
   const typeTab = (id, title, sub) => `<button type="button" id="bs-tab-${id}" role="tab" class="bs-card" aria-label="${title}" aria-selected="${draft.tab === id}" aria-controls="bs-tabpanel" tabindex="${draft.tab === id ? 0 : -1}" data-bs-tab="${id}">${CARD_ART[id]}<b>${title}</b><span>${sub}</span></button>`;
-  const propsHtml = (open, label = true) => `<div class="bs-props${open ? ' open' : ''}" id="bsProps" role="group" aria-label="Add something to compare">${label ? '<span class="bs-size-label">Add something to compare</span>' : ''}<div class="bs-palette">${Props ? Props.KINDS.map(k => `<button type="button" class="bs-prop" data-bs-prop="${k}" aria-pressed="${selected === k}" aria-label="${Props.PROPS[k].name}, ${Props.PROPS[k].h} cm tall">${propSvg(k)}<span>${Props.PROPS[k].name}</span></button>`).join('') : ''}<button type="button" class="bs-prop" data-bs-person aria-pressed="${person}" aria-label="Person, 175 cm">${propSvg('person')}<span>Person 175 cm</span></button></div><div class="bs-props-foot"><p class="bs-prop-help" id="bsPropHelp" role="status"></p><button type="button" class="btn light small" data-bs-action="clearItems">Clear items</button></div></div>`;
-  const sizeHtml = undo => `<div class="bs-size" id="bsSize" role="group" aria-label="Size" data-group>${draft.tab === 'saetter' ? `<span class="bs-size-label">Compare sizes <em class="bs-badge">Comparison only · not saved</em></span><span class="bs-chips">${B.SAETTER_VARIANTS.map(v => `<button type="button" class="btn light small" data-bs-variant="${v.id}" aria-pressed="false">${v.label}</button>`).join('')}</span>` : `<span class="bs-size-label">Size</span><span class="bs-chips">${[-10, -5, 5, 10].map(p => `<button type="button" class="btn light small" data-bs-size="${p}" aria-label="Make the bookshelf ${Math.abs(p)} percent ${p < 0 ? 'smaller' : 'bigger'}">${p < 0 ? '−' : '+'}${Math.abs(p)}%</button>`).join('')}</span>`}${undo ? `<button class="btn light small" data-bs-action="undo" ${history.length ? '' : 'disabled'}>Undo</button>` : ''}</div>`;
+  const propsHtml = (open, label = true) => `<div class="bs-props${open ? ' open' : ''}" id="bsProps" role="group" aria-label="Add something to compare">${label ? '<span class="bs-size-label">Add something to compare</span>' : ''}<div class="bs-palette">${Props ? Props.KINDS.map(k => `<button type="button" class="bs-prop" data-bs-prop="${k}" aria-pressed="${selected === k}" aria-label="${Props.PROPS[k].name}, ${Props.PROPS[k].h} cm tall">${propSvg(k)}<span>${Props.PROPS[k].name}</span><small>${Props.PROPS[k].h} cm tall</small><small class="bs-prop-fit" data-bs-fit></small></button>`).join('') : ''}<button type="button" class="bs-prop" data-bs-person aria-pressed="${person}" aria-label="Person, 175 cm">${propSvg('person')}<span>Person</span><small>175 cm tall</small></button></div><div class="bs-props-foot"><p class="bs-prop-help" id="bsPropHelp" role="status"></p><button type="button" class="btn light small" data-bs-action="clearItems">Clear items</button></div></div>`;
+  const sizeHtml = undo => `<div class="bs-size" id="bsSize" role="group" aria-label="${draft.tab === 'saetter' ? 'Compare models' : 'Size'}" data-group>${draft.tab === 'saetter' ? `<span class="bs-size-label">Compare models <em class="bs-badge">Preview only · not saved</em></span><span class="bs-chips">${B.SAETTER_VARIANTS.map(v => `<button type="button" class="btn light small" data-bs-variant="${v.id}" aria-pressed="false">${v.label}</button>`).join('')}</span>` : `<span class="bs-size-label">Size</span><span class="bs-chips">${[-10, -5, 5, 10].map(p => `<button type="button" class="btn light small" data-bs-size="${p}" aria-label="Make the bookshelf ${Math.abs(p)} percent ${p < 0 ? 'smaller' : 'bigger'}">${p < 0 ? '−' : '+'}${Math.abs(p)}%</button>`).join('')}</span>`}${undo ? `<button class="btn light small" data-bs-action="undo" ${history.length ? '' : 'disabled'}>Undo</button>` : ''}</div>`;
   const levelsHtml = () => `${draft.tab === 'custom' ? '<div class="bs-presets"><button class="btn light small" data-preset="framed">Framed</button><button class="btn light small" data-preset="staggered">Staggered</button><button class="btn light small" data-preset="stepped">Stepped edges</button></div>' : ''}
         <div class="sec-head"><h3>Individual shelves · bottom to top</h3><button class="btn light small" data-bs-action="addLevel">+ Shelf</button></div><div id="bsLevels"></div>
         <p class="note">Select a board in the drawing or 3D view. Drag a divider in the drawing, or enter exact values below. All editing values are cm.</p>
         <p class="note bs-edit-feedback" id="bsEditFeedback" role="status"></p><div id="bsRowEditor"></div>`;
   const aiHtml = () => `<h3>AI shelf edit</h3><p class="note">Only the current shelf geometry and your prompt are sent for a proposal. Nothing changes until you apply it.</p><button class="btn light" data-bs-action="propose" ${api.canPropose?.() ? '' : 'disabled'}>Request AI preview</button><p class="note" id="bsProposalStatus" role="status">${api.canPropose?.() ? '' : 'AI edits are unavailable until sign-in, model configuration and shared validation are ready.'}</p><div id="bsProposal"></div>`;
-  const planHtml = () => { const s = draft.design; return `<h3>Workshop plan</h3><p class="note">${s.template === 'saetter3' ? 'Inferred square-cut shelves, back and paired short separators. The 3D view shows every compartment closed by full-height walls, as on the product; the drawing and list keep the inferred short separators.' : 'Square-cut boards, full depth. Dividers fit between horizontal shelves with butt joints. The drawing and list use the same geometry as 3D.'}</p>
+  const planHtml = () => { const s = draft.design; return `<h3>Workshop plan</h3><p class="note">${s.template === 'saetter3' ? 'Inferred square-cut shelves, back and paired short separators, as shown in the 3D view, drawing and list. Construction and material thicknesses are estimates, not manufacturer plans.' : 'Square-cut boards, full depth. Dividers fit between horizontal shelves with butt joints. The drawing and list use the same geometry as 3D.'}</p>
         <div id="bsCutSummary"></div><div class="bs-table-wrap"><table class="bs-cut"><thead><tr><th>Board</th><th>Length × depth × thickness, mm</th></tr></thead><tbody id="bsCutList"></tbody></table></div>
         <div class="bs-save-actions"><button class="btn light" data-bs-action="csv">Download cut list</button><button class="btn light" data-bs-action="plan">Download build plan</button><button class="btn light" data-bs-action="print">Print / save PDF</button><button class="btn light" data-bs-action="json">Export design JSON</button></div>`; };
   const storageNote = () => `<p class="note">${api.cloudWorkspace?.() ? 'Cloud edits stay in this tab until saved through Private designs. Export a backup before leaving.' : standalone() ? 'Drafts autosave in this browser. Use My designs to reopen saved shelves, or export JSON as a backup.' : 'Drafts autosave in this browser. Saved designs are in My pieces, versions, and full-plan backups.'}</p>
@@ -143,8 +144,8 @@ window.BookshelfBuilder = (() => {
         <div class="bs-cards" role="tablist" aria-label="Bookshelf type" data-group>${typeTab('custom', 'Custom bookshelf', 'Shelves you design yourself')}${typeTab('saetter', 'SÆTTER 3', 'Ready-made walnut shelf')}</div>
         <h2>2. Your wall</h2>
         <div class="row2">${numeric('wallWidth', 'Wall width, cm', draft.wall.widthCm, 10, 2000)}${numeric('wallHeight', 'Wall height, cm', draft.wall.heightCm, 10, 2000)}</div>
-        <h2>3. Bookshelf size</h2>
-        ${saet ? `<p class="bs-fixed">SÆTTER 3 comes in one size: ${fmt(B.saetter3().width)} × ${fmt(B.saetter3().height)} × ${fmt(B.saetter3().depth)} cm. Try the other real sizes under the 3D view.</p>` : `${sizeFields}<p class="note">Or make it bigger or smaller with the Size buttons under the 3D view.</p>`}
+        <h2>3. ${saet ? 'SÆTTER 3 size' : 'Bookshelf size'}</h2>
+        ${saet ? `<p class="bs-fixed" id="bsFixedSize">Your SÆTTER 3 design: ${fmt(s.width)} × ${fmt(s.height)} × ${fmt(s.depth)} cm. Compare other models under the 3D view; the comparison is not saved.</p>` : `${sizeFields}<p class="note">Or make it bigger or smaller with the Size buttons under the 3D view.</p>`}
         <h2>4. Color</h2>${field('color', 'Wood color', draft.color, 'type="color"')}
         <h2>5. Save</h2>
         <div class="bs-save-actions"><button class="btn bs-save" data-bs-action="save">Save design</button></div><p class="note" id="bsSaveNote"></p>
@@ -174,7 +175,7 @@ window.BookshelfBuilder = (() => {
         <p class="note bs-hint">Drag to turn the view · scroll to zoom · pick an item, then click a shelf to place it.</p>
       </div>
       </div>
-      <nav class="bs-bar" aria-label="Quick actions"><button type="button" class="btn light" data-bs-sheet="size" aria-controls="bsSize" aria-expanded="${sheet === 'size'}">Size</button><button type="button" class="btn light" data-bs-sheet="add" aria-controls="bsProps" aria-expanded="${sheet === 'add'}">Add item</button><button type="button" class="btn" data-bs-barsave>Save</button></nav>`;
+      <nav class="bs-bar" aria-label="Quick actions"><button type="button" class="btn light" data-bs-sheet="size" aria-controls="bsSize" aria-expanded="${sheet === 'size'}">${saet ? 'Compare models' : 'Size'}</button><button type="button" class="btn light" data-bs-sheet="add" aria-controls="bsProps" aria-expanded="${sheet === 'add'}">Add item</button><button type="button" class="btn" data-bs-barsave>Save</button></nav>`;
   }
   function roomTemplate() {
     const s = draft.design, r = room();
@@ -250,6 +251,7 @@ window.BookshelfBuilder = (() => {
     host.querySelectorAll('[data-bs-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.bsView === view)));
     host.querySelectorAll('[data-bs-variant]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.bsVariant === (variant || '3'))));
     const shown = displayDesign(), previewing = shown !== s, dims = d => `${fmt(d.width)} × ${fmt(d.height)} × ${fmt(d.depth)} cm`;
+    const fixed = host.querySelector('#bsFixedSize'); if (fixed) fixed.textContent = `Your SÆTTER 3 design: ${dims(s)}. Compare other models under the 3D view; the comparison is not saved.`;
     host.querySelector('#bsReadout').textContent = previewing ? `Comparison preview ${B.SAETTER_VARIANTS.find(v => v.id === variant).label}: ${dims(shown)}. Your design and fit checks stay at ${dims(s)}.` : `Bookshelf ${dims(s)} (width × height × depth)`;
     const over = previewing ? (standalone() ? [...(draft.target.offset + shown.width > draft.wall.widthCm ? ['wider than the wall'] : []), ...(draft.target.elev + shown.height > draft.wall.heightCm ? ['taller than the wall'] : [])] : B.fit(shown, room(), draft.target).length ? ['too big for this spot'] : []) : [];
     host.querySelector('#bsPreviewNote').textContent = over.length ? `At this comparison size it would be ${over.join(' and ')}. Preview only.` : '';
@@ -299,7 +301,13 @@ window.BookshelfBuilder = (() => {
   }
   function paletteState() {
     if (!Props || !host) return;
-    host.querySelectorAll('[data-bs-prop]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.bsProp === selected)));
+    host.querySelectorAll('[data-bs-prop]').forEach(b => {
+      const spec = Props.PROPS[b.dataset.bsProp], fit = draft.tab === 'saetter' ? Props.fitLocation(displayDesign(), b.dataset.bsProp) : '';
+      const label = fit === 'compartment' ? 'Fits inside' : fit === 'top' ? 'Top only' : fit === 'none' ? 'Does not fit' : '';
+      b.setAttribute('aria-pressed', String(b.dataset.bsProp === selected));
+      b.setAttribute('aria-label', `${spec.name}, ${spec.h} cm tall${label ? ', ' + label : ''}`);
+      b.querySelector('[data-bs-fit]').textContent = label;
+    });
     const pb = host.querySelector('[data-bs-person]'); if (pb) pb.setAttribute('aria-pressed', String(person));
     const clear = host.querySelector('[data-bs-action="clearItems"]'); if (clear) clear.disabled = !items.length && !person;
     const el = host.querySelector('#bs3d'); if (el) el.classList.toggle('placing', !!selected);
@@ -327,11 +335,15 @@ window.BookshelfBuilder = (() => {
     if (info.none) { if (selected && Props) { showHelp(); help(Props.MESSAGES.noSurface, true); } return; }
     if (!selected || !Props) { row = Math.min(info.bay, draft.design.levels.length - 1); refresh(); return; } // a SÆTTER size preview can have more levels than the design
     if (items.length >= Props.MAX_ITEMS) { help(Props.MESSAGES.limit, true); return api.toast(Props.MESSAGES.limit); }
-    const r = Props.fitProp(displayDesign(), selected, info.local, items);
+    const design = displayDesign(), topOnly = draft.tab === 'saetter' && Props.fitLocation(design, selected) === 'top';
+    const redirected = topOnly && info.local.y < design.height - .01;
+    const hit = topOnly ? { x: info.local.x, y: design.height, level: design.levels.length - 1 } : info.local;
+    const r = Props.fitProp(design, selected, hit, items);
     if (!r.ok) { help(r.message, true); return api.toast(r.message); }
     const id = `i${++itemSeq}`;
     items = items.concat([{ ...r, id, color: Props.BOOK_COLORS[itemSeq % Props.BOOK_COLORS.length] }]);
-    update3D(false); help(`${itemName(selected)} placed (${Props.PROPS[selected].w} × ${Props.PROPS[selected].h} cm). Click it to remove it.`);
+    update3D(false); const message = redirected ? `${itemName(selected)} placed on top; it does not fit inside.` : `${itemName(selected)} placed (${Props.PROPS[selected].h} cm tall). Click it to remove it.`;
+    help(message); if (redirected) api.toast(message);
   }
   // render() rebuilds the page: put keyboard focus back on the control that was used.
   function refocus(selector) { const b = host.querySelector(selector); if (b && !b.disabled) b.focus({ preventScroll: true }); else host.querySelector('h1')?.focus({ preventScroll: true }); }
