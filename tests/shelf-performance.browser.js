@@ -95,6 +95,17 @@ async page => {
     return { synchronous, perFrame };
   });
   check(coalesced.synchronous === 0 && coalesced.perFrame === 1, 'multiple drag events coalesce into one scene update per frame');
+  await page.locator('#bs-tab-custom').click();
+  await page.waitForFunction(() => window.__testScene && !window.__testScene.rig.state.design.template);
+  const customWood = await page.evaluate(() => {
+    const scene = __testScene, state = scene.rig.state, design = JSON.parse(JSON.stringify(state.design));
+    const original = [...scene.rig.furniture], divider = Bookshelf.dividerPosition(design, 0);
+    if (divider === null) return false;
+    design.levels[0].dividers.push(divider); scene.update({ ...state, design }, false);
+    return scene.rig.furniture.length > original.length && scene.rig.furniture.some(mesh => original.includes(mesh)) &&
+      scene.rig.furniture.every(mesh => !mesh.material.userData.walnut && mesh.material.map && !mesh.material.bumpMap);
+  });
+  check(customWood, 'incrementally added custom boards retain the non-walnut material');
   check(errors.length === 0, 'no browser errors: ' + errors.join(' | '));
   return checks;
 }

@@ -33,7 +33,7 @@ window.BookshelfBuilder = (() => {
   function fresh(tab = 'custom') {
     const r = standalone() ? null : (api.rooms().find(r => r.id === api.activeRoom()) || api.rooms()[0]);
     const saetter = tab === 'saetter';
-    return { tab, name: saetter ? 'SÆTTER 3 · walnut' : 'Custom bookshelf', color: saetter ? '#6C5141' : '#A46B42',
+    return { tab, name: saetter ? 'SÆTTER 3 · walnut' : 'Custom bookshelf', color: saetter ? '#76513D' : '#A46B42',
       design: saetter ? B.saetter3() : B.preset('staggered', Math.min(240, r?.width ?? 500), Math.min(200, (r?.height ?? 500) - 8)),
       ...(standalone() ? { wall: defaultWall(tab) } : {}),
       target: { roomId: r?.id || null, wall: 'n', offset: standalone() ? 0 : 20, gap: standalone() ? 0 : saetter ? 0 : 2, elev: standalone() ? 0 : saetter ? 120 : 0 }, pieceId: null, itemId: null, itemRoomId: null };

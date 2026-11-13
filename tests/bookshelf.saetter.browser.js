@@ -44,6 +44,7 @@ async page => {
   await button('Save & place on wall').click();
   let project = await state(), piece = project.catalog.find(p => p.name === 'SÆTTER test piece');
   check(piece?.shelfDesign?.template === 'saetter3' && piece.shelfDesign.separatorHeight === 2.5, 'saved piece contains edited template geometry');
+  check(piece?.color === '#76513D', 'the default saved SÆTTER color stays unchanged');
   check(project.rooms.flatMap(r => r.items).filter(i => i.catalogId === piece.id && i.shelfDesign?.backThickness === .5).length === 1, 'placement contains the backed geometry');
   await page.reload(); await button('Bookshelf builder').click();
   check(await tab('SÆTTER 3').getAttribute('aria-selected') === 'true', 'active tab survives reload');
