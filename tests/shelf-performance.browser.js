@@ -46,6 +46,24 @@ async page => {
   check(comparisonLabels, 'comparison labels are retained for unchanged updates and rebuilt for item size changes');
   await page.waitForTimeout(500);
   check(await page.evaluate(() => { __bsDebug.orbit(10); return !__testScene.rig.renderer.shadowMap.needsUpdate; }), 'orbiting alone does not invalidate the shadow map');
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => {
+    const renderer = __testScene.rig.renderer, requestFrame = window.requestAnimationFrame, render = renderer.render;
+    const probe = window.__renderProbe = { renderer, requestFrame, render, timestamps: [], current: null };
+    window.requestAnimationFrame = callback => requestFrame.call(window, timestamp => { probe.current = timestamp; callback(timestamp); });
+    renderer.render = function (...args) { if (probe.current !== null) probe.timestamps.push(probe.current); return render.apply(this, args); };
+  });
+  const canvas = page.locator('#bs3d canvas'); await canvas.scrollIntoViewIfNeeded();
+  const bounds = await canvas.boundingBox(), centerX = bounds.x + bounds.width / 2, centerY = bounds.y + bounds.height / 2;
+  await page.mouse.move(centerX, centerY); await page.mouse.down();
+  await page.mouse.move(centerX + 35, centerY + 8, { steps: 8 }); await page.mouse.up(); await page.waitForTimeout(1300);
+  const renderCadence = await page.evaluate(() => {
+    const probe = window.__renderProbe, counts = new Map();
+    probe.timestamps.forEach(timestamp => counts.set(timestamp, (counts.get(timestamp) || 0) + 1));
+    window.requestAnimationFrame = probe.requestFrame; probe.renderer.render = probe.render;
+    return { frames: counts.size, maximum: Math.max(0, ...counts.values()) };
+  });
+  check(renderCadence.frames > 2 && renderCadence.maximum === 1, 'orbiting renders at most once per animation frame');
   const delta = await page.evaluate(() => {
     const scene = __testScene, state = scene.rig.state, design = JSON.parse(JSON.stringify(state.design));
     const original = scene.rig.furniture[3], geometry = original.geometry, position = original.position.x;

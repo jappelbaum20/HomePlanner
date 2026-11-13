@@ -113,10 +113,10 @@
     function frame() {
       raf = 0; if (!rig.state || !rig.state.visible()) return;
       const moved = controls.update(); renderer.render(scene, camera); debug.frames++;
-      if (moved || performance.now() < keepUntil) raf = requestAnimationFrame(frame);
+      if (moved || performance.now() < keepUntil) request();
     }
     function request(ms = 0) { keepUntil = Math.max(keepUntil, performance.now() + ms); if (!raf) raf = requestAnimationFrame(frame); }
-    controls.addEventListener('change', () => { rig.userMoved = true; request(700); });
+    controls.addEventListener('change', () => { rig.userMoved = true; request(); });
 
     // Rendering is on demand, so a lost and restored context must trigger a redraw itself.
     renderer.domElement.addEventListener('webglcontextlost', e => e.preventDefault());
