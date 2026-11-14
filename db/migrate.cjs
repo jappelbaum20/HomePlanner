@@ -4,11 +4,13 @@ const { readFile } = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const FILES = Object.freeze(['001_auth.sql','002_business.sql','003_photos.sql','004_photo_maintenance.sql','005_shelf_documents.sql','006_access_requests.sql']);
-// Additive migrations are rollback-compatible: they only add nullable columns and new functions, so the
-// previous image keeps working against them. They are recorded in hp_migration.applied_additive because
-// the previous image requires hp_migration.applied to equal exactly FILES. Hashed over LF-normalised text,
-// so a CRLF or LF checkout produces the same checksum.
-const ADDITIVE = Object.freeze(['007_verified_signin.sql']);
+// Additive migrations only add objects (nullable columns, tables, new functions; 008 also replaces two
+// internal functions). They are recorded in hp_migration.applied_additive, apart from hp_migration.applied,
+// which the pre-007 image requires to equal exactly FILES. That does not make them image-swap safe: this
+// runtime compares the additive ledger exactly, so an image that does not list a recorded additive
+// migration (main without 008) reports not ready. Rolling back past 008 means the documented hand-undo in
+// docs/STAGE2-OPERATIONS.md. Hashed over LF-normalised text, so a CRLF or LF checkout gives the same checksum.
+const ADDITIVE = Object.freeze(['007_verified_signin.sql','008_add_person.sql']);
 async function expectedMigrations() {
   return Promise.all(FILES.map(async name => {
     const sql = await readFile(path.join(__dirname,'migrations',name),'utf8');

@@ -20,7 +20,7 @@ async function base(extra=false){
  await db.query('INSERT INTO hp_private.admin_binding(user_id,google_subject) VALUES($1,$2)',[owner,'owner-sub']);
  await db.query('INSERT INTO hp_private.admin_grants VALUES($1,$2,$3,$4,now()+interval \'10 minutes\')',[grant,owner,os,'owner-sub']);
  await db.exec('BEGIN;\n'+await mig('006_access_requests.sql')+'\nCOMMIT;');
- if(extra) await db.exec('BEGIN;\n'+await mig('007_verified_signin.sql')+'\nCOMMIT;');
+ if(extra) { await db.exec('BEGIN;\n'+await mig('007_verified_signin.sql')+'\nCOMMIT;'); await db.exec('BEGIN;\n'+await mig('008_add_person.sql')+'\nCOMMIT;'); }
  return db;
 }
 async function call(db,role,uid,sid,sql,args=[],g=''){

@@ -108,6 +108,9 @@ function createAccessStore({appPool,publicPool,rateKey}={}) {
     decide:(ctx,g,id,rev,decision)=>admin(ctx,g,(c,sub)=>rpc(c,'SELECT hp_app.hp_access_decide($1,$2,$3,$4) AS result',[sub,id,rev,decision])),
     revoke:(ctx,g,id,rev)=>admin(ctx,g,(c,sub)=>rpc(c,'SELECT hp_app.hp_access_revoke($1,$2,$3) AS result',[sub,id,rev])),
     retryMail:(ctx,g,id,rev)=>admin(ctx,g,(c,sub)=>rpc(c,'SELECT hp_app.hp_mail_retry($1,$2,$3) AS result',[sub,id,rev])),
+    addedList:(ctx,g)=>admin(ctx,g,(c,sub)=>rpc(c,'SELECT hp_app.hp_access_added_list($1) AS result',[sub])),
+    addPerson:(ctx,g,address,override)=>admin(ctx,g,(c,sub)=>rpc(c,'SELECT hp_app.hp_access_add($1,$2,$3) AS result',[sub,address,override===true])),
+    removeAdded:(ctx,g,address)=>admin(ctx,g,(c,sub)=>rpc(c,'SELECT hp_app.hp_access_added_remove($1,$2) AS result',[sub,address])),
     seedOwner:(ctx,g)=>admin(ctx,g,(c,sub)=>rpc(c,'SELECT hp_app.hp_access_seed_owner($1) AS result',[sub]),true)
   });
 }

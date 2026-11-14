@@ -5,10 +5,12 @@
   const signIn = document.querySelector('#adminSignIn'), signOut = document.querySelector('#adminSignOut');
   const verification = document.querySelector('#verification'), prepare = document.querySelector('#prepareVerification'), googleButton = document.querySelector('#googleButton');
   const accessAdmin = document.querySelector('#accessAdmin'), requestList = document.querySelector('#requestList'), requestDetail = document.querySelector('#requestDetail'), entitlementList = document.querySelector('#entitlementList');
+  const waitingCount = document.querySelector('#waitingCount'), addSubmit = document.querySelector('#addPersonSubmit');
+  const addForm = document.querySelector('#addPersonForm'), addEmail = document.querySelector('#addPersonEmail'), addStatus = document.querySelector('#addPersonStatus'), addActions = document.querySelector('#addPersonActions'), addedList = document.querySelector('#addedList');
   let generation = -1, proof = null, revision = null, timer = null, sequence = 0, googleLoading = null;
   function clearProof(message) {
     sequence++; proof = null; revision = null; clearTimeout(timer); timer = null;
-    form.hidden = budgetForm.hidden = accessAdmin.hidden = true; googleButton.replaceChildren(); requestList.replaceChildren(); requestDetail.replaceChildren(); entitlementList.replaceChildren();
+    form.hidden = budgetForm.hidden = accessAdmin.hidden = true; googleButton.replaceChildren(); waitingCount.textContent = ''; addStatus.textContent = ''; addEmail.value = ''; addActions.replaceChildren(); addedList.replaceChildren(); requestList.replaceChildren(); requestDetail.replaceChildren(); entitlementList.replaceChildren();
     if (message) status.textContent = message;
   }
   const fail = error => { if (error?.obsolete) return; status.textContent = error?.message || 'Settings are unavailable.'; };
@@ -53,7 +55,11 @@
     revision = response.revision; form.hidden = budgetForm.hidden = false;
     status.textContent = `Verified. Settings loaded · revision ${revision}. Budget uses a conservative token allowance, which may exceed invoice spend.`;
   }
-  async function load(stamp) { show(await adminRequest('/api/admin/model-config'), stamp); await loadAccess(); }
+  async function load(stamp) {
+    const [settings, access] = await Promise.allSettled([adminRequest('/api/admin/model-config'), loadAccess()]);
+    if (access.status === 'rejected') throw access.reason;
+    if (settings.status === 'fulfilled') show(settings.value, stamp); else fail(settings.reason);
+  }
   function line(parent, text) { const p = document.createElement('p'); p.textContent = text; parent.append(p); return p; }
   function action(parent, label, fn) {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'btn light'; b.textContent = label;
@@ -67,19 +73,60 @@
       await adminRequest(`/api/admin/access/requests/${encodeURIComponent(item.id)}/${decision}`, { method: 'POST', headers: { 'If-Match': `"${item.revision}"` }, body: {} });
       await loadAccess(); await review(item.id);
     });
-    for (const mail of item.mail || []) {
+    for (const mail of (item.mail || []).filter(mail => mail.kind !== 'request')) {
       const row = line(requestDetail, `${mail.kind}: ${mail.status} · attempts ${mail.attempts}${mail.errorCategory ? ' · ' + mail.errorCategory : ''}`);
       if (mail.status === 'failed') action(row, 'Retry notification', async () => {
         await adminRequest(`/api/admin/access/mail/${encodeURIComponent(mail.id)}/retry`, { method: 'POST', headers: { 'If-Match': `"${mail.revision}"` }, body: {} }); await review(item.id);
       });
     }
   }
+  function requestedAt(value) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'Date unavailable' : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  }
+  async function decide(item, decision) {
+    try {
+      await adminRequest(`/api/admin/access/requests/${encodeURIComponent(item.id)}/${decision}`, { method: 'POST', headers: { 'If-Match': `"${item.revision}"` }, body: {} });
+    } catch (error) {
+      if (error.status !== 409) throw error;
+      await loadAccess();
+      throw Error('This request changed. The current list has been reloaded.');
+    }
+    await loadAccess();
+  }
+  function requestRow(parent, item) {
+    const row = document.createElement('article'); row.className = 'access-request' + (item.status === 'pending' ? ' pending' : ' decided');
+    line(row, `${item.status === 'pending' ? 'Waiting' : item.status} · ${requestedAt(item.createdAt)}`);
+    line(row, `${item.name} · ${item.email}`);
+    const controls = document.createElement('div'); controls.className = 'btnrow'; row.append(controls);
+    let busy = false;
+    if (item.status === 'pending') for (const [decision, label] of [['approve', 'Approve'], ['deny', 'Deny']]) action(controls, label, async () => {
+      if (busy) return; busy = true;
+      try { await decide(item, decision); } finally { busy = false; }
+    });
+    action(controls, 'Details and note', () => review(item.id));
+    parent.append(row);
+  }
   async function loadAccess() {
-    const [requests, entitlements] = await Promise.all([adminRequest('/api/admin/access/requests'), adminRequest('/api/admin/access/entitlements')]);
-    if (!Array.isArray(requests) || !Array.isArray(entitlements) || !proof) throw Error('Access review is unavailable.');
+    const [requests, entitlements, added] = await Promise.all([adminRequest('/api/admin/access/requests'), adminRequest('/api/admin/access/entitlements'), adminRequest('/api/admin/access/people')]);
+    if (!Array.isArray(requests) || !Array.isArray(entitlements) || !Array.isArray(added) || !proof) throw Error('Access review is unavailable.');
+    addedList.replaceChildren();
+    if (!added.length) line(addedList, 'Nobody is waiting to sign in.');
+    for (const item of added) {
+      const row = line(addedList, `${item.email} · added ${requestedAt(item.addedAt)} · not signed in yet `);
+      action(row, 'Remove', async () => { await adminRequest('/api/admin/access/people/remove', { method: 'POST', body: { email: item.email } }); addStatus.textContent = `${item.email} removed.`; await loadAccess(); });
+    }
     requestList.replaceChildren(); requestDetail.replaceChildren(); entitlementList.replaceChildren(); accessAdmin.hidden = false;
-    if (!requests.length) line(requestList, 'No requests.');
-    for (const item of requests) { const row = line(requestList, `${item.name} · ${item.email} · ${item.status} `); action(row, 'Review', () => review(item.id)); }
+    const pending = requests.filter(item => item.status === 'pending'), decided = requests.filter(item => item.status !== 'pending');
+    waitingCount.textContent = `${pending.length} ${pending.length === 1 ? 'request' : 'requests'} waiting`;
+    const heading = document.createElement('h3'); heading.textContent = 'Waiting for approval'; requestList.append(heading);
+    if (!pending.length) line(requestList, 'No requests waiting.');
+    for (const item of pending) requestRow(requestList, item);
+    if (decided.length) {
+      const history = document.createElement('details'), summary = document.createElement('summary'); summary.textContent = 'Decided requests'; history.append(summary);
+      for (const item of decided) requestRow(history, item);
+      requestList.append(history);
+    }
     if (!entitlements.length) line(entitlementList, 'No accounts.');
     for (const item of entitlements) {
       const row = line(entitlementList, `${item.userId} · ${item.status} `);
@@ -90,6 +137,39 @@
     const requested = new URLSearchParams(location.search).get('accessRequest');
     if (requested && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(requested)) { history.replaceState(null, '', '/admin.html'); await review(requested); }
   }
+  // Returns the id of a waiting request to open, if the address already has one. It never loads the list itself.
+  async function addPerson(address, override) {
+    let pendingId;
+    addActions.replaceChildren();
+    const result = await adminRequest('/api/admin/access/people', { method: 'POST', body: override ? { email: address, override: true } : { email: address } });
+    const outcome = result?.result;
+    if (outcome === 'added') addStatus.textContent = `${address} added. They have access once they sign in with Google using this address.`;
+    else if (outcome === 'reinstated') addStatus.textContent = `${address} had an account that was closed; access is restored.`;
+    else if (outcome === 'already_added') addStatus.textContent = `${address} is already added and has not signed in yet.`;
+    else if (outcome === 'has_access') addStatus.textContent = `${address} already has access.`;
+    else if (outcome === 'pending_request') { addStatus.textContent = `A request from ${address} is waiting. Approve it from the waiting list.`; if (typeof result.requestId === 'string') pendingId = result.requestId; }
+    else if (outcome === 'blocked') {
+      const restore = result.restore === true;
+      addStatus.textContent = restore ? `${address} has a closed account (${result.state}), so it was not restored.` : `${address} was ${result.state} before, so it was not added.`;
+      action(addActions, restore ? 'Restore closed account' : 'Allow anyway', () => submitAdd(address, true));
+      return undefined;
+    } else throw Error('The result was not understood.');
+    if (outcome === 'added' || outcome === 'reinstated') addEmail.value = '';
+    return pendingId;
+  }
+  // Reload the lists first (that clears the detail panel), then open the waiting request, so it stays visible.
+  async function submitAdd(address, override) {
+    addSubmit.disabled = true;
+    try { const pendingId = await addPerson(address, override); await loadAccess(); if (pendingId) await review(pendingId); }
+    finally { addSubmit.disabled = false; }
+  }
+  addForm.addEventListener('submit', event => {
+    event.preventDefault(); const address = addEmail.value.trim();
+    if (!address) return;
+    addStatus.textContent = '';
+    if (addSubmit.disabled) return;
+    void submitAdd(address, false).catch(fail);
+  });
   document.querySelector('#reloadAccess').addEventListener('click', () => { void loadAccess().catch(fail); });
   function loadGoogle() {
     if (window.google?.accounts?.id) return Promise.resolve();
