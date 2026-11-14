@@ -10,7 +10,8 @@
   <button class="btn" id="prepareVerification" type="button">Prepare Google verification</button><div id="googleButton"></div>
 </section>
 <section id="accessAdmin" hidden aria-labelledby="accessAdminHeading"><h2 id="accessAdminHeading">Access requests</h2>
-<p>Review requests after verification. Opening a request does not change access. Delivery status shows transport acceptance, not inbox delivery.</p>
+<p id="waitingCount" role="status" aria-live="polite"></p>
+<p>Requests wait here for your decision. Decision notification status shows transport acceptance, not inbox delivery.</p>
 <button class="btn light" type="button" id="reloadAccess">Refresh requests and access</button>
 <div id="requestList"></div><div id="requestDetail"></div><h3>Approved and revoked accounts</h3><div id="entitlementList"></div></section>
 <form id="modelForm" hidden>

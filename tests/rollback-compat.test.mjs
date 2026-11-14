@@ -1,5 +1,5 @@
-// Rollback proof: the runtime code of the commit before this change keeps working against a database
-// that has migration 007 applied, so rolling back is an image swap (no database restore).
+// Historical compatibility check for the pre-007 runtime, which ignores the additive ledger.
+// The immediate pre-008 image checks that ledger and needs an explicit 008 rollback first.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -28,7 +28,7 @@ test('migration 007 is hashed over LF text so CRLF and LF checkouts record the s
   assert.equal(migrateNew.FILES.includes('007_verified_signin.sql'), false, 'the six base files stay exactly what the previous image expects');
 });
 
-test('previous runtime verifies the ledger and serves requests against a 007 database', { skip: !haveBase && `base commit ${BASE} not available` }, async () => {
+test('pre-007 runtime verifies the base ledger and serves requests against the current database', { skip: !haveBase && `base commit ${BASE} not available` }, async () => {
   const dir = mkdtempSync(path.join(process.env.HOMEPLANNER_E_TEST_ROOT || tmpdir(), 'rollback-'));
   for (const f of ['server/access.cjs', 'server/errors.js', 'db/migrate.cjs']) {
     mkdirSync(path.dirname(path.join(dir, f)), { recursive: true });
@@ -43,7 +43,7 @@ test('previous runtime verifies the ledger and serves requests against a 007 dat
   await db.exec('CREATE ROLE hp_auth_owner NOLOGIN; CREATE ROLE hp_auth_runtime NOLOGIN; CREATE ROLE hp_app_owner NOLOGIN; CREATE ROLE hp_app_runtime NOLOGIN; CREATE ROLE hp_photo_maintenance NOLOGIN; CREATE ROLE hp_access_public NOLOGIN; CREATE ROLE hp_mail_worker NOLOGIN;');
   const c = client(db);
   await migrateNew.migrate(c); await migrateNew.migrate(c);
-  assert.deepEqual((await db.query('SELECT name FROM hp_migration.applied_additive')).rows, [{ name: '007_verified_signin.sql' }]);
+  assert.deepEqual((await db.query('SELECT name FROM hp_migration.applied_additive ORDER BY name')).rows, [{ name: '007_verified_signin.sql' }, { name: '008_access_dashboard.sql' }]);
   assert.equal((await db.query('SELECT count(*)::int n FROM hp_migration.applied')).rows[0].n, 6);
   assert.equal(await migrateNew.verifyMigrations(c), true);
   // The previous image's ledger check, byte for byte, passes with 007 applied.

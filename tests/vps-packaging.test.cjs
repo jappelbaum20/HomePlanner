@@ -57,7 +57,7 @@ test('prepared context has exactly reviewed files and rejects extra files', () =
   assert.ok(fs.readFileSync(path.join(target, '.dockerignore'), 'utf8').includes('!api/designs/\\[id\\].js'));
   const ignore = require('ignore')().add(fs.readFileSync(path.join(target, '.dockerignore'), 'utf8'));
   assert.deepEqual(inventory.filter(item => item !== '.dockerignore' && ignore.ignores(item)), []);
-  for (const item of ['runtime/composition.cjs','runtime/integrations.cjs','runtime/storage-safety.cjs','server/photo-files.cjs','server/photo-maintenance.cjs','server/auth-config.cjs','server/session.cjs','db/migrations/003_photos.sql','db/migrations/004_photo_maintenance.sql','.dockerignore']) assert.ok(inventory.includes(item));
+  for (const item of ['runtime/composition.cjs','runtime/integrations.cjs','runtime/storage-safety.cjs','server/photo-files.cjs','server/photo-maintenance.cjs','server/auth-config.cjs','server/session.cjs','db/migrations/003_photos.sql','db/migrations/004_photo_maintenance.sql','db/migrations/008_access_dashboard.sql','.dockerignore']) assert.ok(inventory.includes(item));
   for (const item of ['house-data.js', '.env', '.git/config']) assert.ok(!inventory.includes(item));
   fs.writeFileSync(path.join(target, 'unexpected.txt'), 'fixture');
   assert.notEqual(run(['scripts/audit-vps-context.mjs'], target).status, 0);

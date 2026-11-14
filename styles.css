@@ -318,6 +318,11 @@ dialog::backdrop { background: rgba(29,33,36,.55); }
 .proposal-comparison svg { display: block; width: 100%; max-height: 180px; color: #76513d; border: 1px solid #d6dad5; }
 .admin-shell { max-width: 680px; margin: 40px auto; padding: 0 20px; }
 .admin-shell form { display: grid; gap: 12px; }
+.access-request { margin: 12px 0; padding: 12px; border: 1px solid #d6dad5; border-radius: 8px; overflow-wrap: anywhere; }
+.access-request.pending { border-left: 4px solid #9b6f16; background: #fff9e9; }
+.access-request.decided { background: #f6f7f5; }
+.access-request p { margin: 0 0 8px; white-space: pre-wrap; }
+#waitingCount { font-weight: 700; }
 
 @media (min-width: 901px) and (max-width: 1200px) { .topbar { flex-wrap: wrap; } }
 

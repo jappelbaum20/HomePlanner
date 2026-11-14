@@ -3,11 +3,11 @@
   const cloud = window.HomePlannerCloud, status = document.querySelector('#accessStatus');
   const signIn = document.querySelector('#accessSignIn'), signOut = document.querySelector('#accessSignOut');
   const text = {
-    en: { heading: 'Sign in to HomePlanner', intro: 'Sign in with your approved Google account.', google: 'Sign in with Google', signout: 'Sign out', home: 'Open room planner', shelf: 'Open bookshelf builder', request: 'Request access',
-      checking: 'Checking access…', unavailable: 'Sign-in is unavailable.', pending: 'Your account is awaiting approval. Use Request access if you have not asked yet.', denied: 'Your access request was not approved.', revoked: 'Your access has been revoked.', approved: 'You are signed in.',
+    en: { heading: 'Sign in to HomePlanner', intro: 'Sign in with your approved Google account.', google: 'Sign in with Google', signout: 'Sign out', home: 'Open room planner', shelf: 'Open bookshelf builder', request: 'To request access, sign in with Google.', admin: 'Admin settings',
+      checking: 'Checking access…', unavailable: 'Sign-in is unavailable.', pending: 'Your request is awaiting approval.', denied: 'Your access request was not approved.', revoked: 'Your access has been revoked.', approved: 'You are signed in.',
       access_check_failed: 'Sign-in could not be verified. Please try again.', unknown: 'Sign-in could not be completed. Please try again.' },
-    de: { heading: 'Bei HomePlanner anmelden', intro: 'Melden Sie sich mit Ihrem freigegebenen Google-Konto an.', google: 'Mit Google anmelden', signout: 'Abmelden', home: 'Raumplaner öffnen', shelf: 'Regalplaner öffnen', request: 'Zugang anfragen',
-      checking: 'Zugang wird geprüft…', unavailable: 'Anmeldung nicht verfügbar.', pending: 'Ihr Konto wartet auf Freigabe. Nutzen Sie „Zugang anfragen“, falls Sie noch nicht angefragt haben.', denied: 'Ihre Zugangsanfrage wurde nicht freigegeben.', revoked: 'Ihr Zugang wurde entzogen.', approved: 'Sie sind angemeldet.',
+    de: { heading: 'Bei HomePlanner anmelden', intro: 'Melden Sie sich mit Ihrem freigegebenen Google-Konto an.', google: 'Mit Google anmelden', signout: 'Abmelden', home: 'Raumplaner öffnen', shelf: 'Regalplaner öffnen', request: 'Um Zugang anzufragen, melden Sie sich mit Google an.', admin: 'Administration',
+      checking: 'Zugang wird geprüft…', unavailable: 'Anmeldung nicht verfügbar.', pending: 'Ihre Anfrage wartet auf Freigabe.', denied: 'Ihre Zugangsanfrage wurde nicht freigegeben.', revoked: 'Ihr Zugang wurde entzogen.', approved: 'Sie sind angemeldet.',
       access_check_failed: 'Die Anmeldung konnte nicht geprüft werden. Bitte erneut versuchen.', unknown: 'Die Anmeldung konnte nicht abgeschlossen werden. Bitte erneut versuchen.' }
   };
   const readLang = () => { try { const v = window.localStorage.getItem('hp-lang'); if (v === 'de' || v === 'en') return v; } catch {} return /^de\b/i.test(window.navigator?.language || '') ? 'de' : 'en'; };
@@ -26,6 +26,7 @@
   cloud.subscribe(state => {
     const signedIn = !!state.me, access = state.me?.access?.status || (signedIn ? 'approved' : null);
     signIn.hidden = signedIn; signOut.hidden = !signedIn;
+    document.querySelector('#ownerAdminLink').hidden = state.revalidating || access !== 'approved' || state.me?.isOwner !== true;
     document.querySelector('#workspaces').hidden = access !== 'approved';
     if (state.revalidating) say('checking');
     else if (state.error) say(null, state.error);

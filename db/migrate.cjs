@@ -4,11 +4,10 @@ const { readFile } = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const FILES = Object.freeze(['001_auth.sql','002_business.sql','003_photos.sql','004_photo_maintenance.sql','005_shelf_documents.sql','006_access_requests.sql']);
-// Additive migrations are rollback-compatible: they only add nullable columns and new functions, so the
-// previous image keeps working against them. They are recorded in hp_migration.applied_additive because
-// the previous image requires hp_migration.applied to equal exactly FILES. Hashed over LF-normalised text,
-// so a CRLF or LF checkout produces the same checksum.
-const ADDITIVE = Object.freeze(['007_verified_signin.sql']);
+// Additive migrations have their own ledger because older images require hp_migration.applied to
+// equal exactly FILES. Compatibility depends on each migration and the image's ledger check. Hashes
+// use LF-normalised text, so a CRLF or LF checkout produces the same checksum.
+const ADDITIVE = Object.freeze(['007_verified_signin.sql','008_access_dashboard.sql']);
 async function expectedMigrations() {
   return Promise.all(FILES.map(async name => {
     const sql = await readFile(path.join(__dirname,'migrations',name),'utf8');

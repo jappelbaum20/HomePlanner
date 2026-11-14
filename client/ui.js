@@ -3,6 +3,7 @@ window.HomePlannerCloudUI = bridge => {
   'use strict';
   const cloud = window.HomePlannerCloud, panel = document.querySelector('#cloudPanel'), dialog = document.querySelector('#cloudDlg');
   const status = document.querySelector('#cloudStatus'), signIn = document.querySelector('#cloudSignIn'), signOut = document.querySelector('#cloudSignOut');
+  const adminLink = document.querySelector('#ownerAdminLink');
   let identity = null, lastGeneration = -1, ready = false, openSequence = 0, writing = false;
   const text = (tag, content) => { const node = document.createElement(tag); node.textContent = content; return node; };
   const button = (label, action) => { const node = text('button', label); node.type = 'button'; node.className = 'btn small'; node.addEventListener('click', () => run(action)); return node; };
@@ -105,6 +106,7 @@ window.HomePlannerCloudUI = bridge => {
     }
     identity = next.me ? next : null; bridge.identityChanged(!!identity);
     signIn.hidden = !!identity; signOut.hidden = !identity;
+    adminLink.hidden = next.revalidating || identity?.me?.isOwner !== true;
     message(next.error || (identity ? `Signed in as ${identity.me.displayName || 'Google user'}.` : ready ? 'Not signed in. Local editing remains available.' : 'Cloud sign-in is not configured.'));
     if (identity && dialog.open) void run(refresh);
   });

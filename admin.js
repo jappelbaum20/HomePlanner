@@ -5,10 +5,11 @@
   const signIn = document.querySelector('#adminSignIn'), signOut = document.querySelector('#adminSignOut');
   const verification = document.querySelector('#verification'), prepare = document.querySelector('#prepareVerification'), googleButton = document.querySelector('#googleButton');
   const accessAdmin = document.querySelector('#accessAdmin'), requestList = document.querySelector('#requestList'), requestDetail = document.querySelector('#requestDetail'), entitlementList = document.querySelector('#entitlementList');
+  const waitingCount = document.querySelector('#waitingCount');
   let generation = -1, proof = null, revision = null, timer = null, sequence = 0, googleLoading = null;
   function clearProof(message) {
     sequence++; proof = null; revision = null; clearTimeout(timer); timer = null;
-    form.hidden = budgetForm.hidden = accessAdmin.hidden = true; googleButton.replaceChildren(); requestList.replaceChildren(); requestDetail.replaceChildren(); entitlementList.replaceChildren();
+    form.hidden = budgetForm.hidden = accessAdmin.hidden = true; googleButton.replaceChildren(); waitingCount.textContent = ''; requestList.replaceChildren(); requestDetail.replaceChildren(); entitlementList.replaceChildren();
     if (message) status.textContent = message;
   }
   const fail = error => { if (error?.obsolete) return; status.textContent = error?.message || 'Settings are unavailable.'; };
@@ -53,7 +54,11 @@
     revision = response.revision; form.hidden = budgetForm.hidden = false;
     status.textContent = `Verified. Settings loaded · revision ${revision}. Budget uses a conservative token allowance, which may exceed invoice spend.`;
   }
-  async function load(stamp) { show(await adminRequest('/api/admin/model-config'), stamp); await loadAccess(); }
+  async function load(stamp) {
+    const [settings, access] = await Promise.allSettled([adminRequest('/api/admin/model-config'), loadAccess()]);
+    if (access.status === 'rejected') throw access.reason;
+    if (settings.status === 'fulfilled') show(settings.value, stamp); else fail(settings.reason);
+  }
   function line(parent, text) { const p = document.createElement('p'); p.textContent = text; parent.append(p); return p; }
   function action(parent, label, fn) {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'btn light'; b.textContent = label;
@@ -67,19 +72,55 @@
       await adminRequest(`/api/admin/access/requests/${encodeURIComponent(item.id)}/${decision}`, { method: 'POST', headers: { 'If-Match': `"${item.revision}"` }, body: {} });
       await loadAccess(); await review(item.id);
     });
-    for (const mail of item.mail || []) {
+    for (const mail of (item.mail || []).filter(mail => mail.kind !== 'request')) {
       const row = line(requestDetail, `${mail.kind}: ${mail.status} · attempts ${mail.attempts}${mail.errorCategory ? ' · ' + mail.errorCategory : ''}`);
       if (mail.status === 'failed') action(row, 'Retry notification', async () => {
         await adminRequest(`/api/admin/access/mail/${encodeURIComponent(mail.id)}/retry`, { method: 'POST', headers: { 'If-Match': `"${mail.revision}"` }, body: {} }); await review(item.id);
       });
     }
   }
+  function requestedAt(value) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'Date unavailable' : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  }
+  async function decide(item, decision) {
+    try {
+      await adminRequest(`/api/admin/access/requests/${encodeURIComponent(item.id)}/${decision}`, { method: 'POST', headers: { 'If-Match': `"${item.revision}"` }, body: {} });
+    } catch (error) {
+      if (error.status !== 409) throw error;
+      await loadAccess();
+      throw Error('This request changed. The current list has been reloaded.');
+    }
+    await loadAccess();
+  }
+  function requestRow(parent, item) {
+    const row = document.createElement('article'); row.className = 'access-request' + (item.status === 'pending' ? ' pending' : ' decided');
+    line(row, `${item.status === 'pending' ? 'Waiting' : item.status} · ${requestedAt(item.createdAt)}`);
+    line(row, `${item.name} · ${item.email}`);
+    line(row, item.note ? `Note: ${item.note}` : 'No note.');
+    const controls = document.createElement('div'); controls.className = 'btnrow'; row.append(controls);
+    let busy = false;
+    if (item.status === 'pending') for (const [decision, label] of [['approve', 'Approve'], ['deny', 'Deny']]) action(controls, label, async () => {
+      if (busy) return; busy = true;
+      try { await decide(item, decision); } finally { busy = false; }
+    });
+    action(controls, 'Details', () => review(item.id));
+    parent.append(row);
+  }
   async function loadAccess() {
     const [requests, entitlements] = await Promise.all([adminRequest('/api/admin/access/requests'), adminRequest('/api/admin/access/entitlements')]);
     if (!Array.isArray(requests) || !Array.isArray(entitlements) || !proof) throw Error('Access review is unavailable.');
     requestList.replaceChildren(); requestDetail.replaceChildren(); entitlementList.replaceChildren(); accessAdmin.hidden = false;
-    if (!requests.length) line(requestList, 'No requests.');
-    for (const item of requests) { const row = line(requestList, `${item.name} · ${item.email} · ${item.status} `); action(row, 'Review', () => review(item.id)); }
+    const pending = requests.filter(item => item.status === 'pending'), decided = requests.filter(item => item.status !== 'pending');
+    waitingCount.textContent = `${pending.length} ${pending.length === 1 ? 'request' : 'requests'} waiting`;
+    const heading = document.createElement('h3'); heading.textContent = 'Waiting for approval'; requestList.append(heading);
+    if (!pending.length) line(requestList, 'No requests waiting.');
+    for (const item of pending) requestRow(requestList, item);
+    if (decided.length) {
+      const history = document.createElement('details'), summary = document.createElement('summary'); summary.textContent = 'Decided requests'; history.append(summary);
+      for (const item of decided) requestRow(history, item);
+      requestList.append(history);
+    }
     if (!entitlements.length) line(entitlementList, 'No accounts.');
     for (const item of entitlements) {
       const row = line(entitlementList, `${item.userId} · ${item.status} `);
