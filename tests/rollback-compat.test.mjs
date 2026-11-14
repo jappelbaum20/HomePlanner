@@ -14,7 +14,8 @@ const require = createRequire(import.meta.url);
 const { client, rolePool } = require('./helpers/pglite-pool.cjs');
 const migrateNew = require('../db/migrate.cjs');
 const BASE = process.env.HOMEPLANNER_ROLLBACK_BASE || '3d7e99f';
-const MAIN = process.env.HOMEPLANNER_ROLLBACK_MAIN || 'origin/main';
+// The release before 008 (image 37ee8535). A moving ref would stop meaning "without 008" once 008 is merged.
+const MAIN = process.env.HOMEPLANNER_ROLLBACK_MAIN || '6c8d072dfac06dcc8474fa8c7a0f2aef01540a54';
 const repo = path.resolve(import.meta.dirname, '..');
 const git = args => execFileSync('git', args, { cwd: repo, encoding: 'buffer', maxBuffer: 64 << 20 });
 let haveBase = true; try { git(['cat-file', '-e', BASE + '^{commit}']); } catch { haveBase = false; }
