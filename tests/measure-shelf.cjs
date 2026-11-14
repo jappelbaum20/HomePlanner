@@ -20,7 +20,6 @@ async function measure(page, name, tab) {
   if (tab === 'saetter') await page.locator('#bs-tab-saetter').click();
   await page.waitForFunction(() => window.__bench && window.__bsDebug && window.__bsDebug.frames > 0);
   await page.waitForTimeout(1200);
-  await page.locator('[data-bs-addtoggle]').click();
   await page.locator('[data-bs-prop="mug"]').click();
   await page.locator('#bs3d canvas').scrollIntoViewIfNeeded();
   await page.waitForTimeout(1000);

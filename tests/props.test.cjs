@@ -14,6 +14,14 @@ test('catalogue sizes are the real sizes in cm', () => {
   assert.deepEqual(P.size('mug'), { w: 11, d: 8, h: 9.5 });
   assert.equal(P.size('wine').h, 21); assert.equal(P.size('water').h, 11); assert.equal(P.size('book').h, 18);
   assert.equal(P.size('vase').h, 25); assert.equal(P.PERSON.h, 175); assert.equal(P.size('nope'), null);
+  assert.deepEqual(P.size('cup'), { w: 9.5, d: 9.5, h: 6 });
+  for (const [kind, dimensions, ml] of [
+    ['espresso', { w: 8.5, d: 6.5, h: 5.5 }, 70],
+    ['cappuccino', { w: 14, d: 14, h: 7 }, 180],
+    ['standard_mug', { w: 12, d: 8.5, h: 10 }, 330],
+    ['large_mug', { w: 13.5, d: 9.5, h: 12 }, 475],
+    ['latte', { w: 8, d: 8, h: 15 }, 300]
+  ]) { assert.deepEqual(P.size(kind), dimensions); assert.equal(P.PROPS[kind].ml, ml); }
 });
 
 test('catalogue models have their stated bounds and stand on their surface', () => {
@@ -36,10 +44,32 @@ test('fit indicators follow compartment and top geometry, including preview vari
     const s = B.saetterVariant(variant.id);
     for (const kind of ['mug', 'cup', 'water', 'jar', 'tealight']) assert.equal(P.fitLocation(s, kind), 'compartment', `${variant.id} ${kind}`);
     for (const kind of ['wine', 'book', 'plant', 'vase']) assert.equal(P.fitLocation(s, kind), 'top', `${variant.id} ${kind}`);
+    for (const kind of ['espresso', 'standard_mug']) assert.equal(P.fitLocation(s, kind), 'compartment', `${variant.id} ${kind}`);
+    for (const kind of ['large_mug', 'latte']) assert.equal(P.fitLocation(s, kind), 'top', `${variant.id} ${kind}`);
+    // A 14 cm saucer needs 11.2 cm of shelf depth under the 80% rule; SÆTTER shelves are 10 cm deep.
+    assert.equal(P.fitLocation(s, 'cappuccino'), 'none', `${variant.id} cappuccino`);
   }
   assert.equal(P.fitLocation(saetter, 'missing'), 'none');
   const shallow = B.normalize({ width: 20, height: 20, depth: 10, thickness: 1, levels: [{ y: 0, left: 0, right: 5, dividers: [] }, { y: 19, left: 0, right: 5, dividers: [] }] });
   assert.equal(P.fitLocation(shallow, 'plant'), 'none');
+});
+
+test('fit detail tells a full fit from one that sticks out at the front', () => {
+  const sf = P.surfaces(saetter)[0], depth = sf.depth;
+  assert.equal(depth, 10);
+  // Standard mug only fits turned handle-forward: 12 cm deep in 10 cm.
+  assert.deepEqual(P.fitDetail(saetter, 'standard_mug'), { where: 'compartment', overhang: 2 });
+  assert.deepEqual(P.fitDetail(saetter, 'mug'), { where: 'compartment', overhang: 1 });
+  assert.deepEqual(P.fitDetail(saetter, 'espresso'), { where: 'compartment', overhang: 0 });
+  assert.deepEqual(P.fitDetail(saetter, 'water'), { where: 'compartment', overhang: 0 });
+  assert.equal(P.fitDetail(saetter, 'missing').where, 'none');
+  assert.deepEqual(P.fitDetail(saetter, 'cappuccino'), { where: 'none', overhang: 0 });
+  assert.deepEqual(P.fitDetail(saetter, 'large_mug'), { where: 'top', overhang: 0 });
+  assert.equal(P.stickOut('standard_mug', 2), 'handle sticks out 2 cm');
+  assert.equal(P.stickOut('book', 1.5), 'sticks out 1.5 cm');
+  const r = P.fitProp(saetter, 'standard_mug', { x: 6, y: 5 });
+  assert.equal(r.ok, true); assert.equal(r.overhang, 2); assert.equal(r.d, 12); assert.equal(Math.round((r.d / 2 - r.z) * 10) / 10, 2, 'front edge is 2 cm in front of the shelf');
+  assert.equal(P.fitProp(saetter, 'espresso', { x: 6, y: 5 }).overhang, 0);
 });
 
 test('SAETTER 3: a compartment takes a mug at the shelf top, centred in the bay', () => {
@@ -57,7 +87,8 @@ test('SAETTER 3: tall items are refused inside, with a friendly message', () => 
 
 test('the open top of the top shelf takes everything', () => {
   const topY = saetter.height;
-  for (const kind of P.KINDS) {
+  assert.equal(P.fitProp(saetter, 'cappuccino', { x: 22, y: topY }).reason, 'tooDeep', 'the 14 cm saucer is deeper than the shelf allows');
+  for (const kind of P.KINDS.filter(k => k !== 'cappuccino')) {
     const r = P.fitProp(saetter, kind, { x: 22, y: topY });
     assert.equal(r.ok, true, kind); assert.ok(Math.abs(r.y - topY) < 1e-6);
   }
