@@ -1,0 +1,5 @@
+# The first three migrations are recorded in the live ledger by the hash of their exact bytes (a few CRLF line ends).
+# Keep them byte for byte on every platform.
+db/migrations/001_auth.sql -text
+db/migrations/002_business.sql -text
+db/migrations/003_photos.sql -text
