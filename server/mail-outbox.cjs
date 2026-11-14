@@ -1,22 +1,14 @@
 'use strict';
 const {randomUUID}=require('node:crypto');
 const {email}=require('./access.cjs');
-const ADMIN='jacob@appelbaums.com';
 const escapeHtml=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function message(job,{origin,from}) {
   const url=new URL(origin);
   if (url.origin!==origin || (origin!=='https://home.appelbaums.com' && !(url.protocol==='http:' && ['localhost','127.0.0.1'].includes(url.hostname)))) throw TypeError('Invalid mail origin');
-  const sender=email(from), recipient=job.kind==='request'?ADMIN:email(job.email);
-  if (!/^[0-9a-f-]{36}$/.test(job.requestId) || !/^<(?:request|decision)-[0-9a-f-]+(?:-[0-9]+)?@home\.appelbaums\.com>$/.test(job.messageId) || !['request','approved','denied'].includes(job.kind)) throw TypeError('Invalid mail job');
-  const link=origin+'/admin.html?accessRequest='+job.requestId;
-  let subject, lines;
-  if (job.kind==='request') {
-    subject='HomePlanner access request';
-    lines=['A new access request was recorded.','Name: '+job.name,'Email: '+job.email,'Note: '+job.note,'Review after signing in: '+link];
-  } else {
-    subject='HomePlanner access request update';
-    lines=[job.kind==='approved'?'Your access request was approved.':'Your access request was not approved.', 'Visit '+origin+'/ to sign in or see the current access status.'];
-  }
+  if (!/^[0-9a-f-]{36}$/.test(job.requestId) || !/^<decision-[0-9a-f-]+-[0-9]+@home\.appelbaums\.com>$/.test(job.messageId) || !['approved','denied'].includes(job.kind)) throw TypeError('Invalid mail job');
+  const sender=email(from), recipient=email(job.email);
+  const subject='HomePlanner access request update';
+  const lines=[job.kind==='approved'?'Your access request was approved.':'Your access request was not approved.', 'Visit '+origin+'/ to sign in or see the current access status.'];
   // Validate all stored fields again before constructing headers/body.
   if ([job.name,job.note,job.email].some(x=>typeof x!=='string' || /[\x00-\x1f\x7f-\x9f]/u.test(x))) throw TypeError('Invalid mail content');
   email(job.email);
@@ -49,22 +41,34 @@ function createOutboxWorker({pool,transport,origin,from,sendTimeoutMs=60000}={})
       return true;
     });
   }
+  const claimOne=async()=>{ const token=randomUUID(); const jobs=await transaction(c=>result(c,'SELECT hp_app.hp_mail_claim($1,$2) AS result',[token,1])); return {token,job:Array.isArray(jobs)?jobs[0]:undefined}; };
+  // Access requests are reviewed in the admin dashboard and never mailed. A backlog of them is ended without the
+  // transport, up to this many per run, so it cannot delay decision mail behind it (the claim is oldest first).
+  const MAX_REQUEST_JOBS=20;
   async function runOnce() {
-    const token=randomUUID();
-    const jobs=await transaction(c=>result(c,'SELECT hp_app.hp_mail_claim($1,$2) AS result',[token,1]));
-    if (!Array.isArray(jobs) || jobs.length===0) return {processed:false};
-    const job=jobs[0]; let outcome='unavailable';
-    if (transport && typeof transport.sendMail==='function') {
-      let timer;
-      try {
-        const mail=message(job,{origin,from});
-        const sent=await Promise.race([transport.sendMail(mail),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('timeout')),sendTimeoutMs);})]);
-        outcome=Array.isArray(sent?.accepted) && sent.accepted.includes(mail.to) ? 'accepted' : 'transient';
-      } catch(e) { outcome=e instanceof TypeError ? 'permanent' : e?.permanent===true ? 'permanent' : 'transient'; }
-      finally { if(timer) clearTimeout(timer); }
+    let drained=0;
+    for (;;) {
+      const {token,job}=await claimOne();
+      if (!job) return drained>0 ? {processed:true,recorded:true,outcome:'permanent',drained} : {processed:false};
+      if (job.kind==='request') {
+        const ended=await transaction(c=>result(c,'SELECT hp_app.hp_mail_finish($1,$2,$3) AS result',[job.id,token,'permanent']));
+        drained+=1;
+        if (drained<MAX_REQUEST_JOBS) continue;
+        return {processed:true,recorded:ended===true,outcome:'permanent',drained};
+      }
+      let outcome='unavailable';
+      if (transport && typeof transport.sendMail==='function') {
+        let timer;
+        try {
+          const mail=message(job,{origin,from});
+          const sent=await Promise.race([transport.sendMail(mail),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('timeout')),sendTimeoutMs);})]);
+          outcome=Array.isArray(sent?.accepted) && sent.accepted.includes(mail.to) ? 'accepted' : 'transient';
+        } catch(e) { outcome=e instanceof TypeError ? 'permanent' : e?.permanent===true ? 'permanent' : 'transient'; }
+        finally { if(timer) clearTimeout(timer); }
+      }
+      const finished=await transaction(c=>result(c,'SELECT hp_app.hp_mail_finish($1,$2,$3) AS result',[job.id,token,outcome]));
+      return {processed:true,recorded:finished===true,outcome,drained};
     }
-    const finished=await transaction(c=>result(c,'SELECT hp_app.hp_mail_finish($1,$2,$3) AS result',[job.id,token,outcome]));
-    return {processed:true,recorded:finished===true,outcome};
   }
   return Object.freeze({verifyRole,runOnce});
 }

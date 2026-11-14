@@ -12,6 +12,8 @@ const routes = [
   { path: /^\/api\/admin\/access\/entitlements$/, methods: ['GET'], name: 'accessEntitlements' },
   { path: /^\/api\/admin\/access\/entitlements\/([^/]+)\/revoke$/, methods: ['POST'], name: 'accessRevoke', params: ['userId'] },
   { path: /^\/api\/admin\/access\/mail\/([^/]+)\/retry$/, methods: ['POST'], name: 'accessRetry', params: ['id'] },
+  { path: /^\/api\/admin\/access\/people$/, methods: ['GET', 'POST'], name: 'accessPeople' },
+  { path: /^\/api\/admin\/access\/people\/remove$/, methods: ['POST'], name: 'accessPeopleRemove' },
   { path: /^\/api\/me$/, methods: ['GET'], name: 'me' },
   { path: /^\/api\/designs$/, methods: ['GET', 'POST'], name: 'designs' },
   { path: /^\/api\/designs\/([^/]+)$/, methods: ['GET', 'PUT', 'DELETE'], name: 'design', params: ['id'] },
@@ -36,6 +38,7 @@ function existingHandlers(deps) {
     accessRequest: '../api/access/requests', accessHandoff: '../api/access/handoff', accessStatus: '../api/access/status',
     accessReviews: '../api/admin/access/requests', accessReview: '../api/admin/access/requests/[id]', accessApprove: '../api/admin/access/requests/[id]/approve', accessDeny: '../api/admin/access/requests/[id]/deny',
     accessEntitlements: '../api/admin/access/entitlements', accessRevoke: '../api/admin/access/entitlements/[userId]/revoke', accessRetry: '../api/admin/access/mail/[id]/retry',
+    accessPeople: '../api/admin/access/people', accessPeopleRemove: '../api/admin/access/people/remove',
     adminModelConfig: '../api/admin/model-config', adminBudget: '../api/admin/budget'
   };
   return Object.fromEntries(Object.entries(files).map(([name, file]) => [name, require(file).createHandler(deps)]));

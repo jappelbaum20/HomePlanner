@@ -4,14 +4,14 @@
   // entered here: the request is made for the Google-verified account the server already knows.
   const $ = selector => document.querySelector(selector);
   const text = {
-    en: { title: 'Request access', account: 'Verified Google account:', send: 'Request access', again: 'Sign in with another account', mail: 'Request by email',
+    en: { title: 'Request access', account: 'Verified Google account:', send: 'Request access', again: 'Sign in with another account',
       none: 'This account has not been approved yet.', pending: 'Your request is awaiting review.', denied: 'Your request was denied. After 24 hours, sign in again to submit a new request.',
-      revoked: 'Your access was revoked. Please contact the owner.', approved: 'Your account is approved. Sign in again to continue.', sent: 'Your request is saved.',
+      revoked: 'Your access was revoked. Please contact the owner.', approved: 'Your account is approved. Sign in again to continue.', sent: 'Your request is waiting for approval.',
       rate: 'Please wait before trying again.', conflict: 'A new request is not available now. Please contact the owner.', unavailable: 'The request could not be processed. Please try again later.',
       expired: 'This page has expired. Please sign in again.' },
-    de: { title: 'Zugang anfragen', account: 'Verifiziertes Google-Konto:', send: 'Zugang anfragen', again: 'Anderes Konto anmelden', mail: 'Per E-Mail anfragen',
+    de: { title: 'Zugang anfragen', account: 'Verifiziertes Google-Konto:', send: 'Zugang anfragen', again: 'Anderes Konto anmelden',
       none: 'Dieses Konto ist noch nicht freigegeben.', pending: 'Ihre Anfrage wartet auf Prüfung.', denied: 'Ihre Anfrage wurde abgelehnt. Nach 24 Stunden können Sie sich erneut anmelden und eine neue Anfrage stellen.',
-      revoked: 'Ihr Zugang wurde entzogen. Bitte wenden Sie sich an den Eigentümer.', approved: 'Ihr Konto ist freigegeben. Bitte melden Sie sich erneut an.', sent: 'Ihre Anfrage ist gespeichert.',
+      revoked: 'Ihr Zugang wurde entzogen. Bitte wenden Sie sich an den Eigentümer.', approved: 'Ihr Konto ist freigegeben. Bitte melden Sie sich erneut an.', sent: 'Ihre Anfrage wartet auf Freigabe.',
       rate: 'Bitte warten Sie vor dem erneuten Versuch.', conflict: 'Eine neue Anfrage ist derzeit nicht möglich. Bitte wenden Sie sich an den Eigentümer.', unavailable: 'Die Anfrage konnte derzeit nicht verarbeitet werden. Bitte versuchen Sie es später erneut.',
       expired: 'Diese Seite ist abgelaufen. Bitte melden Sie sich erneut an.' }
   };
@@ -23,7 +23,6 @@
     for (const node of document.querySelectorAll('[data-i18n]')) node.textContent = t(node.dataset.i18n);
     for (const node of document.querySelectorAll('[data-lang]')) node.setAttribute('aria-pressed', String(node.dataset.lang === lang));
     $('#state').textContent = t(key); $('#send').hidden = !canSend; $('#send').disabled = busy; $('#account').textContent = email;
-    $('#mail').href = 'mailto:jacob@appelbaums.com?subject=' + encodeURIComponent('HomePlanner access request') + (email ? '&body=' + encodeURIComponent('Account: ' + email) : '');
   }
   for (const node of document.querySelectorAll('[data-lang]')) node.addEventListener('click', () => { lang = node.dataset.lang; try { window.localStorage.setItem('hp-lang', lang); } catch {} render(); });
   function apply(data, notice) {
