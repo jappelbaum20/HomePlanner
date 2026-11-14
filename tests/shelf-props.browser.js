@@ -10,16 +10,20 @@ async page => {
     await page.goto('http://127.0.0.1:8765/bookshelf'); await page.evaluate(() => localStorage.clear()); await page.reload(); await page.locator('#bs3d canvas').waitFor();
     if (tab === 'saetter') await page.locator('#bs-tab-saetter').click();
     await page.waitForFunction(() => window.__bsDebug && window.__bsDebug.frames > 0); await page.waitForTimeout(300);
-    await ((vp && vp.width <= 700) ? page.locator('[data-bs-sheet="add"]') : page.locator('[data-bs-addtoggle]')).click(); // the palette opens from the button under the 3D view (a bottom sheet on phones)
+    check(await page.locator('#bsProps').isVisible(), `${tab}: comparison picker is visible without opening a menu`);
   };
   const at = (x, y, z = 0) => page.evaluate(([x, y, z]) => window.__bsDebug.screenOf(x, y, z), [x, y, z]);
-  const click = async (x, y, z) => { const p = await at(x, y, z); await page.mouse.click(p.x, p.y); await page.waitForTimeout(120); };
+  const click = async (x, y, z) => { await page.locator('#bs3d canvas').scrollIntoViewIfNeeded(); const p = await at(x, y, z); await page.mouse.click(p.x, p.y); await page.waitForTimeout(120); };
   const pick = kind => page.locator(`[data-bs-prop="${kind}"]`).click();
 
   // ---------- palette ----------
   await open('saetter');
   const names = await page.locator('.bs-prop span').allInnerTexts();
   check(['Mug', 'Coffee cup', 'Wine glass', 'Water glass', 'Book', 'Small plant', 'Vase', 'Small jar', 'Tea light', 'Person'].every(n => names.includes(n)), 'palette shows the items with plain names plus a person');
+  for (const [kind, ml, fit] of [['espresso', 70, 'Fits inside'], ['cappuccino', 180, 'Top only'], ['standard_mug', 330, 'Fits inside'], ['large_mug', 475, 'Top only'], ['latte', 300, 'Top only']]) {
+    const text = await page.locator(`[data-bs-prop="${kind}"]`).innerText();
+    check(text.includes(`${ml} ml`) && text.includes('×') && text.includes(fit), `${kind} shows dimensions, capacity and fit`);
+  }
   check((await page.locator('[data-bs-prop="mug"]').innerText()).includes('9.5 cm tall') && (await page.locator('[data-bs-prop="mug"]').innerText()).includes('Fits inside'), 'the mug button shows its size and compartment fit');
   check((await page.locator('[data-bs-prop="wine"]').innerText()).includes('21 cm tall') && (await page.locator('[data-bs-prop="wine"]').innerText()).includes('Top only'), 'the wine button shows its size and top-only fit');
   check((await page.locator('[data-bs-prop="jar"]').innerText()).includes('Fits inside') && (await page.locator('[data-bs-prop="tealight"]').innerText()).includes('Fits inside'), 'small everyday items fit inside');

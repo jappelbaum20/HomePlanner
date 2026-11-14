@@ -339,23 +339,22 @@ dialog::backdrop { background: rgba(29,33,36,.55); }
 
 /* Items to compare against */
 .bs-props { margin: 10px 0 6px; display: grid; gap: 8px; }
-.bs-palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
-.bs-prop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 64px; padding: 8px 6px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink, #1D2B26); font: inherit; font-size: 12.5px; line-height: 1.15; text-align: center; cursor: pointer; }
+.bs-palette { display: flex; min-width: 0; overflow-x: auto; gap: 8px; padding-bottom: 4px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+.bs-prop { display: flex; flex: 0 0 138px; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 64px; padding: 8px 6px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink, #1D2B26); font: inherit; font-size: 12.5px; line-height: 1.15; text-align: center; cursor: pointer; scroll-snap-align: start; }
 .bs-prop svg { width: 32px; height: 32px; flex: none; }
 @media (hover: hover) { .bs-prop:hover { background: #F6F4EE; } }
 .bs-prop[aria-pressed="true"] { background: #FFF3C8; box-shadow: inset 0 -3px var(--mark); font-weight: 700; }
 .bs-prop small { font-size: 11px; font-weight: 400; line-height: 1.2; }
 .bs-prop .bs-prop-fit { color: #50624E; font-weight: 700; }
 .bs-prop .bs-prop-fit:empty { display: none; }
-.bs-props-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.bs-props-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 8px 0; }
 .bs-prop-help { margin: 0; font-size: 13px; flex: 1 1 220px; }
 .bs-prop-help.warn { color: #8A2B1B; font-weight: 600; }
 #bs3d.placing canvas { cursor: copy; }
-@media (max-width: 700px) { .bs-palette { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); } .bs-prop { min-height: 72px; } .bs-props-foot .btn { min-height: 44px; } }
+@media (max-width: 700px) { .bs-prop { min-height: 72px; } .bs-props-foot .btn { min-height: 44px; } }
 @media (max-width: 700px) {
   #bs3d { height: clamp(300px, 46vh, 460px); }
-  .bs-palette { display: flex; overflow-x: auto; gap: 8px; padding-bottom: 4px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
-  .bs-prop { flex: 0 0 108px; scroll-snap-align: start; }
+  .bs-prop { flex-basis: 128px; }
 }
 
 /* Simple standalone bookshelf page: calm first screen, details on demand */
@@ -397,10 +396,6 @@ body.bs-page .toast { bottom: 84px; z-index: 60; }
 .bs-tools .bs-props { flex: 1 1 100%; margin: 0; }
 .bs-hint { margin-top: 10px; }
 .bs-bar { display: none; }
-@media (min-width: 701px) {
-  .bs-simple .bs-props { display: none; }
-  .bs-simple .bs-props.open { display: grid; }
-}
 @media (max-width: 700px) {
   body.bs-page .bookshelf-builder { padding: 12px 12px 100px; }
   body.bs-page .topbar { gap: 8px; padding: 8px 12px; }
@@ -411,10 +406,9 @@ body.bs-page .toast { bottom: 84px; z-index: 60; }
   .bs-simple #bs3d { height: clamp(300px, 48vh, 460px); }
   .bs-cards { gap: 8px; }
   .bs-card svg { max-width: 100px; }
-  .bs-tools .bs-addtoggle, .bs-tools .bs-size, .bs-simple .bs-props { display: none; }
-  .bs-simple[data-sheet="size"] .bs-size, .bs-simple[data-sheet="add"] .bs-props { display: flex; position: fixed; left: 0; right: 0; bottom: calc(64px + env(safe-area-inset-bottom)); z-index: 45; margin: 0; padding: 12px 14px; background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -10px 28px rgba(0, 0, 0, .16); }
+  .bs-tools .bs-size { display: none; }
+  .bs-simple[data-sheet="size"] .bs-size { display: flex; position: fixed; left: 0; right: 0; bottom: calc(64px + env(safe-area-inset-bottom)); z-index: 45; margin: 0; padding: 12px 14px; background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -10px 28px rgba(0, 0, 0, .16); }
   .bs-simple[data-sheet="size"] .bs-size { flex-wrap: wrap; justify-content: space-between; }
-  .bs-simple[data-sheet="add"] .bs-props { flex-direction: column; gap: 8px; }
   .bs-simple .bs-readout { text-align: left; }
   .bs-bar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; gap: 8px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); background: var(--panel); border-top: 1px solid var(--line); }
   .bs-bar .btn { flex: 1; min-height: 48px; font-size: 15px; }

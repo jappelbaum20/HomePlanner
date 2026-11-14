@@ -12,14 +12,14 @@ async page => {
     const vis = e => { const r = e.getBoundingClientRect(), cs = getComputedStyle(e); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && e.checkVisibility({ checkVisibilityCSS: true, contentVisibilityAuto: true }); };
     const all = [...document.querySelectorAll('button, input, select, summary, a[href]')].filter(e => vis(e) && !e.closest('#toast') && !(e.type === 'file')), top = all.filter(e => e.closest('.topbar')).length, own = all.filter(e => !e.closest('.topbar') && !e.closest('.bs-bar'));
     const groups = new Set(own.map(e => e.closest('[data-group]') || e));
-    return { raw: own.length, top, grouped: groups.size, rects: all.map(e => { const r = e.getBoundingClientRect(); return { name: (e.getAttribute('aria-label') || e.textContent || e.dataset.bs || e.id).trim().slice(0, 30), h: r.height, w: r.width }; }) };
+    return { raw: own.length, outsidePalette: own.filter(e => !e.closest('#bsProps')).length, top, grouped: groups.size, rects: all.map(e => { const r = e.getBoundingClientRect(); return { name: (e.getAttribute('aria-label') || e.textContent || e.dataset.bs || e.id).trim().slice(0, 30), h: r.height, w: r.width }; }) };
   });
 
   // ---------- desktop ----------
   await open({ width: 1440, height: 900 });
   let c = await controls();
-  check(c.grouped <= 12 && c.top <= 2, `desktop first screen shows ${c.grouped} choices (${c.raw} elements) outside More details, plus ${c.top} top bar items: at most 12`);
-  check(c.raw <= 20, `desktop first screen has ${c.raw} interactive elements in the builder (was 53)`);
+  check(c.grouped <= 13 && c.top <= 2, `desktop first screen shows ${c.grouped} choices (${c.raw} elements), including the visible comparison picker and Clear items, plus ${c.top} top bar items: at most 13`);
+  check(c.outsidePalette <= 20, `desktop has ${c.outsidePalette} controls outside the comparison picker`);
   const numbers = await page.locator('input[type="number"]:visible').count();
   check(numbers === 5, `only ${numbers} number fields are visible (wall width/height, width/height/depth)`);
   const text = await page.locator('#bookshelfBuilder').innerText();
@@ -50,7 +50,7 @@ async page => {
   // First-time flow without opening More details: size, add a mug, save
   await page.locator('[data-bs-size="10"]').click();
   check(await page.locator('[data-bs="width"]').inputValue() === '264', 'Size +10% works from the first screen');
-  await page.locator('[data-bs-addtoggle]').click(); await page.locator('[data-bs-prop="mug"]').click();
+  await page.locator('[data-bs-prop="mug"]').click(); await page.locator('#bs3d canvas').scrollIntoViewIfNeeded();
   const p = await page.evaluate(() => window.__bsDebug.screenOf(60, 5, 0)); await page.mouse.click(p.x, p.y);
   check(await page.evaluate(() => window.__bsDebug.props) === 1, 'an item can be added from the first screen');
   await page.locator('[data-bs-action="save"]').click();
@@ -63,7 +63,7 @@ async page => {
   await page.locator('#bsMore summary').click();
   check(await page.locator('[data-bs="elev"]').inputValue() === '0', 'and stands on the floor');
   await page.locator('#bsMore summary').click();
-  c = await controls(); check(c.grouped <= 12, `SAETTER first screen shows ${c.grouped} choices (at most 12)`);
+  c = await controls(); check(c.grouped <= 13, `SAETTER first screen shows ${c.grouped} choices (at most 13)`);
   await page.locator('#bs-tab-custom').click();
   check(await page.locator('[data-bs="wallWidth"]').inputValue() === '500', 'switching back to an untouched custom design restores the 500 cm wall');
 
@@ -73,19 +73,19 @@ async page => {
   const small = c.rects.filter(r => r.h < 43.5);
   check(small.length === 0, `every visible control on a phone is at least 44 px high (${c.raw} controls)` + (small.length ? ': ' + JSON.stringify(small.slice(0, 5)) : ''));
   check(await page.evaluate(() => document.documentElement.scrollWidth) <= 390, 'no horizontal scroll at 390 px');
-  const cb = await page.locator('#bs3d').boundingBox(); check(cb.y >= 0 && cb.y + cb.height <= 844 && cb.y < 300, `3D view comes first and fits on the screen (y ${Math.round(cb.y)}..${Math.round(cb.y + cb.height)})`);
+  check(await page.locator('#bsProps').isVisible(), 'phone: comparison picker is available without opening a sheet');
+  const cb = await page.locator('#bs3d').boundingBox(); check(cb.y >= 0 && cb.y < 500, `3D view follows the comparison picker (y ${Math.round(cb.y)})`);
   const bar = await page.locator('.bs-bar').boundingBox(); check(bar && Math.abs(bar.y + bar.height - 844) < 1 && bar.height >= 56, 'sticky bottom bar is at the bottom of the screen');
-  const names = await page.locator('.bs-bar button').allInnerTexts(); check(names.join('|') === 'Size|Add item|Save', 'bottom bar offers Size, Add item and Save');
+  const names = await page.locator('.bs-bar button').allInnerTexts(); check(names.join('|') === 'Size|Compare sizes|Save', 'bottom bar offers Size, Compare sizes and Save');
   await page.evaluate(() => { document.querySelector('#bookshelfBuilder').scrollTop = 99999; window.scrollTo(0, 99999); }); await page.waitForTimeout(200);
   const bar2 = await page.locator('.bs-bar').boundingBox(); check(Math.abs(bar2.y + bar2.height - 844) < 1, 'the bar stays put while the page scrolls');
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.locator('[data-bs-sheet="size"]').click(); await page.locator('[data-bs-size="10"]').click();
   check(await page.locator('[data-bs="width"]').inputValue() === '264', 'phone: Size opens the size buttons');
   await page.locator('[data-bs-sheet="size"]').click(); check(await page.locator('[data-bs-size="10"]').isHidden(), 'phone: Size sheet closes again');
-  await page.locator('[data-bs-sheet="add"]').click(); await page.locator('[data-bs-prop="mug"]').click();
+  await page.locator('[data-bs-compare]').click(); await page.locator('[data-bs-prop="mug"]').click(); await page.locator('#bs3d canvas').scrollIntoViewIfNeeded();
   const q = await page.evaluate(() => window.__bsDebug.screenOf(60, 5, 0)); await page.mouse.click(q.x, q.y);
   check(await page.evaluate(() => window.__bsDebug.props) === 1, 'phone: Add item places a mug');
-  await page.locator('[data-bs-sheet="add"]').click();
   await page.locator('.bs-bar [data-bs-barsave]').click();
   check(await page.evaluate(() => JSON.parse(localStorage.getItem('homeplanner.standalone.v2.designs') || '[]').length) === 1, 'phone: Save in the bottom bar saves');
   await page.locator('#bsMore summary').scrollIntoViewIfNeeded(); await page.locator('#bsMore summary').click();

@@ -9,6 +9,11 @@
   const PROPS = {
     mug: { name: 'Mug', w: 11, d: 8, h: 9.5, turned: { w: 8, d: 11, h: 9.5 } }, // handle sideways, or turned to the front in a narrow space
     cup: { name: 'Coffee cup', w: 9.5, d: 9.5, h: 6 }, // cup with its saucer
+    espresso: { name: 'Espresso cup', w: 8.5, d: 6.5, h: 5.5, ml: 70, turned: { w: 6.5, d: 8.5, h: 5.5 } },
+    cappuccino: { name: 'Cappuccino cup & saucer', w: 12, d: 12, h: 7, ml: 180 },
+    standard_mug: { name: 'Standard mug', w: 12, d: 8.5, h: 10, ml: 330, turned: { w: 8.5, d: 12, h: 10 } },
+    large_mug: { name: 'Large mug', w: 13.5, d: 9.5, h: 12, ml: 475, turned: { w: 9.5, d: 13.5, h: 12 } },
+    latte: { name: 'Latte glass', w: 8, d: 8, h: 15, ml: 300 },
     wine: { name: 'Wine glass', w: 8, d: 8, h: 21 },
     water: { name: 'Water glass', w: 7, d: 7, h: 11 },
     book: { name: 'Book', w: 2.5, d: 12, h: 18, flat: { w: 18, d: 12, h: 2.5 } }, // paperback, standing or (if it does not fit) lying
@@ -120,6 +125,24 @@
       add(lathe([[0, 1], [1.8, 1], [3.1, 2.6], [3.1, 6.5], [2.8, 6.5], [2.8, 2.9], [1.6, 1.4], [0, 1.4]]), white);
       const coffee = add(new THREE.CircleGeometry(2.75, 28), std('#4A2C1C', { rough: .2 }), 0, 5.6, 0); coffee.rotation.x = -Math.PI / 2;
       const h = add(new THREE.TorusGeometry(1.5, .4, 8, 18, Math.PI), white, 3.2, 4.2, 0); h.rotation.z = -Math.PI / 2;
+    } else if (kind === 'espresso' || kind === 'standard_mug' || kind === 'large_mug') {
+      const spec = PROPS[kind], r = spec.d / 2, h = spec.h;
+      const ceramic = std(kind === 'large_mug' ? '#789398' : '#F1ECE0', { rough: .35, side: THREE.DoubleSide });
+      const body = new THREE.Group(); g.add(body);
+      const cup = new THREE.Mesh(lathe([[0, 0], [r * .82, 0], [r, h * .12], [r, h], [r - .35, h], [r - .35, .6], [0, .6]]), ceramic); cup.castShadow = true; cup.receiveShadow = true; body.add(cup);
+      const coffee = new THREE.Mesh(new THREE.CircleGeometry(r - .4, 32), std('#4A2C1C', { rough: .2 })); coffee.rotation.x = -Math.PI / 2; coffee.position.y = h * .86; body.add(coffee);
+      const handle = new THREE.Mesh(new THREE.TorusGeometry(h * .23, .4, 10, 24, Math.PI), ceramic); handle.rotation.z = -Math.PI / 2; handle.position.set(r, h * .52, 0); handle.castShadow = true; body.add(handle);
+      if (opts.rot === 1) g.rotation.y = -Math.PI / 2;
+    } else if (kind === 'cappuccino') {
+      const white = std('#F7F5F0', { rough: .3, side: THREE.DoubleSide });
+      add(lathe([[0, 0], [4, 0], [6, .55], [6, .9], [5.7, .9], [3.8, .45], [0, .45]]), white);
+      add(lathe([[0, .8], [2.5, .8], [3.8, 2], [4.2, 6.8], [3.8, 6.8], [3.4, 2.2], [2.4, 1.2], [0, 1.2]]), white);
+      const coffee = add(new THREE.CircleGeometry(3.75, 32), std('#C79D75', { rough: .3 }), 0, 6.1, 0); coffee.rotation.x = -Math.PI / 2;
+      const h = add(new THREE.TorusGeometry(1.25, .38, 8, 20, Math.PI), white, 4.1, 4, 0); h.rotation.z = -Math.PI / 2;
+    } else if (kind === 'latte') {
+      add(lathe([[0, 0], [3, 0], [4, 15], [3.7, 15], [2.7, .6], [0, .6]]), glass());
+      add(lathe([[0, .65], [2.65, .65], [3.65, 13.3], [0, 13.3]]), std('#B98255', { rough: .35 }));
+      const foam = add(new THREE.CircleGeometry(3.65, 32), std('#EFE1CC', { rough: .65 }), 0, 13.35, 0); foam.rotation.x = -Math.PI / 2;
     } else if (kind === 'wine') {
       add(new THREE.CylinderGeometry(3.6, 3.7, .35, 28), glass(), 0, .17, 0);
       add(new THREE.CylinderGeometry(.35, .35, 9, 10), glass(), 0, 4.7, 0);

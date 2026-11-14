@@ -14,6 +14,14 @@ test('catalogue sizes are the real sizes in cm', () => {
   assert.deepEqual(P.size('mug'), { w: 11, d: 8, h: 9.5 });
   assert.equal(P.size('wine').h, 21); assert.equal(P.size('water').h, 11); assert.equal(P.size('book').h, 18);
   assert.equal(P.size('vase').h, 25); assert.equal(P.PERSON.h, 175); assert.equal(P.size('nope'), null);
+  assert.deepEqual(P.size('cup'), { w: 9.5, d: 9.5, h: 6 });
+  for (const [kind, dimensions, ml] of [
+    ['espresso', { w: 8.5, d: 6.5, h: 5.5 }, 70],
+    ['cappuccino', { w: 12, d: 12, h: 7 }, 180],
+    ['standard_mug', { w: 12, d: 8.5, h: 10 }, 330],
+    ['large_mug', { w: 13.5, d: 9.5, h: 12 }, 475],
+    ['latte', { w: 8, d: 8, h: 15 }, 300]
+  ]) { assert.deepEqual(P.size(kind), dimensions); assert.equal(P.PROPS[kind].ml, ml); }
 });
 
 test('catalogue models have their stated bounds and stand on their surface', () => {
@@ -36,6 +44,8 @@ test('fit indicators follow compartment and top geometry, including preview vari
     const s = B.saetterVariant(variant.id);
     for (const kind of ['mug', 'cup', 'water', 'jar', 'tealight']) assert.equal(P.fitLocation(s, kind), 'compartment', `${variant.id} ${kind}`);
     for (const kind of ['wine', 'book', 'plant', 'vase']) assert.equal(P.fitLocation(s, kind), 'top', `${variant.id} ${kind}`);
+    for (const kind of ['espresso', 'standard_mug']) assert.equal(P.fitLocation(s, kind), 'compartment', `${variant.id} ${kind}`);
+    for (const kind of ['cappuccino', 'large_mug', 'latte']) assert.equal(P.fitLocation(s, kind), 'top', `${variant.id} ${kind}`);
   }
   assert.equal(P.fitLocation(saetter, 'missing'), 'none');
   const shallow = B.normalize({ width: 20, height: 20, depth: 10, thickness: 1, levels: [{ y: 0, left: 0, right: 5, dividers: [] }, { y: 19, left: 0, right: 5, dividers: [] }] });
