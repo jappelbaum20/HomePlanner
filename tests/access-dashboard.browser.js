@@ -4,7 +4,7 @@ async page => {
   const check = (ok, label) => { if (!ok) throw Error(label); checks.push(label); };
   await page.addInitScript(() => {
     const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-    const stamp = { generation: 1, epoch: 1, userId: owner, sessionId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', me: { userId: owner, displayName: 'Owner', isOwner: true } };
+    const stamp = { generation: 1, epoch: 1, userId: owner, sessionId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', me: { userId: owner, displayName: 'Owner', access: { status: 'approved', role: 'owner' } } };
     const requests = [
       { id:'11111111-1111-4111-8111-111111111111', name:'Previously decided', email:'old@example.com', note:'old', status:'denied', revision:2, createdAt:'2025-01-01T09:00:00Z' },
       { id:'22222222-2222-4222-8222-222222222222', name:'First applicant', email:'first@example.com', note:'Please let me in', status:'pending', revision:1, createdAt:'2025-01-02T09:00:00Z' },
@@ -27,7 +27,7 @@ async page => {
         throw Error('unexpected fixture request');
       }
     };
-    window.__switchOwner = value => listener({ ...stamp, me:value===null ? null : { ...stamp.me, isOwner:value } });
+    window.__switchOwner = value => listener({ ...stamp, me:value===null ? null : { ...stamp.me, access: { status: 'approved', role: value ? 'owner' : 'user' } } });
     window.google={accounts:{id:{ initialize(options) { window.__verify=options.callback; }, renderButton(el) { const b=document.createElement('button'); b.textContent='Verify fixture'; b.onclick=()=>window.__verify({credential:'fixture-token'}); el.append(b); } }}};
   });
   await page.route('**/client/cloud.js', route => route.fulfill({status:200,contentType:'text/javascript',body:''}));
@@ -40,7 +40,7 @@ async page => {
     await page.locator('#prepareVerification').click(); await page.getByRole('button',{name:'Verify fixture'}).click();
     await page.getByText('2 requests waiting').waitFor();
     const pending = page.locator('.access-request.pending');
-    check(await pending.count()===2 && await pending.first().getByText('Please let me in',{exact:false}).count()===1, `pending rows include notes at ${width}px`);
+    check(await pending.count()===2 && await pending.first().getByText('first@example.com',{exact:false}).count()===1, `pending rows show name and email at ${width}px`);
     check(await pending.first().getByText(/2025/).count()===1, `pending rows include requested date at ${width}px`);
     check(await page.locator('#requestList > details').count()===1 && !(await page.locator('#requestList > details').isVisible() && await page.locator('#requestList > details .decided').isVisible()), `decided history is collapsed at ${width}px`);
     check(await page.locator('.access-request script').count()===0, `request text is not interpreted as markup at ${width}px`);

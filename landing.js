@@ -26,7 +26,7 @@
   cloud.subscribe(state => {
     const signedIn = !!state.me, access = state.me?.access?.status || (signedIn ? 'approved' : null);
     signIn.hidden = signedIn; signOut.hidden = !signedIn;
-    document.querySelector('#ownerAdminLink').hidden = state.revalidating || access !== 'approved' || state.me?.isOwner !== true;
+    document.querySelector('#ownerAdminLink').hidden = state.revalidating || state.me?.access?.role !== 'owner';
     document.querySelector('#workspaces').hidden = access !== 'approved';
     if (state.revalidating) say('checking');
     else if (state.error) say(null, state.error);

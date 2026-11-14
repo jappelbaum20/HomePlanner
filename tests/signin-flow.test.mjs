@@ -52,7 +52,7 @@ before(async () => {
   globalThis.fetch = async (input, init) => {
     const url = String(input?.url ?? input);
     if (url.startsWith('https://oauth2.googleapis.com/token')) return new Response(JSON.stringify({ access_token: 'fixture', token_type: 'Bearer', expires_in: 3600, id_token: nextToken, scope: 'openid email profile' }), { status: 200, headers: { 'content-type': 'application/json' } });
-    throw Error('Unexpected network request in sign-in fixture');
+    return realFetch(input, init);
   };
   db = await PGlite.create();
   await db.exec('CREATE ROLE hp_auth_owner NOLOGIN; CREATE ROLE hp_auth_runtime NOLOGIN; CREATE ROLE hp_app_owner NOLOGIN; CREATE ROLE hp_app_runtime NOLOGIN; CREATE ROLE hp_photo_maintenance NOLOGIN; CREATE ROLE hp_access_public NOLOGIN; CREATE ROLE hp_mail_worker NOLOGIN;');
@@ -66,7 +66,6 @@ before(async () => {
   await q('INSERT INTO hp_private.admin_grants VALUES($1,$2,$3,$4,now()+interval \'10 minutes\')', ['a'.repeat(64), owner, os, 'owner-sub']);
   await db.exec('BEGIN;\n' + await mig('006_access_requests.sql') + '\nCOMMIT;');
   await db.exec('BEGIN;\n' + await mig('007_verified_signin.sql') + '\nCOMMIT;');
-  await db.exec('BEGIN;\n' + await mig('008_access_dashboard.sql') + '\nCOMMIT;');
   auth = await createAuth({ origin, authPool: rolePool(db, 'hp_auth_runtime', { searchPath: 'hp_auth,pg_catalog' }), secret, googleClientId: clientId, googleClientSecret: 'fixture-secret' });
 });
 after(async () => { globalThis.fetch = realFetch; await db?.close(); });

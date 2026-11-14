@@ -23,7 +23,6 @@ function fixture() {
    s.challenges.delete(a.p_nonce_hash);s.binding ||= a.p_google_subject;s.grants.set(a.p_grant_hash,{session:s.session,subject:a.p_google_subject});return true;
   }
   if(name==='hp_admin_grant'){const g=s.grants.get(a.p_grant_hash);return g?.session===s.session?g.subject:null;}
-  if(name==='hp_access_is_owner')return s.binding===SUBJECT;
   if(name==='hp_model_config_get')return structuredClone(s.config);
   if(name==='hp_model_config_update'){ if(a.p_revision!==s.config.revision) throw new ApiError(409,'conflict','Conflict');s.config={revision:s.config.revision+1,...structuredClone(a.p_config)};return s.config; }
   throw Error('unexpected RPC');
@@ -50,13 +49,6 @@ test('fresh proof is one-use, grants bind the session, and updates enforce CAS a
  assert.equal((await call(budgetApi,s,'PUT',{globalBudgetMicros:1000000},{...g,'if-match':'"2"'})).statusCode,200);
  assert.equal((await call(budgetApi,s,'PUT',{globalBudgetMicros:1000000},{...g,'if-match':'"2"'})).statusCode,409);
  s.session=OTHER;assert.equal((await call(meApi,s,'GET',undefined,g)).statusCode,403);
-});
-test('owner navigation does not confer an administrator grant',async()=>{
- const s=fixture(); let response=await call(meApi,s,'GET');
- assert.equal(response.data.isOwner,false); assert.equal(response.data.isAdmin,false);
- s.binding=SUBJECT; response=await call(meApi,s,'GET');
- assert.equal(response.data.isOwner,true); assert.equal(response.data.isAdmin,false);
- assert.equal((await call(configApi,s,'GET')).statusCode,403);
 });
 test('verification rejects bad signature, nonce, issuer, audience, email, timing and unlinked or changed subjects',async()=>{
  for(const mutate of [

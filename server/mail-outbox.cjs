@@ -45,7 +45,8 @@ function createOutboxWorker({pool,transport,origin,from,sendTimeoutMs=60000}={})
     const token=randomUUID();
     const jobs=await transaction(c=>result(c,'SELECT hp_app.hp_mail_claim($1,$2) AS result',[token,1]));
     if (!Array.isArray(jobs) || jobs.length===0) return {processed:false};
-    const job=jobs[0]; let outcome=job.kind==='request' ? 'suppressed' : 'unavailable';
+    // Access requests are reviewed in the admin dashboard and never mailed: end the job without the transport.
+    const job=jobs[0]; let outcome=job.kind==='request' ? 'permanent' : 'unavailable';
     if (job.kind!=='request' && transport && typeof transport.sendMail==='function') {
       let timer;
       try {

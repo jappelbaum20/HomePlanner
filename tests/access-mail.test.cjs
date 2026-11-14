@@ -27,15 +27,15 @@ test('review GET is read only and decision POST requires grant, CSRF, session an
  for(const headers of [{...opts.headers,'if-match':'1'},{...opts.headers,'x-admin-grant':'bad'},{...opts.headers,origin:'https://bad.invalid'}]) assert.notEqual((await call(approve,fx,{...opts,headers})).statusCode,200);
  assert.equal((await call(approve,fx,{...opts,body:{actor:userId}})).statusCode,422);
 });
-test('worker suppresses request mail even with transport configured; decision mail still reaches the requester',async()=>{
+test('worker ends request jobs as permanent even with transport configured; decision mail still reaches the requester',async()=>{
  const job={id:requestId,requestId,kind:'request',name:'Applicant',email:'person@example.invalid',note:'',messageId:`<request-${requestId}@home.appelbaums.com>`};
  assert.throws(()=>mail.message(job,{origin,from:'sender@example.invalid'}));
  const calls=[];let next=[job];const pool={async connect(){return {async query(sql,args){calls.push([sql,args]);if(sql.includes('hp_mail_claim'))return {rows:[{result:next.splice(0)}]};if(sql.includes('hp_mail_finish'))return {rows:[{result:true}]};return {rows:[]};},release(){}};}};
  const sent=[];const worker=mail.createOutboxWorker({pool,origin,from:'sender@example.invalid',transport:{async sendMail(msg){sent.push(msg);return {accepted:[msg.to]};}}});
- assert.equal((await worker.runOnce()).outcome,'suppressed'); assert.equal(sent.length,0);
- assert.equal(calls.find(x=>x[0].includes('hp_mail_finish'))[1][2],'suppressed');
+ assert.equal((await worker.runOnce()).outcome,'permanent'); assert.equal(sent.length,0);
+ assert.equal(calls.find(x=>x[0].includes('hp_mail_finish'))[1][2],'permanent');
  next=[job]; const noTransport=mail.createOutboxWorker({pool,origin,from:'sender@example.invalid'});
- assert.equal((await noTransport.runOnce()).outcome,'suppressed');
+ assert.equal((await noTransport.runOnce()).outcome,'permanent');
  for(const kind of ['approved','denied']) {
   const decision={...job,kind,messageId:`<decision-${requestId}-2@home.appelbaums.com>`}; next=[decision];
   assert.equal((await worker.runOnce()).outcome,'accepted'); assert.equal(sent.at(-1).to,job.email);

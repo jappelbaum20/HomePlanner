@@ -21,11 +21,11 @@ test('landing keeps unapproved accounts out of workspaces and has no in-page req
 });
 test('only a verified current owner session sees the admin link',()=>{
  const {elements,emit}=load();
- for(const state of [{me:null},{me:{}},{me:{isOwner:false}},{me:{isOwner:true,access:{status:'pending'}}},{me:{isOwner:true},revalidating:true}]) {
+ for(const state of [{me:null},{me:{}},{me:{access:{status:'approved',role:'user'}}},{me:{access:{status:'approved',role:'owner'}},revalidating:true}]) {
   emit(state); assert.equal(elements['#ownerAdminLink'].hidden,true);
  }
- emit({me:{isOwner:true}}); assert.equal(elements['#ownerAdminLink'].hidden,false);
- emit({me:{isOwner:false}}); assert.equal(elements['#ownerAdminLink'].hidden,true);
+ emit({me:{access:{status:'approved',role:'owner'}}}); assert.equal(elements['#ownerAdminLink'].hidden,false);
+ emit({me:{access:{status:'approved',role:'user'}}}); assert.equal(elements['#ownerAdminLink'].hidden,true);
 });
 test('landing shows a fixed message for sign-in error codes and ignores unknown ones',()=>{
  let page=load('?signin_error=access_check_failed'); page.emit({me:null});

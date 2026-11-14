@@ -161,7 +161,7 @@ window.HomePlannerCloud = (() => {
         const result = await identityResponse.json();
         if (ticket !== serial || session !== next) return;
         if (result.userId !== next.userId) throw Error('Session identity could not be verified.');
-        me = result; notify(); if (changed && announce) broadcast();
+        me = { ...result, access: next.access }; notify(); if (changed && announce) broadcast();
       } catch (error) {
         if (ticket !== serial) return;
         invalidate(); notify(error.message || 'Session verification is unavailable.');

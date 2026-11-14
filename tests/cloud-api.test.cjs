@@ -27,7 +27,6 @@ function fake() {
     async get(ctx, id) { const d = designs.get(id); return d && d.owner === ctx.userId && !d.deleted ? d : null; },
     async photo(ctx, did, pid) { const p = photos.get(pid); return p && p.owner_id === ctx.userId && p.design_id === did && !designs.get(did)?.deleted ? p : null; },
     async rpc(name, args) {
-      if (name === 'hp_access_is_owner') return false;
       if (name === 'hp_create_design') {
         const k = args.p_user_id + args.p_key, prev = keys.get(k);
         if (prev) { if (prev.hash !== args.p_body_hash) errors(409, 'conflict'); return prev.result; }

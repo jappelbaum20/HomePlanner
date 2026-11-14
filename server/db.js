@@ -1,7 +1,7 @@
 'use strict';
 const { uuid, fail } = require('./errors');
 const RPC = Object.freeze({
-  hp_google_subjects: [], hp_access_is_owner: [],
+  hp_google_subjects: [],
   hp_admin_challenge_issue: ['p_nonce_hash','p_google_subject'],
   hp_admin_verify: ['p_nonce_hash','p_google_subject','p_grant_hash'],
   hp_admin_grant: ['p_grant_hash'],

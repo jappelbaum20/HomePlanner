@@ -97,14 +97,13 @@
     const row = document.createElement('article'); row.className = 'access-request' + (item.status === 'pending' ? ' pending' : ' decided');
     line(row, `${item.status === 'pending' ? 'Waiting' : item.status} · ${requestedAt(item.createdAt)}`);
     line(row, `${item.name} · ${item.email}`);
-    line(row, item.note ? `Note: ${item.note}` : 'No note.');
     const controls = document.createElement('div'); controls.className = 'btnrow'; row.append(controls);
     let busy = false;
     if (item.status === 'pending') for (const [decision, label] of [['approve', 'Approve'], ['deny', 'Deny']]) action(controls, label, async () => {
       if (busy) return; busy = true;
       try { await decide(item, decision); } finally { busy = false; }
     });
-    action(controls, 'Details', () => review(item.id));
+    action(controls, 'Details and note', () => review(item.id));
     parent.append(row);
   }
   async function loadAccess() {

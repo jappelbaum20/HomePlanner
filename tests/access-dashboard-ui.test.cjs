@@ -24,6 +24,7 @@ test('dashboard waits for verification, lists pending first, and decides directl
       if(url==='/api/admin/bootstrap') return {isAdmin:true,grantId:'grant',expiresIn:300};
       assert.equal(opts.headers?.['X-Admin-Grant'],'grant');
       if(url==='/api/me') return {userId:'owner',isAdmin:true};
+      if(url==='/api/admin/access/requests/old') return {...rows[0],note:'n',mail:[{id:'m1',kind:'request',status:'failed',revision:3,attempts:1,errorCategory:'permanent'},{id:'m2',kind:'denied',status:'failed',revision:2,attempts:1,errorCategory:'transient'}]};
       if(url==='/api/admin/access/requests') return structuredClone(rows);
       if(url==='/api/admin/access/entitlements') return [];
       if(url==='/api/admin/access/requests/new/approve') { assert.equal(opts.headers['If-Match'],'"1"'); rows[1].status='approved'; rows[1].revision++; return {}; }
@@ -41,13 +42,19 @@ test('dashboard waits for verification, lists pending first, and decides directl
   assert.equal(elements['#accessAdmin'].hidden,false);
   assert.equal(elements['#waitingCount'].textContent,'1 request waiting');
   const list=elements['#requestList'], card=list.children.find(n=>n.className==='access-request pending');
-  assert.ok(card); assert.ok(flatten(card).some(n=>n.textContent.includes('Please approve')));
+  assert.ok(card); assert.ok(flatten(card).some(n=>n.textContent.includes('Applicant')));
   assert.ok(flatten(card).some(n=>n.textContent.includes('2025')));
   assert.ok(list.children.indexOf(card)<list.children.findIndex(n=>n.tagName==='details'));
   const approve=flatten(card).find(n=>n.tagName==='button' && n.textContent==='Approve');
   assert.ok(approve); await approve.events.click();
   assert.equal(elements['#waitingCount'].textContent,'0 requests waiting');
   assert.equal(rows[1].status,'approved');
+  const history=elements['#requestList'].children.find(n=>n.tagName==='details');
+  const details=flatten(history).find(n=>n.tagName==='button' && n.textContent==='Details and note'); await details.events.click();
+  const texts=flatten(elements['#requestDetail']).map(n=>n.textContent);
+  assert.equal(texts.some(t=>t.startsWith('request:')),false);
+  assert.ok(texts.some(t=>t.startsWith('denied: failed')));
+  assert.equal(flatten(elements['#requestDetail']).filter(n=>n.textContent==='Retry notification').length,1);
 });
 
 test('planner account controls hide the owner link for other sessions and during revalidation', () => {
@@ -61,8 +68,8 @@ test('planner account controls hide the owner link for other sessions and during
   const context={window:{HomePlannerCloud:cloud},document:{querySelector:s=>elements[s],createElement:tag=>new Element(tag)},confirm:()=>true};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../client/ui.js'),'utf8'),context);
   context.window.HomePlannerCloudUI(bridge);
-  listener({generation:1,me:{isOwner:false,displayName:'User'}}); assert.equal(elements['#ownerAdminLink'].hidden,true);
-  listener({generation:1,me:{isOwner:true,displayName:'Owner'}}); assert.equal(elements['#ownerAdminLink'].hidden,false);
-  listener({generation:1,me:{isOwner:true},revalidating:true}); assert.equal(elements['#ownerAdminLink'].hidden,true);
+  listener({generation:1,me:{displayName:'User',access:{status:'approved',role:'user'}}}); assert.equal(elements['#ownerAdminLink'].hidden,true);
+  listener({generation:1,me:{displayName:'Owner',access:{status:'approved',role:'owner'}}}); assert.equal(elements['#ownerAdminLink'].hidden,false);
+  listener({generation:1,me:{access:{status:'approved',role:'owner'}},revalidating:true}); assert.equal(elements['#ownerAdminLink'].hidden,true);
   listener({generation:2,me:null}); assert.equal(elements['#ownerAdminLink'].hidden,true);
 });

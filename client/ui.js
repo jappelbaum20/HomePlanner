@@ -106,7 +106,7 @@ window.HomePlannerCloudUI = bridge => {
     }
     identity = next.me ? next : null; bridge.identityChanged(!!identity);
     signIn.hidden = !!identity; signOut.hidden = !identity;
-    adminLink.hidden = next.revalidating || identity?.me?.isOwner !== true;
+    adminLink.hidden = next.revalidating || identity?.me?.access?.role !== 'owner';
     message(next.error || (identity ? `Signed in as ${identity.me.displayName || 'Google user'}.` : ready ? 'Not signed in. Local editing remains available.' : 'Cloud sign-in is not configured.'));
     if (identity && dialog.open) void run(refresh);
   });
