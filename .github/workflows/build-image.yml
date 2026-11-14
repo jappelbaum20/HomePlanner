@@ -1,0 +1,77 @@
+name: Build image
+# Manual only: builds the VPS runtime image for one exact commit from the
+# reviewed input list and uploads it as a short-lived artifact.
+# No registry login, push or secret.
+'on':
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full 40-character commit SHA to build
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: build-image-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    name: Build runtime image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SOURCE_SHA: ${{ inputs.sha }}
+    steps:
+    - name: Require a full 40-character lowercase hex commit SHA
+      run: |
+        [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::Input must be a full 40-character lowercase hex SHA'; exit 1; }
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ inputs.sha }}
+        lfs: false
+        persist-credentials: false
+    - name: Build, save and describe the image
+      run: |
+        set -euo pipefail
+        [ "$(git rev-parse HEAD)" = "$SOURCE_SHA" ] || { echo '::error::Checked-out commit differs from the input'; exit 1; }
+        [ -z "$(git status --porcelain)" ] || { echo '::error::Checkout is not clean'; exit 1; }
+        short="${SOURCE_SHA:0:7}"; now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        tag="homeplanner-web:${short}"
+        context="$RUNNER_TEMP/context"; out="$RUNNER_TEMP/out"; archive="homeplanner-web-${short}-linux-amd64.tar.gz"; mkdir "$out"
+        # The build context holds only the reviewed inputs of scripts/vps-manifest.mjs plus the generated ignore file.
+        node scripts/prepare-hosting.mjs --vps "$context" "$out/context-inputs.json"
+        (cd "$context" && node scripts/audit-vps-context.mjs)
+        docker buildx build --platform linux/amd64 --file "$context/deployment/Dockerfile" \
+          --tag "$tag" --load --progress plain "$context"
+        docker image save "$tag" | gzip -n -c > "$out/$archive"
+        sum="$(sha256sum "$out/$archive" | cut -d' ' -f1)"
+        config="$(tar -xzOf "$out/$archive" manifest.json | jq -r '.[0].Config')"
+        config_digest="sha256:$(tar -xzOf "$out/$archive" "$config" | sha256sum | cut -d' ' -f1)"
+        {
+          echo "commit:           $SOURCE_SHA"
+          echo "tree:             $(git rev-parse 'HEAD^{tree}')"
+          echo "tag:              $tag"
+          echo "image ID:         $(docker image inspect --format '{{.Id}}' "$tag")"
+          echo "config digest:    $config_digest"
+          echo "archive manifest: $(tar -xzOf "$out/$archive" index.json | jq -r '.manifests[0].digest')"
+          echo "platform/user:    $(docker image inspect --format '{{.Os}}/{{.Architecture}} {{.Config.User}}' "$tag")"
+          echo "entrypoint/cmd:   $(docker image inspect --format '{{json .Config.Entrypoint}} {{json .Config.Cmd}}' "$tag")"
+          echo "archive:          $archive"
+          echo "archive sha256:   $sum"
+          echo "archive bytes:    $(stat -c %s "$out/$archive")"
+          echo "context ignore:   $(sha256sum "$context/.dockerignore" | cut -d' ' -f1)"
+          echo "context inputs:   $(jq '.files | length' "$out/context-inputs.json") files, list sha256 $(sha256sum "$out/context-inputs.json" | cut -d' ' -f1)"
+          echo "base image:       $(sed -n 's/^FROM \([^ ]*\) AS runtime$/\1/p' "$context/deployment/Dockerfile")"
+          echo "built at (UTC):   $now"
+          echo "workflow run:     ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+        } > "$out/image-manifest.txt"
+        printf '%s  %s\n' "$sum" "$archive" > "$out/image.sha256"
+        { echo '### Runtime image'; echo '```'; cat "$out/image-manifest.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      if: ${{ !cancelled() }}
+      with:
+        name: homeplanner-web-${{ inputs.sha }}
+        path: ${{ runner.temp }}/out
+        compression-level: 0
+        retention-days: 7
+        if-no-files-found: error
