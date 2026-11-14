@@ -13,10 +13,14 @@ RESET ROLE;
 SET ROLE hp_app_owner;
 
 CREATE TABLE hp_private.access_added (
- email text PRIMARY KEY CHECK (length(email) BETWEEN 3 AND 254 AND email=lower(email)),
+ id uuid PRIMARY KEY DEFAULT pg_catalog.gen_random_uuid(),
+ email text NOT NULL CHECK (length(email) BETWEEN 3 AND 254 AND email=lower(email)),
  added_by uuid NOT NULL, created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
  claimed_user uuid, claimed_subject text, CHECK ((claimed_user IS NULL) = (claimed_subject IS NULL))
 );
+-- One usable (unclaimed) invitation per address; claimed rows are kept as history and never block a new one.
+CREATE UNIQUE INDEX access_added_one_open ON hp_private.access_added(email) WHERE claimed_user IS NULL;
+CREATE INDEX access_added_email ON hp_private.access_added(email);
 REVOKE ALL ON hp_private.access_added FROM PUBLIC,hp_app_runtime,hp_access_public,hp_mail_worker,hp_auth_runtime,hp_photo_maintenance;
 CREATE TRIGGER access_added_claim_immutable BEFORE UPDATE ON hp_private.access_added FOR EACH ROW EXECUTE FUNCTION hp_private.access_claim_immutable();
 ALTER TABLE hp_private.access_audit ADD COLUMN target_email text CHECK (target_email IS NULL OR length(target_email) BETWEEN 3 AND 254);
@@ -27,7 +31,9 @@ DECLARE ent hp_private.access_entitlements; req hp_private.access_requests; inv 
 BEGIN
  SELECT * INTO ent FROM hp_private.access_entitlements WHERE google_subject=p_subject;
  IF FOUND THEN RETURN jsonb_build_object('state',ent.status,'source','entitlement','decidedAt',ent.decision_at); END IF;
- SELECT * INTO added FROM hp_private.access_added WHERE email=p_email AND claimed_user IS NULL;
+ -- The pre-approval is void once a request for the same address was denied after the address was added.
+ SELECT * INTO added FROM hp_private.access_added a WHERE a.email=p_email AND a.claimed_user IS NULL
+  AND NOT EXISTS(SELECT 1 FROM hp_private.access_requests q WHERE q.email=p_email AND q.status='denied' AND q.decided_at>a.created_at);
  IF FOUND THEN RETURN jsonb_build_object('state','approved','source','added','decidedAt',added.created_at); END IF;
  SELECT * INTO req FROM hp_private.access_requests WHERE google_subject=p_subject ORDER BY created_at DESC,id DESC LIMIT 1;
  IF FOUND THEN RETURN jsonb_build_object('state',req.status,'source','request','requestId',req.id,'decidedAt',req.decided_at,'lastSubmitAt',coalesce(req.last_submit_at,req.created_at)); END IF;
@@ -54,11 +60,12 @@ BEGIN
  st := hp_private.access_subject_state(sub,p_email);
  IF st->>'state' IS DISTINCT FROM 'approved' THEN RETURN jsonb_build_object('state',st->>'state'); END IF;
  IF st->>'source'='added' THEN
-  SELECT * INTO ad FROM hp_private.access_added WHERE email=p_email AND claimed_user IS NULL FOR UPDATE;
+  SELECT * INTO ad FROM hp_private.access_added a WHERE a.email=p_email AND a.claimed_user IS NULL
+   AND NOT EXISTS(SELECT 1 FROM hp_private.access_requests q WHERE q.email=p_email AND q.status='denied' AND q.decided_at>a.created_at) FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'HP_CONFLICT'; END IF;
   INSERT INTO hp_private.access_entitlements(user_id,google_subject,status,decided_by,decision_at,provenance)
    VALUES(p_user,sub,'approved',ad.added_by,ad.created_at,'verified-added');
-  UPDATE hp_private.access_added SET claimed_user=p_user,claimed_subject=sub WHERE email=p_email AND claimed_user IS NULL;
+  UPDATE hp_private.access_added SET claimed_user=p_user,claimed_subject=sub WHERE id=ad.id;
   INSERT INTO hp_private.access_audit(actor_id,subject_user,action,revision,target_email) VALUES(ad.added_by,p_user,'signin_bound',1,p_email);
   RETURN jsonb_build_object('state','approved');
  END IF;
@@ -70,10 +77,11 @@ BEGIN
  RETURN jsonb_build_object('state','approved');
 END $$;
 
--- Result is one of: has_access, already_added, pending_request (+requestId), blocked (+state denied|revoked),
--- reinstated (override of an existing denied/revoked account), added. Never creates or changes an owner.
+-- Result is one of: has_access, already_added, pending_request (+requestId), blocked (+state denied|revoked,
+-- +restore true when an existing closed account would be restored), reinstated (override of an existing
+-- denied/revoked account), added. Never creates or changes an owner. Never reports 'added' without a usable row.
 CREATE FUNCTION hp_app.hp_access_add(p_subject text,p_email text,p_override boolean) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE actor uuid; rid uuid; blocked text; ov boolean := coalesce(p_override,false); reinstated integer;
+DECLARE actor uuid; rid uuid; blocked text; restore boolean := false; ov boolean := coalesce(p_override,false); reinstated integer; newid uuid;
 BEGIN
  actor := hp_private.access_admin(p_subject);
  IF p_email IS NULL OR p_email<>lower(p_email) OR length(p_email) NOT BETWEEN 3 AND 254 THEN RAISE EXCEPTION 'HP_INVALID'; END IF;
@@ -82,22 +90,30 @@ BEGIN
     OR EXISTS(SELECT 1 FROM hp_private.access_invitations i WHERE i.email=p_email AND i.status='approved' AND i.claimed_user IS NULL) THEN
   RETURN jsonb_build_object('result','has_access');
  END IF;
- IF EXISTS(SELECT 1 FROM hp_private.access_added WHERE email=p_email AND claimed_user IS NULL) THEN RETURN jsonb_build_object('result','already_added'); END IF;
+ -- The owner account is never touched by this path.
+ IF EXISTS(SELECT 1 FROM hp_private.admin_binding b JOIN hp_auth."user" u ON u.id=b.user_id WHERE lower(u.email)=p_email) THEN RAISE EXCEPTION 'HP_INVALID'; END IF;
+ IF EXISTS(SELECT 1 FROM hp_private.access_added a WHERE a.email=p_email AND a.claimed_user IS NULL AND NOT EXISTS(SELECT 1 FROM hp_private.access_requests q WHERE q.email=a.email AND q.status='denied' AND q.decided_at>a.created_at)) THEN RETURN jsonb_build_object('result','already_added'); END IF;
  SELECT id INTO rid FROM hp_private.access_requests WHERE email=p_email AND status='pending' LIMIT 1;
  IF FOUND THEN RETURN jsonb_build_object('result','pending_request','requestId',rid); END IF;
- SELECT e.status INTO blocked FROM hp_private.access_entitlements e JOIN hp_auth."user" u ON u.id=e.user_id WHERE lower(u.email)=p_email AND e.status<>'approved' ORDER BY e.updated_at DESC LIMIT 1;
+ SELECT e.status INTO blocked FROM hp_private.access_entitlements e JOIN hp_auth."user" u ON u.id=e.user_id
+  WHERE lower(u.email)=p_email AND e.status<>'approved' AND NOT EXISTS(SELECT 1 FROM hp_private.admin_binding b WHERE b.user_id=e.user_id) ORDER BY e.updated_at DESC LIMIT 1;
+ IF blocked IS NOT NULL THEN restore := true; END IF;
  IF blocked IS NULL AND EXISTS(SELECT 1 FROM hp_private.access_invitations i WHERE i.email=p_email AND i.status='denied') THEN blocked := 'denied'; END IF;
- IF blocked IS NOT NULL AND NOT ov THEN RETURN jsonb_build_object('result','blocked','state',blocked); END IF;
+ IF blocked IS NOT NULL AND NOT ov THEN RETURN jsonb_build_object('result','blocked','state',blocked,'restore',restore); END IF;
  IF blocked IS NOT NULL THEN
-  UPDATE hp_private.access_entitlements e SET status='approved',revision=e.revision+1,decided_by=actor,decision_at=clock_timestamp(),updated_at=clock_timestamp()
-   FROM hp_auth."user" u WHERE u.id=e.user_id AND lower(u.email)=p_email AND e.status<>'approved';
+  WITH upd AS (
+   UPDATE hp_private.access_entitlements e SET status='approved',revision=e.revision+1,decided_by=actor,decision_at=clock_timestamp(),updated_at=clock_timestamp()
+    FROM hp_auth."user" u WHERE u.id=e.user_id AND lower(u.email)=p_email AND e.status<>'approved'
+     AND NOT EXISTS(SELECT 1 FROM hp_private.admin_binding b WHERE b.user_id=e.user_id)
+    RETURNING e.user_id,e.revision)
+  INSERT INTO hp_private.access_audit(actor_id,subject_user,action,revision,target_email) SELECT actor,user_id,'added_override',revision,p_email FROM upd;
   GET DIAGNOSTICS reinstated = ROW_COUNT;
-  IF reinstated>0 THEN
-   INSERT INTO hp_private.access_audit(actor_id,action,target_email) VALUES(actor,'added_override',p_email);
-   RETURN jsonb_build_object('result','reinstated');
-  END IF;
+  IF reinstated>0 THEN RETURN jsonb_build_object('result','reinstated'); END IF;
  END IF;
- INSERT INTO hp_private.access_added(email,added_by) VALUES(p_email,actor) ON CONFLICT DO NOTHING;
+ -- Only a row voided by a later denial can still be unclaimed here (a live one returned above); replace it.
+ DELETE FROM hp_private.access_added WHERE email=p_email AND claimed_user IS NULL;
+ INSERT INTO hp_private.access_added(email,added_by) VALUES(p_email,actor) ON CONFLICT (email) WHERE claimed_user IS NULL DO NOTHING RETURNING id INTO newid;
+ IF newid IS NULL THEN RAISE EXCEPTION 'HP_CONFLICT'; END IF;
  INSERT INTO hp_private.access_audit(actor_id,action,target_email) VALUES(actor,CASE WHEN blocked IS NOT NULL THEN 'added_override' ELSE 'added' END,p_email);
  RETURN jsonb_build_object('result','added');
 END $$;
@@ -107,7 +123,7 @@ DECLARE result jsonb;
 BEGIN
  PERFORM hp_private.access_admin(p_subject);
  SELECT coalesce(jsonb_agg(x ORDER BY x->>'addedAt' DESC),'[]'::jsonb) INTO result FROM
-  (SELECT jsonb_build_object('email',email,'addedAt',created_at) x FROM hp_private.access_added WHERE claimed_user IS NULL ORDER BY created_at DESC LIMIT 100) q;
+  (SELECT jsonb_build_object('email',email,'addedAt',created_at) x FROM hp_private.access_added a WHERE a.claimed_user IS NULL AND NOT EXISTS(SELECT 1 FROM hp_private.access_requests q WHERE q.email=a.email AND q.status='denied' AND q.decided_at>a.created_at) ORDER BY created_at DESC LIMIT 100) q;
  RETURN result;
 END $$;
 

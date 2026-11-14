@@ -5,7 +5,7 @@
   const signIn = document.querySelector('#adminSignIn'), signOut = document.querySelector('#adminSignOut');
   const verification = document.querySelector('#verification'), prepare = document.querySelector('#prepareVerification'), googleButton = document.querySelector('#googleButton');
   const accessAdmin = document.querySelector('#accessAdmin'), requestList = document.querySelector('#requestList'), requestDetail = document.querySelector('#requestDetail'), entitlementList = document.querySelector('#entitlementList');
-  const waitingCount = document.querySelector('#waitingCount');
+  const waitingCount = document.querySelector('#waitingCount'), addSubmit = document.querySelector('#addPersonSubmit');
   const addForm = document.querySelector('#addPersonForm'), addEmail = document.querySelector('#addPersonEmail'), addStatus = document.querySelector('#addPersonStatus'), addActions = document.querySelector('#addPersonActions'), addedList = document.querySelector('#addedList');
   let generation = -1, proof = null, revision = null, timer = null, sequence = 0, googleLoading = null;
   function clearProof(message) {
@@ -137,7 +137,9 @@
     const requested = new URLSearchParams(location.search).get('accessRequest');
     if (requested && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(requested)) { history.replaceState(null, '', '/admin.html'); await review(requested); }
   }
+  // Returns the id of a waiting request to open, if the address already has one. It never loads the list itself.
   async function addPerson(address, override) {
+    let pendingId;
     addActions.replaceChildren();
     const result = await adminRequest('/api/admin/access/people', { method: 'POST', body: override ? { email: address, override: true } : { email: address } });
     const outcome = result?.result;
@@ -145,19 +147,28 @@
     else if (outcome === 'reinstated') addStatus.textContent = `${address} had an account that was closed; access is restored.`;
     else if (outcome === 'already_added') addStatus.textContent = `${address} is already added and has not signed in yet.`;
     else if (outcome === 'has_access') addStatus.textContent = `${address} already has access.`;
-    else if (outcome === 'pending_request') { addStatus.textContent = `A request from ${address} is waiting. Approve it from the waiting list.`; if (typeof result.requestId === 'string') await review(result.requestId); }
+    else if (outcome === 'pending_request') { addStatus.textContent = `A request from ${address} is waiting. Approve it from the waiting list.`; if (typeof result.requestId === 'string') pendingId = result.requestId; }
     else if (outcome === 'blocked') {
-      addStatus.textContent = `${address} was ${result.state} before, so it was not added.`;
-      action(addActions, 'Allow anyway', async () => { await addPerson(address, true); await loadAccess(); });
-      return;
+      const restore = result.restore === true;
+      addStatus.textContent = restore ? `${address} has a closed account (${result.state}), so it was not restored.` : `${address} was ${result.state} before, so it was not added.`;
+      action(addActions, restore ? 'Restore closed account' : 'Allow anyway', () => submitAdd(address, true));
+      return undefined;
     } else throw Error('The result was not understood.');
     if (outcome === 'added' || outcome === 'reinstated') addEmail.value = '';
+    return pendingId;
+  }
+  // Reload the lists first (that clears the detail panel), then open the waiting request, so it stays visible.
+  async function submitAdd(address, override) {
+    addSubmit.disabled = true;
+    try { const pendingId = await addPerson(address, override); await loadAccess(); if (pendingId) await review(pendingId); }
+    finally { addSubmit.disabled = false; }
   }
   addForm.addEventListener('submit', event => {
     event.preventDefault(); const address = addEmail.value.trim();
     if (!address) return;
     addStatus.textContent = '';
-    void addPerson(address, false).then(() => loadAccess()).catch(fail);
+    if (addSubmit.disabled) return;
+    void submitAdd(address, false).catch(fail);
   });
   document.querySelector('#reloadAccess').addEventListener('click', () => { void loadAccess().catch(fail); });
   function loadGoogle() {

@@ -150,6 +150,8 @@ async function createComposition({ env = process.env, safety, PoolClass = Pool, 
       googleClientSecret, photoHandlers, photoRecovery: recovery, photoReady: photos.photoReady, close,
       requestsAvailable: accessRequestsAvailable({ proxies }), getTrustedClientIp: req => trustedClientIp(req, proxies) });
     if (!transport) console.log('mail notifications disabled; access requests are recorded for admin review only');
+    // The worker runs only with a transport. With mail off nothing is claimed: hp_mail_claim takes jobs of any kind, so
+    // ticking without a transport would also use up attempts of approved/denied mail. Request rows stay queued then.
     if (transport) {
       const tick = () => { if (!mailTask) { mailTask = worker.runOnce().catch(() => {}).finally(() => { mailTask = null; }); } };
       timer = setInterval(tick, 15000); timer.unref(); tick();

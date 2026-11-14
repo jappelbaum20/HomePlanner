@@ -9,7 +9,7 @@ class Element {
 }
 const flatten = node => [node, ...node.children.flatMap(flatten)];
 test('dashboard waits for verification, lists pending first, and decides directly with the grant and revision', async () => {
-  const ids=['adminStatus','modelForm','budgetForm','adminSignIn','adminSignOut','verification','prepareVerification','googleButton','accessAdmin','requestList','requestDetail','entitlementList','waitingCount','reloadAccess','addPersonForm','addPersonEmail','addPersonStatus','addPersonActions','addedList'];
+  const ids=['adminStatus','modelForm','budgetForm','adminSignIn','adminSignOut','verification','prepareVerification','googleButton','accessAdmin','requestList','requestDetail','entitlementList','waitingCount','reloadAccess','addPersonForm','addPersonEmail','addPersonStatus','addPersonActions','addPersonSubmit','addedList'];
   const elements=Object.fromEntries(ids.map(id=>['#'+id,new Element()]));
   for (const name of ['adapterId','modelId','connectionId','enabled','requestsPerMinute','requestsPerDay','maxOutputTokens']) elements['#modelForm'].elements[name]=new Element('input');
   elements['#budgetForm'].elements.budget=new Element('input');
@@ -26,14 +26,17 @@ test('dashboard waits for verification, lists pending first, and decides directl
       assert.equal(opts.headers?.['X-Admin-Grant'],'grant');
       if(url==='/api/me') return {userId:'owner',isAdmin:true};
       if(url==='/api/admin/access/requests/old') return {...rows[0],note:'n',mail:[{id:'m1',kind:'request',status:'failed',revision:3,attempts:1,errorCategory:'permanent'},{id:'m2',kind:'denied',status:'failed',revision:2,attempts:1,errorCategory:'transient'}]};
+      if(url==='/api/admin/access/requests/new') return structuredClone(rows[1]);
       if(url==='/api/admin/access/requests') return structuredClone(rows);
       if(url==='/api/admin/access/entitlements') return [];
       if(url==='/api/admin/access/people' && !opts.method) return structuredClone(added);
       if(url==='/api/admin/access/people' && opts.method==='POST') {
         people.push(opts.body);
         if(opts.body.email==='denied@example.com' && !opts.body.override) return {result:'blocked',state:'denied'};
+        if(opts.body.email==='closed@example.com' && !opts.body.override) return {result:'blocked',state:'revoked',restore:true};
+        if(opts.body.email==='closed@example.com') return {result:'reinstated'};
         if(opts.body.email==='waiting@example.com') return {result:'pending_request',requestId:'new'};
-        if(opts.body.email==='has@example.com') return {result:'has_access'};
+        if(['has@example.com','slow@example.com'].includes(opts.body.email)) return {result:'has_access'};
         added.push({email:opts.body.email,addedAt:'2025-01-03T10:00:00Z'}); return {result:'added'};
       }
       if(url==='/api/admin/access/people/remove') { added.splice(0,added.length,...added.filter(x=>x.email!==opts.body.email)); return {status:'removed'}; }
@@ -61,7 +64,10 @@ test('dashboard waits for verification, lists pending first, and decides directl
   assert.equal(rows[1].status,'approved');
   const submit=async address=>{ elements['#addPersonEmail'].value=address; await elements['#addPersonForm'].events.submit({preventDefault(){}}); await new Promise(setImmediate); await new Promise(setImmediate); };
   await submit('has@example.com'); assert.match(elements['#addPersonStatus'].textContent,/already has access/);
+  elements['#requestDetail'].children=[];
   await submit('waiting@example.com'); assert.match(elements['#addPersonStatus'].textContent,/request from waiting@example.com is waiting/);
+  assert.ok(flatten(elements['#requestDetail']).some(n=>n.textContent==='Applicant · applicant@example.com · approved'),'the waiting request stays open after the list reloads');
+  assert.equal(elements['#addPersonSubmit'].disabled,false,'submit is enabled again after the request');
   await submit('denied@example.com'); assert.match(elements['#addPersonStatus'].textContent,/was denied before/);
   assert.equal(added.length,0);
   const anyway=elements['#addPersonActions'].children.find(n=>n.textContent==='Allow anyway'); assert.ok(anyway);
@@ -69,6 +75,18 @@ test('dashboard waits for verification, lists pending first, and decides directl
   assert.equal(JSON.stringify(people.at(-1)),JSON.stringify({email:'denied@example.com',override:true}));
   assert.equal(added.length,1);
   assert.ok(flatten(elements['#addedList']).some(n=>n.textContent.includes('denied@example.com') && n.textContent.includes('not signed in yet')));
+  await submit('closed@example.com'); assert.match(elements['#addPersonStatus'].textContent,/closed account/);
+  assert.equal(elements['#addPersonActions'].children.some(n=>n.textContent==='Allow anyway'),false);
+  const restoreBtn=elements['#addPersonActions'].children.find(n=>n.textContent==='Restore closed account'); assert.ok(restoreBtn);
+  await restoreBtn.events.click(); await new Promise(setImmediate); assert.match(elements['#addPersonStatus'].textContent,/access is restored/);
+  // The submit button is disabled while a request is in flight.
+  let release; const slow=new Promise(r=>{release=r;}); const realRequest=cloud.request; let sawDisabled=false;
+  cloud.request=async(url,opts)=>{ if(url==='/api/admin/access/people' && opts?.method==='POST'){ sawDisabled=elements['#addPersonSubmit'].disabled; await slow; } return realRequest(url,opts); };
+  elements['#addPersonEmail'].value='slow@example.com'; const pendingSubmit=elements['#addPersonForm'].events.submit({preventDefault(){}});
+  await new Promise(setImmediate); assert.equal(elements['#addPersonSubmit'].disabled,true);
+  await elements['#addPersonForm'].events.submit({preventDefault(){}}); assert.equal(people.filter(p=>p.email==='slow@example.com').length,0,'a second submit during the request is ignored');
+  release(); await pendingSubmit; await new Promise(setImmediate); await new Promise(setImmediate); cloud.request=realRequest;
+  assert.equal(elements['#addPersonSubmit'].disabled,false); assert.equal(people.filter(p=>p.email==='slow@example.com').length,1); assert.equal(sawDisabled,true);
   const removeBtn=flatten(elements['#addedList']).find(n=>n.textContent==='Remove'); await removeBtn.events.click(); await new Promise(setImmediate);
   assert.equal(added.length,0);
   const history=elements['#requestList'].children.find(n=>n.tagName==='details');

@@ -130,7 +130,7 @@ test('rule c: a denied address is refused by default; an explicit override grant
  const d=await db8();try{
   assert.equal((await askS(d,sub(5),E)).status,'pending');
   const r=(await list(d)).find(x=>x.email===E); await decide(d,r.id,r.revision,'denied');
-  assert.deepEqual(await add(d,E),{result:'blocked',state:'denied'});
+  assert.deepEqual(await add(d,E),{result:'blocked',state:'denied',restore:false});
   assert.equal(await count(d),0); assert.equal((await audit(d,'added_override')).length,0);
   assert.equal((await gate(d,sub(5),E)).state,'denied');
   assert.equal((await add(d,E,true)).result,'added');
@@ -147,7 +147,7 @@ test('rule c: a revoked account is refused by default and restored only by an ex
   const revision=Number((await d.query('SELECT revision FROM hp_private.access_entitlements WHERE user_id=$1',[fresh])).rows[0].revision);
   await admin(d,'SELECT hp_app.hp_access_revoke($1,$2,$3) x',['owner-sub',fresh,revision]);
   assert.equal((await ent(d,fresh)).status,'revoked');
-  assert.deepEqual(await add(d,E),{result:'blocked',state:'revoked'});
+  assert.deepEqual(await add(d,E),{result:'blocked',state:'revoked',restore:true});
   assert.equal((await ent(d,fresh)).status,'revoked');
   assert.equal((await add(d,E,true)).result,'reinstated');
   assert.equal((await ent(d,fresh)).status,'approved');
@@ -169,4 +169,131 @@ test('the new table is not readable by any runtime role',async()=>{
  const d=await db8();try{
   for(const role of ['hp_app_runtime','hp_access_public','hp_auth_runtime','hp_mail_worker']) await assert.rejects(()=>call(d,role,null,null,'SELECT count(*) x FROM hp_private.access_added'),/permission denied/);
  } finally { await d.close(); }
+});
+
+test('a second Google subject with the same address cannot reuse a claimed pre-approval',async()=>{
+ const d=await db8();try{
+  await add(d,E); await createFresh(d,sub(7),E); assert.equal((await bind(d,fresh,E)).state,'approved');
+  assert.equal((await gate(d,sub(1),E)).state,'none','the address was claimed once; another subject must request');
+  assert.equal((await askS(d,sub(1),E)).status,'pending');
+  const other='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'; await d.query('INSERT INTO hp_auth."user"(id,name,email,"emailVerified","updatedAt") VALUES ($1,$2,$3,true,now())',[other,sub(1),E+'.other']);
+  await d.query('INSERT INTO hp_auth.account("accountId","providerId","userId","updatedAt") VALUES ($1,\'google\',$2,now())',[sub(1),other]);
+  assert.equal((await bind(d,other,E)).state,'pending'); assert.equal(await ent(d,other),undefined);
+ } finally { await d.close(); }
+});
+test('gate and bind called with different addresses never approve through the pre-approval of one of them',async()=>{
+ const d=await db8();try{
+  await add(d,E);
+  assert.equal((await gate(d,sub(2),'someone-else@example.com')).state,'none');
+  await createFresh(d,sub(2),'someone-else@example.com');
+  assert.equal((await bind(d,fresh,'someone-else@example.com')).state,'none');
+  assert.equal(await ent(d,fresh),undefined);
+  assert.equal((await bind(d,fresh,E)).state,'approved','bind trusts the address it is given, exactly like the gate');
+  assert.equal(await count(d,'hp_private.access_added WHERE claimed_user IS NULL'),0);
+ } finally { await d.close(); }
+});
+test('revoke wins after a reinstatement and after an override-added claim; the reinstated audit row has subject and revision',async()=>{
+ const d=await db8();try{
+  await add(d,E); await createFresh(d,sub(6),E); await bind(d,fresh,E);
+  const rev=async()=>Number((await d.query('SELECT revision FROM hp_private.access_entitlements WHERE user_id=$1',[fresh])).rows[0].revision);
+  await admin(d,'SELECT hp_app.hp_access_revoke($1,$2,$3) x',['owner-sub',fresh,await rev()]);
+  assert.equal((await add(d,E,true)).result,'reinstated'); assert.equal((await ent(d,fresh)).status,'approved');
+  const au=(await audit(d,'added_override')).at(-1); assert.equal(au.subject_user,fresh); assert.equal(au.target_email,E);
+  assert.equal(Number((await d.query("SELECT revision FROM hp_private.access_audit WHERE action='added_override' ORDER BY id DESC LIMIT 1")).rows[0].revision),await rev(),'the audit row records the new revision');
+  await admin(d,'SELECT hp_app.hp_access_revoke($1,$2,$3) x',['owner-sub',fresh,await rev()]);
+  assert.equal((await ent(d,fresh)).status,'revoked','revoke after reinstated wins');
+  assert.equal((await gate(d,sub(6),E)).state,'revoked');
+ } finally { await d.close(); }
+ const d2=await db8();try{
+  assert.equal((await askS(d2,sub(5),E)).status,'pending');
+  const r=(await list(d2)).find(x=>x.email===E); await decide(d2,r.id,r.revision,'denied');
+  assert.equal((await add(d2,E,true)).result,'added');
+  await createFresh(d2,sub(5),E); assert.equal((await bind(d2,fresh,E)).state,'approved');
+  const revision=Number((await d2.query('SELECT revision FROM hp_private.access_entitlements WHERE user_id=$1',[fresh])).rows[0].revision);
+  await admin(d2,'SELECT hp_app.hp_access_revoke($1,$2,$3) x',['owner-sub',fresh,revision]);
+  assert.equal((await ent(d2,fresh)).status,'revoked');
+  assert.equal((await gate(d2,sub(5),E)).state,'revoked');
+  assert.equal((await bind(d2,fresh,E)).state,'revoked');
+ } finally { await d2.close(); }
+});
+test('the owner account is never touched: not reinstated, not blocked, no added row, even with override',async()=>{
+ const d=await db8();try{
+  const ownerEmail=(await d.query('SELECT email FROM hp_auth."user" WHERE id=$1',[owner])).rows[0].email;
+  assert.equal((await ent(d,owner)).status,'approved');
+  assert.equal((await add(d,ownerEmail,true)).result,'has_access');
+  // Force the entitlement into a closed state (superuser fixture) and try the override path.
+  await d.query("UPDATE hp_private.access_entitlements SET status='revoked' WHERE user_id=$1",[owner]);
+  const before=(await d.query('SELECT status,revision FROM hp_private.access_entitlements WHERE user_id=$1',[owner])).rows[0];
+  const auditBefore=await count(d,'hp_private.access_audit');
+  for(const ov of [false,true]) await assert.rejects(()=>add(d,ownerEmail,ov),/HP_INVALID/);
+  assert.deepEqual((await d.query('SELECT status,revision FROM hp_private.access_entitlements WHERE user_id=$1',[owner])).rows[0],before);
+  assert.equal(await count(d),0); assert.equal(await count(d,'hp_private.access_audit'),auditBefore);
+ } finally { await d.close(); }
+});
+test('add never reports added unless a usable invitation exists, even if a claimed row for the address is kept',async()=>{
+ const d=await db8();try{
+  await add(d,E); await createFresh(d,sub(7),E); await bind(d,fresh,E);
+  // The account's stored address changes; the claimed row stays as history.
+  await d.query('UPDATE hp_auth."user" SET email=$2 WHERE id=$1',[fresh,'renamed@example.com']);
+  assert.equal(await count(d,'hp_private.access_added WHERE claimed_user IS NOT NULL'),1);
+  assert.equal((await add(d,E)).result,'added');
+  assert.equal(await count(d,'hp_private.access_added WHERE claimed_user IS NULL'),1,'a usable unclaimed row exists');
+  assert.equal(await count(d),2,'the claimed row is kept');
+  assert.equal((await gate(d,sub(1),E)).state,'approved');
+  assert.equal((await add(d,E)).result,'already_added');
+  await assert.rejects(()=>d.query('INSERT INTO hp_private.access_added(email,added_by) VALUES($1,$2)',[E,owner]),/duplicate key|unique/);
+  assert.equal((await audit(d,'added')).length,2);
+ } finally { await d.close(); }
+});
+test('a later Deny of a racing request beats the earlier add, at the gate and at bind',async()=>{
+ const d=await db8();try{
+  assert.equal((await add(d,E)).result,'added');
+  // A request for the same address lands next to the add (they lock different keys). The public request path would answer
+  // 'approved' once the row exists, so the interleaved request is inserted directly.
+  await d.query("INSERT INTO hp_private.access_requests(name,email,note,google_issuer,google_subject,last_submit_at) VALUES('Applicant',$1,'',$2,$3,clock_timestamp())",[E,ISS,sub(4)]);
+  const r=(await list(d)).find(x=>x.email===E); await decide(d,r.id,r.revision,'denied');
+  assert.equal((await gate(d,sub(4),E)).state,'denied');
+  await createFresh(d,sub(4),E);
+  assert.equal((await bind(d,fresh,E)).state,'denied'); assert.equal(await ent(d,fresh),undefined);
+  assert.equal((await gate(d,sub(1),E)).state,'none','the old unclaimed row no longer applies to another subject either');
+  assert.equal(await count(d,'hp_private.access_added WHERE claimed_user IS NOT NULL'),0);
+  // An explicit override after the denial creates a row newer than the denial; it applies again.
+  assert.deepEqual(await addedList(d),[],'a voided row is not listed as waiting');
+  assert.deepEqual(await add(d,E),{result:'blocked',state:'denied',restore:false});
+  assert.equal((await add(d,E,true)).result,'added');
+  assert.equal(await count(d,'hp_private.access_added WHERE claimed_user IS NULL'),1);
+  assert.equal((await gate(d,sub(4),E)).state,'approved');
+  assert.equal((await bind(d,fresh,E)).state,'approved');
+ } finally { await d.close(); }
+});
+test('the three new functions are not executable by the mail worker, the sign-in runtime or the public role',async()=>{
+ const d=await db8();try{
+  for(const role of ['hp_mail_worker','hp_auth_runtime','hp_access_public']) for(const [sql,args] of [
+   ['SELECT hp_app.hp_access_add($1,$2,$3) x',['owner-sub',E,false]],['SELECT hp_app.hp_access_added_list($1) x',['owner-sub']],['SELECT hp_app.hp_access_added_remove($1,$2) x',['owner-sub',E]]])
+    await assert.rejects(()=>call(d,role,null,null,sql,args),/permission denied/,role);
+ } finally { await d.close(); }
+});
+test('the closed-account flag: blocked by an existing closed account says restore, a denied request does not',async()=>{
+ const d=await db8();try{
+  await add(d,E); await createFresh(d,sub(6),E); await bind(d,fresh,E);
+  const revision=Number((await d.query('SELECT revision FROM hp_private.access_entitlements WHERE user_id=$1',[fresh])).rows[0].revision);
+  await admin(d,'SELECT hp_app.hp_access_revoke($1,$2,$3) x',['owner-sub',fresh,revision]);
+  assert.deepEqual(await add(d,E),{result:'blocked',state:'revoked',restore:true});
+  assert.equal((await askS(d,sub(5),'other@example.com')).status,'pending');
+  const r=(await list(d)).find(x=>x.email==='other@example.com'); await decide(d,r.id,r.revision,'denied');
+  assert.deepEqual(await add(d,'other@example.com'),{result:'blocked',state:'denied',restore:false});
+ } finally { await d.close(); }
+});
+test('removal and bind in either order: a claimed row cannot be removed, a removed row cannot be claimed (single session: no true overlap)',async()=>{
+ // Limit: the embedded database has one session, so the two calls cannot overlap; this proves both serial orders.
+ // The overlapping case relies on bind taking FOR UPDATE on the row and removal deleting under the email lock.
+ const d=await db8();try{
+  await add(d,E); await removeAdded(d,E);
+  await createFresh(d,sub(7),E); assert.equal((await bind(d,fresh,E)).state,'none'); assert.equal(await ent(d,fresh),undefined);
+ } finally { await d.close(); }
+ const d2=await db8();try{
+  await add(d2,E); await createFresh(d2,sub(7),E); await bind(d2,fresh,E);
+  await assert.rejects(()=>removeAdded(d2,E),/HP_NOT_FOUND/);
+  assert.equal((await ent(d2,fresh)).status,'approved');
+ } finally { await d2.close(); }
 });

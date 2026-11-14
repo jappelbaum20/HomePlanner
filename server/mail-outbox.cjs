@@ -41,23 +41,34 @@ function createOutboxWorker({pool,transport,origin,from,sendTimeoutMs=60000}={})
       return true;
     });
   }
+  const claimOne=async()=>{ const token=randomUUID(); const jobs=await transaction(c=>result(c,'SELECT hp_app.hp_mail_claim($1,$2) AS result',[token,1])); return {token,job:Array.isArray(jobs)?jobs[0]:undefined}; };
+  // Access requests are reviewed in the admin dashboard and never mailed. A backlog of them is ended without the
+  // transport, up to this many per run, so it cannot delay decision mail behind it (the claim is oldest first).
+  const MAX_REQUEST_JOBS=20;
   async function runOnce() {
-    const token=randomUUID();
-    const jobs=await transaction(c=>result(c,'SELECT hp_app.hp_mail_claim($1,$2) AS result',[token,1]));
-    if (!Array.isArray(jobs) || jobs.length===0) return {processed:false};
-    // Access requests are reviewed in the admin dashboard and never mailed: end the job without the transport.
-    const job=jobs[0]; let outcome=job.kind==='request' ? 'permanent' : 'unavailable';
-    if (job.kind!=='request' && transport && typeof transport.sendMail==='function') {
-      let timer;
-      try {
-        const mail=message(job,{origin,from});
-        const sent=await Promise.race([transport.sendMail(mail),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('timeout')),sendTimeoutMs);})]);
-        outcome=Array.isArray(sent?.accepted) && sent.accepted.includes(mail.to) ? 'accepted' : 'transient';
-      } catch(e) { outcome=e instanceof TypeError ? 'permanent' : e?.permanent===true ? 'permanent' : 'transient'; }
-      finally { if(timer) clearTimeout(timer); }
+    let drained=0;
+    for (;;) {
+      const {token,job}=await claimOne();
+      if (!job) return drained>0 ? {processed:true,recorded:true,outcome:'permanent',drained} : {processed:false};
+      if (job.kind==='request') {
+        const ended=await transaction(c=>result(c,'SELECT hp_app.hp_mail_finish($1,$2,$3) AS result',[job.id,token,'permanent']));
+        drained+=1;
+        if (drained<MAX_REQUEST_JOBS) continue;
+        return {processed:true,recorded:ended===true,outcome:'permanent',drained};
+      }
+      let outcome='unavailable';
+      if (transport && typeof transport.sendMail==='function') {
+        let timer;
+        try {
+          const mail=message(job,{origin,from});
+          const sent=await Promise.race([transport.sendMail(mail),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('timeout')),sendTimeoutMs);})]);
+          outcome=Array.isArray(sent?.accepted) && sent.accepted.includes(mail.to) ? 'accepted' : 'transient';
+        } catch(e) { outcome=e instanceof TypeError ? 'permanent' : e?.permanent===true ? 'permanent' : 'transient'; }
+        finally { if(timer) clearTimeout(timer); }
+      }
+      const finished=await transaction(c=>result(c,'SELECT hp_app.hp_mail_finish($1,$2,$3) AS result',[job.id,token,outcome]));
+      return {processed:true,recorded:finished===true,outcome,drained};
     }
-    const finished=await transaction(c=>result(c,'SELECT hp_app.hp_mail_finish($1,$2,$3) AS result',[job.id,token,outcome]));
-    return {processed:true,recorded:finished===true,outcome};
   }
   return Object.freeze({verifyRole,runOnce});
 }
