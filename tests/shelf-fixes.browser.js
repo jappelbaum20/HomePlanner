@@ -9,15 +9,14 @@ async page => {
     await page.setViewportSize({ width: 1440, height: 900 }); await page.goto('http://127.0.0.1:8765/bookshelf'); await page.evaluate(() => localStorage.clear()); await page.reload();
     await page.locator('#bs3d canvas').waitFor(); await page.waitForFunction(() => window.__bsDebug && window.__bsDebug.frames > 0); await page.waitForTimeout(400);
   };
-  const clickAt = async (x, y, z = 0) => { const p = await page.evaluate(([x, y, z]) => window.__bsDebug.screenOf(x, y, z), [x, y, z]); await page.mouse.click(p.x, p.y); await page.waitForTimeout(150); };
+  const clickAt = async (x, y, z = 0) => { await page.locator('#bs3d canvas').scrollIntoViewIfNeeded(); const p = await page.evaluate(([x, y, z]) => window.__bsDebug.screenOf(x, y, z), [x, y, z]); await page.mouse.click(p.x, p.y); await page.waitForTimeout(150); };
 
   await open();
   // 2: the pull-back is applied once (x1.1) on the standalone page
   let d = await dbg();
   check(d.fit.pull === 1.1 && Math.abs(d.fit.distance / d.fit.base - 1.1) < 1e-6, `standalone close-up pulls back once (x${(d.fit.distance / d.fit.base).toFixed(3)})`);
   // duplicate label
-  await page.locator('[data-bs-addtoggle]').click();
-  check(await page.getByText('Add something to compare', { exact: true }).filter({ visible: true }).count() === 1, 'the open palette does not repeat the "Add something to compare" label');
+  check(await page.getByText('Compare sizes: add a cup, mug, glass or other item', { exact: true }).count() === 1, 'the comparison palette has one clear heading');
   // 1: a click inside an open bay of a custom shelf places the item; a click beside the furniture says what to do
   await page.locator('[data-bs-prop="mug"]').click();
   const depth = await page.locator('[data-bs="depth"]').inputValue();

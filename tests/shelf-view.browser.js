@@ -26,7 +26,8 @@ async page => {
   check((await page.locator('#bsReadout').innerText()).includes('240 × 200 × 30 cm'), 'live readout shows the furniture size');
   check(await painted() > 12, '3D canvas is painted, not blank');
   const box = await page.locator('#bs3d').boundingBox();
-  check(box.height >= 420 && box.height <= 720, '3D canvas is tall: ' + box.height);
+  // The always-visible picker takes space above the view; at 1440 x 900 the view, its buttons and Clear items must still fit on the first screen.
+  check(box.height >= 300 && box.height <= 720, '3D canvas is tall: ' + box.height);
   const vb = async () => (await page.locator('#bsDrawing svg').getAttribute('viewBox')).split(' ').map(Number);
   let v = await vb();
   check(v[2] < 400 && v[2] > 240, 'close-up 2D drawing is cropped around the furniture, not the 500 cm wall: ' + v[2]);

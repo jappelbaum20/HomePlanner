@@ -33,9 +33,10 @@ async page => {
   await page.evaluate(() => localStorage.setItem('houseplanner.anonymous.v3', JSON.stringify({version:2,name:'Synthetic fixture',rooms:[{id:'office',seedId:'office',name:'Office',width:600,length:400,height:250,items:[],openings:[{id:'fixture-door',type:'door',wall:'n',offset:340,width:90},{id:'fixture-window',type:'window',wall:'s',offset:20,width:140,sill:90,radiator:true}],photos:[],photoLabels:{}},{id:'living',seedId:'living',name:'Living room',width:600,length:400,height:250,items:[],openings:[],photos:[],photoLabels:{}}],catalog:[]}))); await page.reload(); await page.waitForTimeout(800);
   await page.locator('#bookshelfBtn').click(); await page.locator('#bs3d canvas').waitFor();
   await page.waitForFunction(() => window.__bsDebug && window.__bsDebug.frames > 0); await page.waitForTimeout(400);
-  check(await page.locator('.bs-prop').count() === 10, 'room mode shows the palette');
+  check(await page.locator('.bs-prop').count() === 15, 'room mode shows the expanded palette');
   check(await page.locator('[data-bs-action="place"]').count() === 1, 'room mode keeps Save & place');
   await page.locator('[data-bs-prop="mug"]').click();
+  await page.locator('#bs3d canvas').scrollIntoViewIfNeeded();
   const p = await page.evaluate(() => window.__bsDebug.screenOf(30, 5, 0)); await page.mouse.click(p.x, p.y); await page.waitForTimeout(250);
   check(await page.evaluate(() => window.__bsDebug.props) === 1, 'room mode: click places a mug');
   const real = await page.evaluate(() => window.__bsDebug.realism());
