@@ -125,7 +125,7 @@ window.BookshelfBuilder = (() => {
   const propsHtml = () => {
     const featured = ['espresso', 'cappuccino', 'standard_mug', 'large_mug', 'latte'];
     const kinds = Props ? featured.concat(Props.KINDS.filter(k => !featured.includes(k))) : [];
-    return `<div class="bs-props" id="bsProps" role="group" aria-label="Compare sizes: cups, mugs and more"><span class="bs-size-label">Compare sizes: add a cup, mug, glass or other item</span><div class="bs-palette" data-group>${kinds.map(k => { const spec = Props.PROPS[k]; return `<button type="button" class="bs-prop" data-bs-prop="${k}" aria-pressed="${selected === k}" aria-label="${spec.name}, ${propSize(spec)}">${propSvg(k)}<span>${spec.name}</span><small>${spec.h} cm tall</small><small>${propSize(spec)}</small><small class="bs-prop-fit" data-bs-fit></small></button>`; }).join('')}<button type="button" class="bs-prop" data-bs-person aria-pressed="${person}" aria-label="Person, 175 cm">${propSvg('person')}<span>Person</span><small>175 cm tall</small></button></div><small>Dimensions: width × height × depth. Scroll to see more.</small></div>`;
+    return `<div class="bs-props" id="bsProps" role="group" aria-label="Compare sizes: cups, mugs and more"><div class="bs-props-head"><span class="bs-size-label">Compare sizes: add a cup, mug, glass or other item</span><small class="bs-props-note">Width × height × depth. <span class="bs-swipe">Swipe sideways for more.</span></small></div><div class="bs-palette" data-group>${kinds.map(k => { const spec = Props.PROPS[k]; return `<button type="button" class="bs-prop" data-bs-prop="${k}" aria-pressed="${selected === k}" aria-label="${spec.name}, ${propSize(spec)}">${propSvg(k)}<span>${spec.name}</span><small>${propSize(spec)}</small><small class="bs-prop-fit" data-bs-fit></small></button>`; }).join('')}<button type="button" class="bs-prop" data-bs-person aria-pressed="${person}" aria-label="Person, 175 cm">${propSvg('person')}<span>Person</span><small>175 cm tall</small></button></div></div>`;
   };
   const propsFoot = () => `<div class="bs-props-foot"><p class="bs-prop-help" id="bsPropHelp" role="status"></p><button type="button" class="btn light small" data-bs-action="clearItems">Clear items</button></div>`;
   const sizeHtml = undo => `<div class="bs-size" id="bsSize" role="group" aria-label="${draft.tab === 'saetter' ? 'Compare models' : 'Size'}" data-group>${draft.tab === 'saetter' ? `<span class="bs-size-label">Compare models <em class="bs-badge">Preview only · not saved</em></span><span class="bs-chips">${B.SAETTER_VARIANTS.map(v => `<button type="button" class="btn light small" data-bs-variant="${v.id}" aria-pressed="false">${v.label}</button>`).join('')}</span>` : `<span class="bs-size-label">Size</span><span class="bs-chips">${[-10, -5, 5, 10].map(p => `<button type="button" class="btn light small" data-bs-size="${p}" aria-label="Make the bookshelf ${Math.abs(p)} percent ${p < 0 ? 'smaller' : 'bigger'}">${p < 0 ? '−' : '+'}${Math.abs(p)}%</button>`).join('')}</span>`}${undo ? `<button class="btn light small" data-bs-action="undo" ${history.length ? '' : 'disabled'}>Undo</button>` : ''}</div>`;
@@ -174,7 +174,7 @@ window.BookshelfBuilder = (() => {
       </aside>
       <div class="bs-preview">
         <p class="bs-wallname" id="bsPreviewTitle"></p>
-        ${propsHtml()}<div id="bs3d" role="img" aria-label="Orbitable 3D bookshelf against the selected wall"></div>${propsFoot()}
+        ${propsHtml()}${propsFoot()}<div id="bs3d" role="img" aria-label="Orbitable 3D bookshelf against the selected wall"></div>
         <div class="bs-viewbar"><div class="bs-seg" role="group" aria-label="3D view" data-group><button type="button" class="btn light small" data-bs-view="close" aria-pressed="true">Close-up</button><button type="button" class="btn light small" data-bs-view="wall" aria-pressed="false">Whole wall</button></div><p class="bs-readout" id="bsReadout" role="status"></p></div>
         <p class="bs-note-grey" id="bsPreviewNote"></p>
         <div class="bs-tools">${sizeHtml(true)}</div>
@@ -182,7 +182,7 @@ window.BookshelfBuilder = (() => {
         <p class="note bs-hint">Drag to turn the view · scroll to zoom · pick an item, then click a shelf to place it.</p>
       </div>
       </div>
-      <nav class="bs-bar" aria-label="Quick actions"><button type="button" class="btn light" data-bs-sheet="size" aria-controls="bsSize" aria-expanded="${sheet === 'size'}">${saet ? 'Compare models' : 'Size'}</button><button type="button" class="btn light" data-bs-compare aria-controls="bsProps">Compare sizes</button><button type="button" class="btn" data-bs-barsave>Save</button></nav>`;
+      <nav class="bs-bar" aria-label="Quick actions"><button type="button" class="btn light" data-bs-sheet="size" aria-controls="bsSize" aria-expanded="${sheet === 'size'}">${saet ? 'Compare models' : 'Size'}</button><button type="button" class="btn" data-bs-barsave>Save</button></nav>`;
   }
   function roomTemplate() {
     const s = draft.design, r = room();
@@ -202,7 +202,7 @@ window.BookshelfBuilder = (() => {
         ${levelsHtml()}
       </aside><div class="bs-preview"><div class="bs-preview-head"><h2 id="bsPreviewTitle"></h2><div class="btnrow"><button class="btn light small" data-bs-action="undo" ${history.length ? '' : 'disabled'}>Undo</button><button class="btn light small" data-bs-action="resetCamera">Reset 3D view</button></div></div>
         <div class="bs-viewbar"><div class="bs-seg" role="group" aria-label="3D view"><button type="button" class="btn light small" data-bs-view="close" aria-pressed="true">Close-up</button><button type="button" class="btn light small" data-bs-view="wall" aria-pressed="false">Whole wall</button></div><label class="bs-switch"><input type="checkbox" data-bs-sizes ${showSizes ? 'checked' : ''}> Show sizes</label></div>
-        <div id="bs3d" role="img" aria-label="Orbitable 3D bookshelf against the selected wall"></div>${propsHtml()}${propsFoot()}${sizeHtml(false)}
+        ${propsHtml()}${propsFoot()}<div id="bs3d" role="img" aria-label="Orbitable 3D bookshelf against the selected wall"></div>${sizeHtml(false)}
         <p class="bs-readout" id="bsReadout" role="status"></p><p class="bs-note-grey" id="bsPreviewNote"></p>
         <p class="note">Drag to orbit · scroll to zoom · click a board to edit its level, or pick an item above and click to place it</p>
         <div id="bsDrawing" class="bs-drawing"></div><div id="bsProblems" aria-live="polite"></div>
@@ -303,8 +303,9 @@ window.BookshelfBuilder = (() => {
   function paletteState() {
     if (!Props || !host) return;
     host.querySelectorAll('[data-bs-prop]').forEach(b => {
-      const spec = Props.PROPS[b.dataset.bsProp], fit = draft.tab === 'saetter' ? Props.fitLocation(displayDesign(), b.dataset.bsProp) : '';
-      const label = fit === 'compartment' ? 'Fits inside' : fit === 'top' ? 'Top only' : fit === 'none' ? 'Does not fit' : '';
+      const spec = Props.PROPS[b.dataset.bsProp], fd = draft.tab === 'saetter' ? Props.fitDetail(displayDesign(), b.dataset.bsProp) : null;
+      const out = fd && fd.overhang ? Props.stickOut(b.dataset.bsProp, fd.overhang) : '';
+      const label = !fd ? '' : fd.where === 'compartment' ? (out ? `Fits, ${out}` : 'Fits inside') : fd.where === 'top' ? (out ? `Top only, ${out}` : 'Top only') : 'Does not fit';
       b.setAttribute('aria-pressed', String(b.dataset.bsProp === selected));
       b.setAttribute('aria-label', `${spec.name}, ${propSize(spec)}, width by height by depth${label ? ', ' + label : ''}`);
       b.querySelector('[data-bs-fit]').textContent = label;
@@ -337,14 +338,15 @@ window.BookshelfBuilder = (() => {
     if (!selected || !Props) { row = Math.min(info.bay, draft.design.levels.length - 1); refresh(); return; } // a SÆTTER size preview can have more levels than the design
     if (items.length >= Props.MAX_ITEMS) { help(Props.MESSAGES.limit, true); return api.toast(Props.MESSAGES.limit); }
     const design = displayDesign(), topOnly = draft.tab === 'saetter' && Props.fitLocation(design, selected) === 'top';
+    const placing = selected;
     const redirected = topOnly && info.local.y < design.height - .01;
     const hit = topOnly ? { x: info.local.x, y: design.height, level: design.levels.length - 1 } : info.local;
     const r = Props.fitProp(design, selected, hit, items);
     if (!r.ok) { help(r.message, true); return api.toast(r.message); }
     const id = `i${++itemSeq}`;
     items = items.concat([{ ...r, id, color: Props.BOOK_COLORS[itemSeq % Props.BOOK_COLORS.length] }]);
-    update3D(false); const message = redirected ? `${itemName(selected)} placed on top; it does not fit inside.` : `${itemName(selected)} placed (${Props.PROPS[selected].h} cm tall). Click it to remove it.`;
-    help(message); if (redirected) api.toast(message);
+    update3D(false); const message = redirected ? `${itemName(selected)} placed on top; it does not fit inside${r.overhang ? ` and ${Props.stickOut(placing, r.overhang)}` : ''}.` : `${itemName(selected)} placed (${Props.PROPS[selected].h} cm tall${r.overhang ? `; fits, ${Props.stickOut(placing, r.overhang)}` : ''}). Click it to remove it.`;
+    help(message, !!r.overhang); if (redirected) api.toast(message);
   }
   // render() rebuilds the page: put keyboard focus back on the control that was used.
   function refocus(selector) { const b = host.querySelector(selector); if (b && !b.disabled) b.focus({ preventScroll: true }); else host.querySelector('h1')?.focus({ preventScroll: true }); }
@@ -414,7 +416,6 @@ window.BookshelfBuilder = (() => {
     host.addEventListener('click', async e => {
       const t = e.target.closest('button, [data-bs-board]'); if (!t) return;
       if (t.dataset.bsTab) return switchTab(t.dataset.bsTab);
-      if (t.dataset.bsCompare !== undefined) { host.querySelector('#bsProps').scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
       if (t.dataset.bsSheet) {
         sheet = sheet === t.dataset.bsSheet ? null : t.dataset.bsSheet; host.querySelector('.bs-simple').dataset.sheet = sheet || '';
         host.querySelectorAll('[data-bs-sheet]').forEach(b => b.setAttribute('aria-expanded', String(b.dataset.bsSheet === sheet)));

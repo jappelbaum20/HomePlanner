@@ -18,8 +18,13 @@ async page => {
   // ---------- desktop ----------
   await open({ width: 1440, height: 900 });
   let c = await controls();
-  check(c.grouped <= 13 && c.top <= 2, `desktop first screen shows ${c.grouped} choices (${c.raw} elements), including the visible comparison picker and Clear items, plus ${c.top} top bar items: at most 13`);
+  // 12 choices before; the always-visible picker is one group and Clear items is one more button (the old toggle was one choice).
+  check(c.grouped <= 13 && c.top <= 2, `desktop first screen shows ${c.grouped} choices (${c.raw} elements): the picker is one group, plus Clear items; ${c.top} top bar items: at most 13`);
   check(c.outsidePalette <= 20, `desktop has ${c.outsidePalette} controls outside the comparison picker`);
+  check(await page.locator('.bs-prop').count() === 15, 'the picker offers 14 items plus a person');
+  check(await page.evaluate(() => { const p = document.querySelector('.bs-palette'); return p.scrollWidth <= p.clientWidth + 1; }), 'desktop: the picker wraps into rows, no sideways scrolling needed');
+  { const cv = await page.locator('#bs3d').boundingBox(), vb = await page.locator('[data-bs-view="close"]').boundingBox(), cl = await page.locator('[data-bs-action="clearItems"]').boundingBox(), sz = await page.locator('[data-bs-size="10"]').boundingBox();
+    check(cv.y + cv.height <= 900 && vb.y + vb.height <= 900 && cl.y + cl.height <= 900 && sz.y + sz.height <= 900, `desktop 1440 x 900: canvas (bottom ${Math.round(cv.y + cv.height)}), view buttons, size buttons and Clear items are on the first screen`); }
   const numbers = await page.locator('input[type="number"]:visible').count();
   check(numbers === 5, `only ${numbers} number fields are visible (wall width/height, width/height/depth)`);
   const text = await page.locator('#bookshelfBuilder').innerText();
@@ -74,16 +79,19 @@ async page => {
   check(small.length === 0, `every visible control on a phone is at least 44 px high (${c.raw} controls)` + (small.length ? ': ' + JSON.stringify(small.slice(0, 5)) : ''));
   check(await page.evaluate(() => document.documentElement.scrollWidth) <= 390, 'no horizontal scroll at 390 px');
   check(await page.locator('#bsProps').isVisible(), 'phone: comparison picker is available without opening a sheet');
-  const cb = await page.locator('#bs3d').boundingBox(); check(cb.y >= 0 && cb.y < 500, `3D view follows the comparison picker (y ${Math.round(cb.y)})`);
-  const bar = await page.locator('.bs-bar').boundingBox(); check(bar && Math.abs(bar.y + bar.height - 844) < 1 && bar.height >= 56, 'sticky bottom bar is at the bottom of the screen');
-  const names = await page.locator('.bs-bar button').allInnerTexts(); check(names.join('|') === 'Size|Compare sizes|Save', 'bottom bar offers Size, Compare sizes and Save');
+  const cb = await page.locator('#bs3d').boundingBox(), bar = await page.locator('.bs-bar').boundingBox();
+  check(cb.y >= 0 && cb.y + cb.height <= bar.y, `phone: the whole 3D view is on screen above the bottom bar at the top of the page (y ${Math.round(cb.y)}..${Math.round(cb.y + cb.height)}, bar at ${Math.round(bar.y)})`);
+  check(await page.evaluate(() => { const p = document.querySelector('.bs-palette'); return p.scrollWidth > p.clientWidth && document.documentElement.scrollWidth <= innerWidth; }), 'phone: only the picker scrolls sideways, the page does not');
+  const hb = await page.locator('#bsPropHelp').boundingBox(); check(hb.y + hb.height <= bar.y, 'phone: the status line is above the bottom bar');
+ check(bar && Math.abs(bar.y + bar.height - 844) < 1 && bar.height >= 56, 'sticky bottom bar is at the bottom of the screen');
+  const names = await page.locator('.bs-bar button').allInnerTexts(); check(names.join('|') === 'Size|Save', 'bottom bar offers Size and Save (the picker is always visible)');
   await page.evaluate(() => { document.querySelector('#bookshelfBuilder').scrollTop = 99999; window.scrollTo(0, 99999); }); await page.waitForTimeout(200);
   const bar2 = await page.locator('.bs-bar').boundingBox(); check(Math.abs(bar2.y + bar2.height - 844) < 1, 'the bar stays put while the page scrolls');
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.locator('[data-bs-sheet="size"]').click(); await page.locator('[data-bs-size="10"]').click();
   check(await page.locator('[data-bs="width"]').inputValue() === '264', 'phone: Size opens the size buttons');
   await page.locator('[data-bs-sheet="size"]').click(); check(await page.locator('[data-bs-size="10"]').isHidden(), 'phone: Size sheet closes again');
-  await page.locator('[data-bs-compare]').click(); await page.locator('[data-bs-prop="mug"]').click(); await page.locator('#bs3d canvas').scrollIntoViewIfNeeded();
+  await page.locator('[data-bs-prop="mug"]').click(); await page.locator('#bs3d canvas').scrollIntoViewIfNeeded();
   const q = await page.evaluate(() => window.__bsDebug.screenOf(60, 5, 0)); await page.mouse.click(q.x, q.y);
   check(await page.evaluate(() => window.__bsDebug.props) === 1, 'phone: Add item places a mug');
   await page.locator('.bs-bar [data-bs-barsave]').click();

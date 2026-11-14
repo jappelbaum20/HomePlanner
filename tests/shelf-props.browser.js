@@ -20,12 +20,12 @@ async page => {
   await open('saetter');
   const names = await page.locator('.bs-prop span').allInnerTexts();
   check(['Mug', 'Coffee cup', 'Wine glass', 'Water glass', 'Book', 'Small plant', 'Vase', 'Small jar', 'Tea light', 'Person'].every(n => names.includes(n)), 'palette shows the items with plain names plus a person');
-  for (const [kind, ml, fit] of [['espresso', 70, 'Fits inside'], ['cappuccino', 180, 'Top only'], ['standard_mug', 330, 'Fits inside'], ['large_mug', 475, 'Top only'], ['latte', 300, 'Top only']]) {
+  for (const [kind, ml, fit] of [['espresso', 70, 'Fits inside'], ['cappuccino', 180, 'Does not fit'], ['standard_mug', 330, 'Fits, handle sticks out 2 cm'], ['large_mug', 475, 'Top only'], ['latte', 300, 'Top only']]) {
     const text = await page.locator(`[data-bs-prop="${kind}"]`).innerText();
     check(text.includes(`${ml} ml`) && text.includes('×') && text.includes(fit), `${kind} shows dimensions, capacity and fit`);
   }
-  check((await page.locator('[data-bs-prop="mug"]').innerText()).includes('9.5 cm tall') && (await page.locator('[data-bs-prop="mug"]').innerText()).includes('Fits inside'), 'the mug button shows its size and compartment fit');
-  check((await page.locator('[data-bs-prop="wine"]').innerText()).includes('21 cm tall') && (await page.locator('[data-bs-prop="wine"]').innerText()).includes('Top only'), 'the wine button shows its size and top-only fit');
+  check((await page.locator('[data-bs-prop="mug"]').innerText()).includes('11 × 9.5 × 8 cm') && (await page.locator('[data-bs-prop="mug"]').innerText()).includes('Fits, handle sticks out 1 cm'), 'the mug button shows its size and that it sticks out 1 cm');
+  check((await page.locator('[data-bs-prop="wine"]').innerText()).includes('8 × 21 × 8 cm') && (await page.locator('[data-bs-prop="wine"]').innerText()).includes('Top only'), 'the wine button shows its size and top-only fit');
   check((await page.locator('[data-bs-prop="jar"]').innerText()).includes('Fits inside') && (await page.locator('[data-bs-prop="tealight"]').innerText()).includes('Fits inside'), 'small everyday items fit inside');
   check(await page.locator('[data-bs-label="compartment"]').innerText() === '≈ 10 × 12 cm inside', 'the 3D view labels a compartment');
   const box = await page.locator('[data-bs-prop="mug"]').boundingBox();
@@ -40,7 +40,7 @@ async page => {
   check(d.props === 1 && d.items.length === 1, 'clicking a compartment places the mug');
   check(Math.abs(d.items[0].y - 1.1) < 0.01, 'the mug stands on the shelf top (y = board thickness)');
   check(d.items[0].x - d.items[0].w / 2 >= 1.1 - 0.01 && d.items[0].x + d.items[0].w / 2 <= 11.1 + 0.01, 'the mug stays between the dividers');
-  check(/Mug placed/.test(await help()), 'a status line confirms the placement');
+  check(/Mug placed/.test(await help()) && /handle sticks out 1 cm/.test(await help()), 'a status line confirms the placement and the 1 cm overhang');
   const b = d.bounds[0];
   check(Math.abs(b.h - 9.5) < 0.3 && Math.max(b.w, b.d) >= 10 && Math.max(b.w, b.d) <= 11.3, `the mug model is real size (got ${b.w} x ${b.h} x ${b.d} cm)`);
   check(Math.abs(b.baseY - 1.1) < 0.05, 'the mug model sits on the surface');
@@ -64,6 +64,12 @@ async page => {
   check(d.items.some(i => i.kind === 'cup' && i.level === 1), 'a coffee cup goes into a middle-row compartment');
   await pick('book'); await click(17, 5);
   check(/placed on top/.test(await help()) && (await dbg()).items.some(i => i.kind === 'book' && i.y === 40.6), 'a book clicked inside is placed on top');
+
+  await pick('standard_mug'); await click(17, 5);
+  check(/Standard mug placed/.test(await help()) && /fits, handle sticks out 2 cm/.test(await help()), 'the standard mug message says it sticks out 2 cm');
+  await pick('cappuccino'); await click(17, 18);
+  check(/Too (wide|deep)/.test(await help()) && (await dbg()).items.every(i => i.kind !== 'cappuccino'), 'the 14 cm saucer is refused (too wide or deep for a compartment)');
+  await page.locator('[data-bs-action="clearItems"]').click();
 
   // ---------- person, clear ----------
   await page.locator('[data-bs-person]').click();
@@ -134,6 +140,17 @@ async page => {
 
   // ---------- phone ----------
   await open('saetter', { width: 390, height: 844 });
+  { // a placement message must be visible at once, without scrolling, above the bottom bar
+    await pick('cappuccino'); await page.evaluate(() => window.scrollTo(0, 0));
+    const at0 = await at(6, 5); await page.mouse.click(at0.x, at0.y); await page.waitForTimeout(150);
+    const hb = await page.locator('#bsPropHelp').boundingBox(), bar = await page.locator('.bs-bar').boundingBox(), cl = await page.locator('[data-bs-action="clearItems"]').boundingBox();
+    check(/Too (wide|deep)/.test(await help()) && hb && hb.y >= 0 && hb.y + hb.height <= bar.y, `phone: the "does not fit" message is visible without scrolling (y ${Math.round(hb ? hb.y : -1)}..${Math.round(hb ? hb.y + hb.height : -1)}, bar at ${Math.round(bar.y)})`);
+    check(cl && cl.y >= 0 && cl.y + cl.height <= bar.y, 'phone: Clear items is visible above the bottom bar');
+    await pick('standard_mug'); const at1 = await at(6, 5); await page.mouse.click(at1.x, at1.y); await page.waitForTimeout(150);
+    const hb2 = await page.locator('#bsPropHelp').boundingBox();
+    check(/handle sticks out 2 cm/.test(await help()) && hb2.y + hb2.height <= bar.y, 'phone: the placement message with the overhang is visible');
+    await page.locator('[data-bs-action="clearItems"]').click();
+  }
   d = await dbg();
   check(d.q.pixelRatio <= 1.25 && d.q.shadowMapSize <= 1024, `phone budget: pixel ratio ${d.q.pixelRatio}, shadow map ${d.q.shadowMapSize}`);
   const over = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
