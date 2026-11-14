@@ -8,7 +8,7 @@ const FILES = Object.freeze(['001_auth.sql','002_business.sql','003_photos.sql',
 // previous image keeps working against them. They are recorded in hp_migration.applied_additive because
 // the previous image requires hp_migration.applied to equal exactly FILES. Hashed over LF-normalised text,
 // so a CRLF or LF checkout produces the same checksum.
-const ADDITIVE = Object.freeze(['007_verified_signin.sql']);
+const ADDITIVE = Object.freeze(['007_verified_signin.sql','008_add_person.sql']);
 async function expectedMigrations() {
   return Promise.all(FILES.map(async name => {
     const sql = await readFile(path.join(__dirname,'migrations',name),'utf8');

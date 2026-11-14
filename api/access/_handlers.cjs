@@ -31,6 +31,20 @@ function create(kind,deps) { return wrap(async req=>{
   if(kind==='list') { method(req,['GET']);query(req);return {body:await store.review(ctx,g,null)}; }
   if(kind==='entitlements') { method(req,['GET']);query(req);return {body:await store.entitlements(ctx,g)}; }
   if(kind==='review') { method(req,['GET']);query(req,['id']);return {body:await store.review(ctx,g,id(req.query.id))}; }
+  if(kind==='people') {
+    method(req,['GET','POST']);query(req);
+    if(req.method==='GET') return {body:await store.addedList(ctx,g)};
+    await access.csrf(req,ctx,deps);
+    const b=jsonBody(req,4096);
+    if(Object.keys(b).some(k=>k!=='email' && k!=='override') || (b.override!==undefined && typeof b.override!=='boolean')) fail(422,'invalid_data','Invalid request.');
+    return {body:await store.addPerson(ctx,g,access.email(b.email),b.override===true)};
+  }
+  if(kind==='people_remove') {
+    method(req,['POST']);query(req);await access.csrf(req,ctx,deps);
+    const b=jsonBody(req,4096);
+    if(Object.keys(b).some(k=>k!=='email')) fail(422,'invalid_data','Invalid request.');
+    await store.removeAdded(ctx,g,access.email(b.email));return {body:{status:'removed'}};
+  }
   if(kind==='approve' || kind==='deny') {
     method(req,['POST']);query(req,['id']);await access.csrf(req,ctx,deps);empty(req);
     return {body:await store.decide(ctx,g,id(req.query.id),revision(req.headers['if-match']),kind==='approve'?'approved':'denied')};

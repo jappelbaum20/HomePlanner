@@ -10,6 +10,7 @@ async page => {
       { id:'22222222-2222-4222-8222-222222222222', name:'First applicant', email:'first@example.com', note:'Please let me in', status:'pending', revision:1, createdAt:'2025-01-02T09:00:00Z' },
       { id:'33333333-3333-4333-8333-333333333333', name:'<script>Not markup</script>', email:'second@example.com', note:'Another note', status:'pending', revision:1, createdAt:'2025-01-03T09:00:00Z' }
     ];
+    const added = [];
     let listener;
     window.HomePlannerCloud = {
       subscribe(fn) { listener=fn; }, init() { setTimeout(() => listener(stamp), 0); return true; }, snapshot() { return stamp; }, isCurrent() { return true; },
@@ -21,6 +22,12 @@ async page => {
         if (path==='/api/me') return { userId:owner, isAdmin:true };
         if (path==='/api/admin/access/requests') return structuredClone(requests);
         if (path==='/api/admin/access/entitlements') return [{ userId:'cccccccc-cccc-4ccc-8ccc-cccccccccccc', status:'approved', revision:1 }];
+        if (path==='/api/admin/access/people' && !options.method) return structuredClone(added);
+        if (path==='/api/admin/access/people' && options.method==='POST') {
+          if (options.body.email==='denied@example.com' && !options.body.override) return { result:'blocked', state:'denied' };
+          added.push({ email:options.body.email, addedAt:'2025-01-04T09:00:00Z' }); return { result:'added' };
+        }
+        if (path==='/api/admin/access/people/remove') { const i=added.findIndex(x=>x.email===options.body.email); if (i>=0) added.splice(i,1); return { status:'removed' }; }
         const decision=/^\/api\/admin\/access\/requests\/([^/]+)\/(approve|deny)$/.exec(path);
         if (decision) { const item=requests.find(r=>r.id===decision[1]); if (options.headers['If-Match']!==`"${item.revision}"`) throw Error('revision missing'); item.status=decision[2]==='approve'?'approved':'denied'; item.revision++; return item; }
         if (path==='/api/admin/model-config') return { revision:1, config:{enabled:false,adapterId:'fixture',modelId:'fixture',connectionId:'fixture',limits:{requestsPerMinute:1,requestsPerDay:1,maxOutputTokens:100}},globalBudgetMicros:1000000,adapters:[{id:'fixture',label:'Fixture'}],models:[{id:'fixture',label:'Fixture'}],connections:[{id:'fixture',label:'Fixture'}] };
@@ -47,6 +54,18 @@ async page => {
     await pending.first().getByRole('button',{name:'Approve'}).click(); await page.getByText('1 request waiting').waitFor();
     await page.locator('.access-request.pending').getByRole('button',{name:'Deny'}).click(); await page.getByText('0 requests waiting').waitFor();
     check(await page.getByRole('button',{name:'Revoke'}).count()===1, `revoke remains available at ${width}px`);
+    check(await page.getByRole('heading',{name:'Add a person'}).isVisible(), `Add a person form shows after verification at ${width}px`);
+    const email = page.getByLabel('Email address');
+    await email.fill('denied@example.com'); await page.getByRole('button',{name:'Add person'}).click();
+    await page.getByText('was denied before',{exact:false}).waitFor();
+    check(await page.locator('#addedList').getByText('denied@example.com').count()===0, `a denied address is not added by default at ${width}px`);
+    await page.getByRole('button',{name:'Allow anyway'}).click();
+    await page.locator('#addedList').getByText('denied@example.com',{exact:false}).waitFor();
+    check(await page.locator('#addedList').getByText('not signed in yet',{exact:false}).count()===1, `override adds the person as not signed in yet at ${width}px`);
+    await page.locator('#addedList').getByRole('button',{name:'Remove'}).click();
+    await page.getByText('Nobody is waiting to sign in.').waitFor();
+    await email.fill('new.person@example.com'); await page.getByRole('button',{name:'Add person'}).click();
+    await page.locator('#addedList').getByText('new.person@example.com').waitFor();
     check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), `dashboard fits the viewport at ${width}px`);
   }
   await page.goto('http://127.0.0.1:8765/landing.html');

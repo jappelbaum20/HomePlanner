@@ -9,13 +9,14 @@ class Element {
 }
 const flatten = node => [node, ...node.children.flatMap(flatten)];
 test('dashboard waits for verification, lists pending first, and decides directly with the grant and revision', async () => {
-  const ids=['adminStatus','modelForm','budgetForm','adminSignIn','adminSignOut','verification','prepareVerification','googleButton','accessAdmin','requestList','requestDetail','entitlementList','waitingCount','reloadAccess'];
+  const ids=['adminStatus','modelForm','budgetForm','adminSignIn','adminSignOut','verification','prepareVerification','googleButton','accessAdmin','requestList','requestDetail','entitlementList','waitingCount','reloadAccess','addPersonForm','addPersonEmail','addPersonStatus','addPersonActions','addedList'];
   const elements=Object.fromEntries(ids.map(id=>['#'+id,new Element()]));
   for (const name of ['adapterId','modelId','connectionId','enabled','requestsPerMinute','requestsPerDay','maxOutputTokens']) elements['#modelForm'].elements[name]=new Element('input');
   elements['#budgetForm'].elements.budget=new Element('input');
   const account={generation:1,epoch:1,userId:'owner',sessionId:'session',me:{userId:'owner'}};
   const rows=[{id:'old',name:'Decided',email:'old@example.com',note:'',status:'denied',revision:2,createdAt:'2025-01-01T10:00:00Z'},
     {id:'new',name:'Applicant',email:'applicant@example.com',note:'Please approve',status:'pending',revision:1,createdAt:'2025-01-02T10:00:00Z'}];
+  const added=[], people=[];
   const calls=[]; let listener, googleCallback;
   const cloud={subscribe(fn){listener=fn;},init(){listener(account);return true;},snapshot(){return account;},isCurrent(){return true;},async verificationStamp(){return account;},
     async signIn(){},async signOut(){},async request(url,opts={}){
@@ -27,6 +28,15 @@ test('dashboard waits for verification, lists pending first, and decides directl
       if(url==='/api/admin/access/requests/old') return {...rows[0],note:'n',mail:[{id:'m1',kind:'request',status:'failed',revision:3,attempts:1,errorCategory:'permanent'},{id:'m2',kind:'denied',status:'failed',revision:2,attempts:1,errorCategory:'transient'}]};
       if(url==='/api/admin/access/requests') return structuredClone(rows);
       if(url==='/api/admin/access/entitlements') return [];
+      if(url==='/api/admin/access/people' && !opts.method) return structuredClone(added);
+      if(url==='/api/admin/access/people' && opts.method==='POST') {
+        people.push(opts.body);
+        if(opts.body.email==='denied@example.com' && !opts.body.override) return {result:'blocked',state:'denied'};
+        if(opts.body.email==='waiting@example.com') return {result:'pending_request',requestId:'new'};
+        if(opts.body.email==='has@example.com') return {result:'has_access'};
+        added.push({email:opts.body.email,addedAt:'2025-01-03T10:00:00Z'}); return {result:'added'};
+      }
+      if(url==='/api/admin/access/people/remove') { added.splice(0,added.length,...added.filter(x=>x.email!==opts.body.email)); return {status:'removed'}; }
       if(url==='/api/admin/access/requests/new/approve') { assert.equal(opts.headers['If-Match'],'"1"'); rows[1].status='approved'; rows[1].revision++; return {}; }
       if(url==='/api/admin/model-config') return {revision:1,config:{enabled:false,adapterId:'fixture',modelId:'fixture',connectionId:'fixture',limits:{requestsPerMinute:1,requestsPerDay:1,maxOutputTokens:1}},globalBudgetMicros:1000000,adapters:[{id:'fixture',label:'Fixture'}],models:[{id:'fixture',label:'Fixture'}],connections:[{id:'fixture',label:'Fixture'}]};
       throw Error('Unexpected request: '+url);
@@ -49,6 +59,18 @@ test('dashboard waits for verification, lists pending first, and decides directl
   assert.ok(approve); await approve.events.click();
   assert.equal(elements['#waitingCount'].textContent,'0 requests waiting');
   assert.equal(rows[1].status,'approved');
+  const submit=async address=>{ elements['#addPersonEmail'].value=address; await elements['#addPersonForm'].events.submit({preventDefault(){}}); await new Promise(setImmediate); await new Promise(setImmediate); };
+  await submit('has@example.com'); assert.match(elements['#addPersonStatus'].textContent,/already has access/);
+  await submit('waiting@example.com'); assert.match(elements['#addPersonStatus'].textContent,/request from waiting@example.com is waiting/);
+  await submit('denied@example.com'); assert.match(elements['#addPersonStatus'].textContent,/was denied before/);
+  assert.equal(added.length,0);
+  const anyway=elements['#addPersonActions'].children.find(n=>n.textContent==='Allow anyway'); assert.ok(anyway);
+  await anyway.events.click(); await new Promise(setImmediate);
+  assert.equal(JSON.stringify(people.at(-1)),JSON.stringify({email:'denied@example.com',override:true}));
+  assert.equal(added.length,1);
+  assert.ok(flatten(elements['#addedList']).some(n=>n.textContent.includes('denied@example.com') && n.textContent.includes('not signed in yet')));
+  const removeBtn=flatten(elements['#addedList']).find(n=>n.textContent==='Remove'); await removeBtn.events.click(); await new Promise(setImmediate);
+  assert.equal(added.length,0);
   const history=elements['#requestList'].children.find(n=>n.tagName==='details');
   const details=flatten(history).find(n=>n.tagName==='button' && n.textContent==='Details and note'); await details.events.click();
   const texts=flatten(elements['#requestDetail']).map(n=>n.textContent);

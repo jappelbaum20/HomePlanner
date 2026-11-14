@@ -31,11 +31,21 @@ Container IPs can change after Caddy or network recreation. Establish a reserved
 
 ## Shared Google sign-in (migration 007)
 
-Every new Google account needs owner approval. A sign-in by an account without an approved entitlement creates no user, account or session; it only sets a 10-minute signed `__Host-hp-request` cookie that lets that browser view its status and submit one request on `/auth/request-access`. Approve or deny in `/admin.html`. Limits: one open request per Google subject, 60 s between submissions, 24 h after a denial. Mail stays off; the login card links to a mailto address for the owner.
+Every new Google account needs owner approval. A sign-in by an account without an approved entitlement creates no user, account or session; it only sets a 10-minute signed `__Host-hp-request` cookie that lets that browser view its status and submit one request on `/auth/request-access`. Approve or deny in `/admin.html`. Limits: one open request per Google subject, 60 s between submissions, 24 h after a denial. Mail stays off.
 
 Migration 007 is additive (nullable columns and new functions) and is recorded in `hp_migration.applied_additive`, hashed over LF-normalised text. The previous image reads only `hp_migration.applied`, so rollback is an image swap. `tests/rollback-compat.test.mjs` proves it.
 
 Proxy trust can be set as `HOMEPLANNER_TRUSTED_PROXY_CIDR` (default `172.20.0.0/16`, private, /16 to /30) in place of one exact address. The gateway (first host), network and broadcast addresses and every address of the web container itself are always excluded; add more with `HOMEPLANNER_TRUSTED_PROXY_EXCLUDE`. `deployment/check-web-ports.sh <web container>` must pass before opening ingress: the host must not be able to reach the web container directly, because the host is inside the trusted range. Caddy must still send one validated `X-Forwarded-For` value.
+
+## Dashboard requests and Add a person (migration 008)
+
+New access requests no longer email the owner. The mail worker ends every `request` outbox job as `failed/permanent` without calling the transport (also when mail is off), so no such row queues forever; `approved` and `denied` mails to the requester are unchanged. Requests wait on the Google-verified `/admin.html`, waiting ones first with a count.
+
+"Add a person" on that page pre-approves one address: the person gets normal user access at their first Google sign-in with exactly that address. It cannot create an owner. Existing access: no change. A waiting request: the page points to it and nothing is approved silently. Previously denied or revoked: refused until the owner confirms "Allow anyway", which is audited as `added_override`. Entries can be removed until the person has signed in. Every add, override and removal writes `hp_private.access_audit` with the acting admin and the address.
+
+Migration 008 (`db/migrations/008_add_person.sql`, additive ledger) adds table `hp_private.access_added`, nullable column `access_audit.target_email`, a read grant on the two columns `id,email` of `hp_auth."user"` to `hp_app_owner`, functions `hp_access_add`, `hp_access_added_list`, `hp_access_added_remove` (granted to `hp_app_runtime`), and replaces `hp_private.access_subject_state` and `hp_app.hp_access_signin_bind` (identical for every other case). Apply it like 006/007 with the maintenance service: fence traffic and drain web, take the operations lock, run `"${C[@]}" --profile operations run --no-deps -T maintenance migrate`, then `verify`, then recreate web with the new image (release sequence above). The old web image reports not ready and refuses to start once the additive ledger lists 008, so do not leave the old web container serving while it runs. Locks are bounded (2 s lock, 5 s statement timeout); a timeout rolls the migration back.
+
+Undo by hand (fenced, with a recovery point): in one transaction under the migration identity restore the 007 definitions of `hp_private.access_subject_state` and `hp_app.hp_access_signin_bind` from `007_verified_signin.sql` with `CREATE OR REPLACE`, `DROP` the three `hp_access_add*` functions, `REVOKE SELECT (id,email) ON hp_auth."user" FROM hp_app_owner`, drop `hp_private.access_added` (only after checking no unclaimed row is needed; entitlements created through it stay) and column `access_audit.target_email` (loses the address in 008 audit rows; export them first), and delete the 008 row from `hp_migration.applied_additive`. Then start the previous image. Nothing in the base ledger changes.
 
 ## Release sequence
 

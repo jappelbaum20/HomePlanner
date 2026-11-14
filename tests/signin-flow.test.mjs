@@ -66,6 +66,7 @@ before(async () => {
   await q('INSERT INTO hp_private.admin_grants VALUES($1,$2,$3,$4,now()+interval \'10 minutes\')', ['a'.repeat(64), owner, os, 'owner-sub']);
   await db.exec('BEGIN;\n' + await mig('006_access_requests.sql') + '\nCOMMIT;');
   await db.exec('BEGIN;\n' + await mig('007_verified_signin.sql') + '\nCOMMIT;');
+  await db.exec('BEGIN;\n' + await mig('008_add_person.sql') + '\nCOMMIT;');
   auth = await createAuth({ origin, authPool: rolePool(db, 'hp_auth_runtime', { searchPath: 'hp_auth,pg_catalog' }), secret, googleClientId: clientId, googleClientSecret: 'fixture-secret' });
 });
 after(async () => { globalThis.fetch = realFetch; await db?.close(); });

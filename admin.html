@@ -13,7 +13,14 @@
 <p id="waitingCount" role="status" aria-live="polite"></p>
 <p>Requests wait here for your decision. Decision notification status shows transport acceptance, not inbox delivery.</p>
 <button class="btn light" type="button" id="reloadAccess">Refresh requests and access</button>
-<div id="requestList"></div><div id="requestDetail"></div><h3>Approved and revoked accounts</h3><div id="entitlementList"></div></section>
+<div id="requestList"></div><div id="requestDetail"></div>
+<h3 id="addPersonHeading">Add a person</h3>
+<form id="addPersonForm" aria-labelledby="addPersonHeading"><p class="note">Gives normal access to the person who signs in with Google using exactly this address. No request is needed.</p>
+<label class="field"><span>Email address</span><input type="email" name="email" id="addPersonEmail" maxlength="254" autocomplete="off" required></label>
+<button class="btn" type="submit" id="addPersonSubmit">Add person</button></form>
+<p id="addPersonStatus" role="status" aria-live="polite"></p><div id="addPersonActions" class="btnrow"></div>
+<h3>Added, not signed in yet</h3><div id="addedList"></div>
+<h3>Approved and revoked accounts</h3><div id="entitlementList"></div></section>
 <form id="modelForm" hidden>
   <p class="note">Choose a model and a connection already registered on the server. Keys are configured separately and are never entered here.</p>
   <label><input type="checkbox" name="enabled"> Enable AI edits</label>
