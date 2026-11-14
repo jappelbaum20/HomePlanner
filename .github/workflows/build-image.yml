@@ -12,8 +12,8 @@ name: Build image
 permissions:
   contents: read
 concurrency:
-  group: build-image-${{ github.ref }}
-  cancel-in-progress: true
+  group: build-image-${{ inputs.sha }}
+  cancel-in-progress: false
 jobs:
   build:
     name: Build runtime image
@@ -41,7 +41,7 @@ jobs:
         # The build context holds only the reviewed inputs of scripts/vps-manifest.mjs plus the generated ignore file.
         node scripts/prepare-hosting.mjs --vps "$context" "$out/context-inputs.json"
         (cd "$context" && node scripts/audit-vps-context.mjs)
-        docker buildx build --platform linux/amd64 --file "$context/deployment/Dockerfile" \
+        docker buildx build --platform linux/amd64 --provenance=false --file "$context/deployment/Dockerfile" \
           --tag "$tag" --load --progress plain "$context"
         docker image save "$tag" | gzip -n -c > "$out/$archive"
         sum="$(sha256sum "$out/$archive" | cut -d' ' -f1)"
@@ -68,7 +68,6 @@ jobs:
         printf '%s  %s\n' "$sum" "$archive" > "$out/image.sha256"
         { echo '### Runtime image'; echo '```'; cat "$out/image-manifest.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
     - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-      if: ${{ !cancelled() }}
       with:
         name: homeplanner-web-${{ inputs.sha }}
         path: ${{ runner.temp }}/out
