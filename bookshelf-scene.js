@@ -3,7 +3,7 @@
 (function (root) {
   'use strict';
   const round1 = n => Math.round(n * 10) / 10, rad = d => d * Math.PI / 180;
-  const FOV = 32, MARGIN = 1.35, MAX_AZIMUTH = 60;
+  const FOV = 32, MARGIN = 1.35, MAX_AZIMUTH = 60, MAX_POLAR = Math.PI * .85, FLOOR_EPS = 3; // cm: the camera stays at least this high above the floor
   const LIMITS = { width: [20, 500], height: [20, 500], depth: [10, 100] };
   const fmtCm = n => `${round1(n).toFixed(1).replace(/\.0$/, '')} cm`;
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -95,7 +95,7 @@
     const sun = new THREE.DirectionalLight(0xfff1dc, 1.05); sun.position.set(-60, 320, 420); scene.add(sun, sun.target);
     if (quality.shadows) { sun.castShadow = true; sun.shadow.mapSize.set(quality.shadowMapSize, quality.shadowMapSize); sun.shadow.bias = -.0005; sun.shadow.normalBias = .35; sun.shadow.radius = 4; }
     const camera = new THREE.PerspectiveCamera(FOV, 1, 1, 20000);
-    const controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.dampingFactor = .1; controls.maxPolarAngle = Math.PI * .85;
+    const controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.dampingFactor = .1; controls.maxPolarAngle = MAX_POLAR;
     controls.minAzimuthAngle = -rad(MAX_AZIMUTH); controls.maxAzimuthAngle = rad(MAX_AZIMUTH);
     const rig = { renderer, scene, camera, controls, group: null, boards: [], furniture: [], propMeshes: [], frame: null, labels: [], state: null, userMoved: false };
     const shell = { wall: [], skirt: [] }, templates = new Map(), shapes = new Map(), labelTextures = new Map(), instances = new Map();
@@ -116,7 +116,23 @@
       if (moved || performance.now() < keepUntil) request();
     }
     function request(ms = 0) { keepUntil = Math.max(keepUntil, performance.now() + ms); if (!raf) raf = requestAnimationFrame(frame); }
-    controls.addEventListener('change', () => { rig.userMoved = true; request(); });
+    function keepTargetAboveFloor() {
+      // Panning can move the target below the room floor even when orbit is limited.
+      // Translate the camera with it to keep the same view and preserve the orbit distance.
+      if (controls.target.y < 0) { camera.position.y -= controls.target.y; controls.target.y = 0; }
+    }
+    function keepAboveFloor() {
+      keepTargetAboveFloor();
+      if (camera.position.y < 0) { camera.position.y = 0; camera.lookAt(controls.target); } // backstop
+    }
+    // Looking up is allowed, but never from below the floor: the polar limit follows the current distance and target height.
+    function limitPolar() {
+      const d = camera.position.distanceTo(controls.target);
+      controls.maxPolarAngle = d > 1e-6 ? Math.min(MAX_POLAR, Math.acos(clamp(-(controls.target.y - FLOOR_EPS) / d, -1, 1))) : MAX_POLAR;
+    }
+    const updateControls = controls.update.bind(controls);
+    controls.update = (...args) => { keepTargetAboveFloor(); limitPolar(); const moved = updateControls(...args); keepAboveFloor(); return moved; };
+    controls.addEventListener('change', () => { keepAboveFloor(); rig.userMoved = true; request(); });
 
     // Rendering is on demand, so a lost and restored context must trigger a redraw itself.
     renderer.domElement.addEventListener('webglcontextlost', e => e.preventDefault());

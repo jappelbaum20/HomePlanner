@@ -20,8 +20,8 @@ async page => {
     const rig = __testScene.rig;
     window.__original = { wall: rig.group.children[0], floor: rig.group.children[1], furniture: [...rig.furniture], labels: rig.group.children.filter(child => child.isSprite) };
   });
-  await page.locator('[data-bs-addtoggle]').click();
   await page.locator('[data-bs-prop="mug"]').click();
+  await page.locator('#bs3d canvas').scrollIntoViewIfNeeded();
   const position = await page.evaluate(() => __bsDebug.screenOf(6, 5));
   await page.mouse.click(position.x, position.y);
   check(await page.evaluate(() => __bsDebug.props === 1), 'the item was placed');

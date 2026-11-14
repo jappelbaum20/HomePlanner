@@ -6,7 +6,7 @@ window.BookshelfBuilder = (() => {
   const fmt = n => String(B.round(n));
   const mm = n => fmt(n * 10);
   const walls = { n: 'North · top', e: 'East · right', s: 'South · bottom', w: 'West · left' };
-  let host, api, draft, visible = false, scene3d, row = 0, view = 'close', variant = null, showSizes = true, history = [], editing = null, interactionGeneration = 0, proposal = null, addOpen = false, sheet = null, moreOpen = false, lastRemoved = null;
+  let host, api, draft, visible = false, scene3d, row = 0, view = 'close', variant = null, showSizes = true, history = [], editing = null, interactionGeneration = 0, proposal = null, sheet = null, moreOpen = false, lastRemoved = null;
   // Items to compare against are a session-only aid: never saved, cleared whenever another design is opened.
   let items = [], selected = null, person = false, itemsOn = null, itemSeq = 0;
   const Scene = window.BookshelfScene, Props = window.BookshelfProps;
@@ -25,6 +25,7 @@ window.BookshelfBuilder = (() => {
   const PROP_ICONS = { mug: `<path d="M6 9h15v13a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4z"/><path d="M21 12h3a3 3 0 0 1 0 8h-3"/>`, cup: `<path d="M5 14h18v3a7 7 0 0 1-7 7h-4a7 7 0 0 1-7-7z"/><path d="M23 15h2a3 3 0 0 1 0 6h-2.5"/><path d="M3 27h24"/>`, wine: `<path d="M9 4h12c0 7-2 11-6 11S9 11 9 4z"/><path d="M15 15v11M10 27h10"/>`, water: `<path d="M8 6h16l-2 20H10z"/><path d="M9 13h14"/>`, book: `<path d="M9 4h14v24H9z"/><path d="M9 9h14M12 4v24"/>`, plant: `<path d="M10 20h12l-2 8h-8z"/><path d="M16 20c0-6-1-9-5-12 4 0 6 2 5 8 0-5 2-8 6-9-1 5-2 9-6 13"/>`, vase: `<path d="M13 4h6l-1 5c5 3 6 10 4 16H10c-2-6-1-13 4-16z"/>`, person: `<path d="M10 28V15c0-3 2-5 6-5s6 2 6 5v13"/><circle cx="16" cy="7" r="3.5"/>` };
   const propSvg = k => `<svg viewBox="0 0 32 32" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PROP_ICONS[k]}</svg>`;
   Object.assign(PROP_ICONS, { jar: `<rect x="9" y="9" width="14" height="19" rx="3"/><path d="M8 6h16v4H8z"/>`, tealight: `<path d="M7 17h18l-2 9H9z"/><path d="M8 17c0-2 16-2 16 0M16 12v3"/>` });
+  Object.assign(PROP_ICONS, { espresso: PROP_ICONS.cup, cappuccino: PROP_ICONS.cup, standard_mug: PROP_ICONS.mug, large_mug: PROP_ICONS.mug, latte: PROP_ICONS.water });
   function clearScene() { items = []; selected = null; person = false; itemsOn = null; lastRemoved = null; }
   function checkpoint() { history.push(JSON.stringify(draft)); if (history.length > 50) history.shift(); }
   function persist(immediate = false) { return api.draft(JSON.parse(JSON.stringify(draft)), immediate); }
@@ -120,7 +121,13 @@ window.BookshelfBuilder = (() => {
     saetter: `<svg viewBox="0 0 120 84" aria-hidden="true"><rect x="10" y="10" width="100" height="64" rx="2" fill="#9A7358" stroke="#5E3F2E" stroke-width="4"/><path d="M12 31h96M12 52h96" stroke="#5E3F2E" stroke-width="3"/>${[35, 60, 85].map(x => [12, 33, 54].map(y => `<path d="M${x} ${y}v5m0 11v5" stroke="#5E3F2E" stroke-width="3"/>`).join('')).join('')}</svg>`
   };
   const typeTab = (id, title, sub) => `<button type="button" id="bs-tab-${id}" role="tab" class="bs-card" aria-label="${title}" aria-selected="${draft.tab === id}" aria-controls="bs-tabpanel" tabindex="${draft.tab === id ? 0 : -1}" data-bs-tab="${id}">${CARD_ART[id]}<b>${title}</b><span>${sub}</span></button>`;
-  const propsHtml = (open, label = true) => `<div class="bs-props${open ? ' open' : ''}" id="bsProps" role="group" aria-label="Add something to compare">${label ? '<span class="bs-size-label">Add something to compare</span>' : ''}<div class="bs-palette">${Props ? Props.KINDS.map(k => `<button type="button" class="bs-prop" data-bs-prop="${k}" aria-pressed="${selected === k}" aria-label="${Props.PROPS[k].name}, ${Props.PROPS[k].h} cm tall">${propSvg(k)}<span>${Props.PROPS[k].name}</span><small>${Props.PROPS[k].h} cm tall</small><small class="bs-prop-fit" data-bs-fit></small></button>`).join('') : ''}<button type="button" class="bs-prop" data-bs-person aria-pressed="${person}" aria-label="Person, 175 cm">${propSvg('person')}<span>Person</span><small>175 cm tall</small></button></div><div class="bs-props-foot"><p class="bs-prop-help" id="bsPropHelp" role="status"></p><button type="button" class="btn light small" data-bs-action="clearItems">Clear items</button></div></div>`;
+  const propSize = spec => `${spec.w} × ${spec.h} × ${spec.d} cm${spec.ml ? ` · ${spec.ml} ml` : ''}`;
+  const propsHtml = () => {
+    const featured = ['espresso', 'cappuccino', 'standard_mug', 'large_mug', 'latte'];
+    const kinds = Props ? featured.concat(Props.KINDS.filter(k => !featured.includes(k))) : [];
+    return `<div class="bs-props" id="bsProps" role="group" aria-label="Compare sizes: cups, mugs and more"><div class="bs-props-head"><span class="bs-size-label">Compare sizes: add a cup, mug, glass or other item</span><small class="bs-props-note">Width × height × depth. <span class="bs-swipe">Swipe sideways for more.</span></small></div><div class="bs-palette" data-group>${kinds.map(k => { const spec = Props.PROPS[k]; return `<button type="button" class="bs-prop" data-bs-prop="${k}" aria-pressed="${selected === k}" aria-label="${spec.name}, ${propSize(spec)}">${propSvg(k)}<span>${spec.name}</span><small>${propSize(spec)}</small><small class="bs-prop-fit" data-bs-fit></small></button>`; }).join('')}<button type="button" class="bs-prop" data-bs-person aria-pressed="${person}" aria-label="Person, 175 cm">${propSvg('person')}<span>Person</span><small>175 cm tall</small></button></div></div>`;
+  };
+  const propsFoot = () => `<div class="bs-props-foot"><p class="bs-prop-help" id="bsPropHelp" role="status"></p><button type="button" class="btn light small" data-bs-action="clearItems">Clear items</button></div>`;
   const sizeHtml = undo => `<div class="bs-size" id="bsSize" role="group" aria-label="${draft.tab === 'saetter' ? 'Compare models' : 'Size'}" data-group>${draft.tab === 'saetter' ? `<span class="bs-size-label">Compare models <em class="bs-badge">Preview only · not saved</em></span><span class="bs-chips">${B.SAETTER_VARIANTS.map(v => `<button type="button" class="btn light small" data-bs-variant="${v.id}" aria-pressed="false">${v.label}</button>`).join('')}</span>` : `<span class="bs-size-label">Size</span><span class="bs-chips">${[-10, -5, 5, 10].map(p => `<button type="button" class="btn light small" data-bs-size="${p}" aria-label="Make the bookshelf ${Math.abs(p)} percent ${p < 0 ? 'smaller' : 'bigger'}">${p < 0 ? '−' : '+'}${Math.abs(p)}%</button>`).join('')}</span>`}${undo ? `<button class="btn light small" data-bs-action="undo" ${history.length ? '' : 'disabled'}>Undo</button>` : ''}</div>`;
   const levelsHtml = () => `${draft.tab === 'custom' ? '<div class="bs-presets"><button class="btn light small" data-preset="framed">Framed</button><button class="btn light small" data-preset="staggered">Staggered</button><button class="btn light small" data-preset="stepped">Stepped edges</button></div>' : ''}
         <div class="sec-head"><h3>Individual shelves · bottom to top</h3><button class="btn light small" data-bs-action="addLevel">+ Shelf</button></div><div id="bsLevels"></div>
@@ -167,15 +174,15 @@ window.BookshelfBuilder = (() => {
       </aside>
       <div class="bs-preview">
         <p class="bs-wallname" id="bsPreviewTitle"></p>
-        <div id="bs3d" role="img" aria-label="Orbitable 3D bookshelf against the selected wall"></div>
+        ${propsHtml()}${propsFoot()}<div id="bs3d" role="img" aria-label="Orbitable 3D bookshelf against the selected wall"></div>
         <div class="bs-viewbar"><div class="bs-seg" role="group" aria-label="3D view" data-group><button type="button" class="btn light small" data-bs-view="close" aria-pressed="true">Close-up</button><button type="button" class="btn light small" data-bs-view="wall" aria-pressed="false">Whole wall</button></div><p class="bs-readout" id="bsReadout" role="status"></p></div>
         <p class="bs-note-grey" id="bsPreviewNote"></p>
-        <div class="bs-tools"><button type="button" class="btn light bs-addtoggle" data-bs-addtoggle aria-expanded="${addOpen}" aria-controls="bsProps">Add something to compare</button>${sizeHtml(true)}${propsHtml(addOpen, false)}</div>
+        <div class="bs-tools">${sizeHtml(true)}</div>
         <div id="bsProblems" aria-live="polite"></div>
         <p class="note bs-hint">Drag to turn the view · scroll to zoom · pick an item, then click a shelf to place it.</p>
       </div>
       </div>
-      <nav class="bs-bar" aria-label="Quick actions"><button type="button" class="btn light" data-bs-sheet="size" aria-controls="bsSize" aria-expanded="${sheet === 'size'}">${saet ? 'Compare models' : 'Size'}</button><button type="button" class="btn light" data-bs-sheet="add" aria-controls="bsProps" aria-expanded="${sheet === 'add'}">Add item</button><button type="button" class="btn" data-bs-barsave>Save</button></nav>`;
+      <nav class="bs-bar" aria-label="Quick actions"><button type="button" class="btn light" data-bs-sheet="size" aria-controls="bsSize" aria-expanded="${sheet === 'size'}">${saet ? 'Compare models' : 'Size'}</button><button type="button" class="btn" data-bs-barsave>Save</button></nav>`;
   }
   function roomTemplate() {
     const s = draft.design, r = room();
@@ -195,7 +202,7 @@ window.BookshelfBuilder = (() => {
         ${levelsHtml()}
       </aside><div class="bs-preview"><div class="bs-preview-head"><h2 id="bsPreviewTitle"></h2><div class="btnrow"><button class="btn light small" data-bs-action="undo" ${history.length ? '' : 'disabled'}>Undo</button><button class="btn light small" data-bs-action="resetCamera">Reset 3D view</button></div></div>
         <div class="bs-viewbar"><div class="bs-seg" role="group" aria-label="3D view"><button type="button" class="btn light small" data-bs-view="close" aria-pressed="true">Close-up</button><button type="button" class="btn light small" data-bs-view="wall" aria-pressed="false">Whole wall</button></div><label class="bs-switch"><input type="checkbox" data-bs-sizes ${showSizes ? 'checked' : ''}> Show sizes</label></div>
-        <div id="bs3d" role="img" aria-label="Orbitable 3D bookshelf against the selected wall"></div>${propsHtml(true)}${sizeHtml(false)}
+        ${propsHtml()}${propsFoot()}<div id="bs3d" role="img" aria-label="Orbitable 3D bookshelf against the selected wall"></div>${sizeHtml(false)}
         <p class="bs-readout" id="bsReadout" role="status"></p><p class="bs-note-grey" id="bsPreviewNote"></p>
         <p class="note">Drag to orbit · scroll to zoom · click a board to edit its level, or pick an item above and click to place it</p>
         <div id="bsDrawing" class="bs-drawing"></div><div id="bsProblems" aria-live="polite"></div>
@@ -293,19 +300,14 @@ window.BookshelfBuilder = (() => {
     const el = host && host.querySelector('#bsPropHelp'); if (!el) return; el.textContent = text; el.classList.toggle('warn', !!warn);
     if (undo) { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn light small'; b.dataset.bsAction = 'restoreItem'; b.textContent = 'Undo'; el.append(' ', b); }
   }
-  // The message (and its Undo) lives in the palette: make sure the palette is showing.
-  function showHelp() {
-    if (!standalone()) return;
-    if (window.matchMedia('(max-width: 700px)').matches) { sheet = 'add'; const p = host.querySelector('.bs-simple'); if (p) p.dataset.sheet = 'add'; host.querySelectorAll('[data-bs-sheet]').forEach(b => b.setAttribute('aria-expanded', String(b.dataset.bsSheet === sheet))); }
-    else { addOpen = true; host.querySelector('#bsProps').classList.add('open'); host.querySelector('[data-bs-addtoggle]').setAttribute('aria-expanded', 'true'); }
-  }
   function paletteState() {
     if (!Props || !host) return;
     host.querySelectorAll('[data-bs-prop]').forEach(b => {
-      const spec = Props.PROPS[b.dataset.bsProp], fit = draft.tab === 'saetter' ? Props.fitLocation(displayDesign(), b.dataset.bsProp) : '';
-      const label = fit === 'compartment' ? 'Fits inside' : fit === 'top' ? 'Top only' : fit === 'none' ? 'Does not fit' : '';
+      const spec = Props.PROPS[b.dataset.bsProp], fd = draft.tab === 'saetter' ? Props.fitDetail(displayDesign(), b.dataset.bsProp) : null;
+      const out = fd && fd.overhang ? Props.stickOut(b.dataset.bsProp, fd.overhang) : '';
+      const label = !fd ? '' : fd.where === 'compartment' ? (out ? `Fits, ${out}` : 'Fits inside') : fd.where === 'top' ? (out ? `Top only, ${out}` : 'Top only') : 'Does not fit';
       b.setAttribute('aria-pressed', String(b.dataset.bsProp === selected));
-      b.setAttribute('aria-label', `${spec.name}, ${spec.h} cm tall${label ? ', ' + label : ''}`);
+      b.setAttribute('aria-label', `${spec.name}, ${propSize(spec)}, width by height by depth${label ? ', ' + label : ''}`);
       b.querySelector('[data-bs-fit]').textContent = label;
     });
     const pb = host.querySelector('[data-bs-person]'); if (pb) pb.setAttribute('aria-pressed', String(person));
@@ -330,20 +332,21 @@ window.BookshelfBuilder = (() => {
     if (info.propId) {
       const at = items.findIndex(i => i.id === info.propId); if (at < 0) return;
       const it = items[at]; lastRemoved = { item: it, index: at };
-      items = items.filter(i => i.id !== it.id); update3D(false); showHelp(); help(`${itemName(it.kind)} removed ·`, false, true); return;
+      items = items.filter(i => i.id !== it.id); update3D(false); help(`${itemName(it.kind)} removed ·`, false, true); return;
     }
-    if (info.none) { if (selected && Props) { showHelp(); help(Props.MESSAGES.noSurface, true); } return; }
+    if (info.none) { if (selected && Props) help(Props.MESSAGES.noSurface, true); return; }
     if (!selected || !Props) { row = Math.min(info.bay, draft.design.levels.length - 1); refresh(); return; } // a SÆTTER size preview can have more levels than the design
     if (items.length >= Props.MAX_ITEMS) { help(Props.MESSAGES.limit, true); return api.toast(Props.MESSAGES.limit); }
     const design = displayDesign(), topOnly = draft.tab === 'saetter' && Props.fitLocation(design, selected) === 'top';
+    const placing = selected;
     const redirected = topOnly && info.local.y < design.height - .01;
     const hit = topOnly ? { x: info.local.x, y: design.height, level: design.levels.length - 1 } : info.local;
     const r = Props.fitProp(design, selected, hit, items);
     if (!r.ok) { help(r.message, true); return api.toast(r.message); }
     const id = `i${++itemSeq}`;
     items = items.concat([{ ...r, id, color: Props.BOOK_COLORS[itemSeq % Props.BOOK_COLORS.length] }]);
-    update3D(false); const message = redirected ? `${itemName(selected)} placed on top; it does not fit inside.` : `${itemName(selected)} placed (${Props.PROPS[selected].h} cm tall). Click it to remove it.`;
-    help(message); if (redirected) api.toast(message);
+    update3D(false); const message = redirected ? `${itemName(selected)} placed on top; it does not fit inside${r.overhang ? ` and ${Props.stickOut(placing, r.overhang)}` : ''}.` : `${itemName(selected)} placed (${Props.PROPS[selected].h} cm tall${r.overhang ? `; fits, ${Props.stickOut(placing, r.overhang)}` : ''}). Click it to remove it.`;
+    help(message, !!r.overhang); if (redirected) api.toast(message);
   }
   // render() rebuilds the page: put keyboard focus back on the control that was used.
   function refocus(selector) { const b = host.querySelector(selector); if (b && !b.disabled) b.focus({ preventScroll: true }); else host.querySelector('h1')?.focus({ preventScroll: true }); }
@@ -413,11 +416,10 @@ window.BookshelfBuilder = (() => {
     host.addEventListener('click', async e => {
       const t = e.target.closest('button, [data-bs-board]'); if (!t) return;
       if (t.dataset.bsTab) return switchTab(t.dataset.bsTab);
-      if (t.dataset.bsAddtoggle !== undefined) { addOpen = !addOpen; host.querySelector('#bsProps').classList.toggle('open', addOpen); t.setAttribute('aria-expanded', String(addOpen)); return; }
       if (t.dataset.bsSheet) {
         sheet = sheet === t.dataset.bsSheet ? null : t.dataset.bsSheet; host.querySelector('.bs-simple').dataset.sheet = sheet || '';
         host.querySelectorAll('[data-bs-sheet]').forEach(b => b.setAttribute('aria-expanded', String(b.dataset.bsSheet === sheet)));
-        if (sheet) host.querySelector(sheet === 'size' ? '#bsSize button' : '[data-bs-prop]')?.focus({ preventScroll: true }); // keyboard and screen reader users land in the sheet
+        if (sheet) host.querySelector('#bsSize button')?.focus({ preventScroll: true });
         return;
       }
       if (t.dataset.bsBarsave !== undefined) { const save = host.querySelector('[data-bs-action="save"]'); if (!save.disabled) save.click(); else api.toast('Resolve the highlighted issues first.'); return; }

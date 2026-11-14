@@ -9,6 +9,11 @@
   const PROPS = {
     mug: { name: 'Mug', w: 11, d: 8, h: 9.5, turned: { w: 8, d: 11, h: 9.5 } }, // handle sideways, or turned to the front in a narrow space
     cup: { name: 'Coffee cup', w: 9.5, d: 9.5, h: 6 }, // cup with its saucer
+    espresso: { name: 'Espresso cup', w: 8.5, d: 6.5, h: 5.5, ml: 70, turned: { w: 6.5, d: 8.5, h: 5.5 } },
+    cappuccino: { name: 'Cappuccino cup & saucer', w: 14, d: 14, h: 7, ml: 180 },
+    standard_mug: { name: 'Standard mug', w: 12, d: 8.5, h: 10, ml: 330, turned: { w: 8.5, d: 12, h: 10 } },
+    large_mug: { name: 'Large mug', w: 13.5, d: 9.5, h: 12, ml: 475, turned: { w: 9.5, d: 13.5, h: 12 } },
+    latte: { name: 'Latte glass', w: 8, d: 8, h: 15, ml: 300 },
     wine: { name: 'Wine glass', w: 8, d: 8, h: 21 },
     water: { name: 'Water glass', w: 7, d: 7, h: 11 },
     book: { name: 'Book', w: 2.5, d: 12, h: 18, flat: { w: 18, d: 12, h: 2.5 } }, // paperback, standing or (if it does not fit) lying
@@ -46,12 +51,23 @@
   const overlaps = (a, b) => Math.abs(a.x - b.x) < (a.w + b.w) / 2 - .1 && Math.abs(a.z - b.z) < (a.d + b.d) / 2 - .1;
   const orientations = spec => [{ w: spec.w, d: spec.d, h: spec.h, rot: 0 }].concat(spec.flat || spec.turned ? [{ ...(spec.flat || spec.turned), rot: 1 }] : []);
   const fitsSurface = (sf, v) => sf.ceiling - sf.y >= v.h - .01 && sf.x1 - sf.x0 >= v.w - .05 && sf.depth >= v.d * .8 - .001;
-  function fitLocation(design, kind) {
-    const spec = PROPS[kind]; if (!spec) return 'none';
+  // How far the item sticks out at the front when it is pushed to the back of a surface that is shallower than it.
+  const overhangOf = (sf, v) => { const o = Math.round(Math.max(0, v.d - sf.depth) * 10) / 10; return o < .05 ? 0 : o; };
+  // Same orientation choice as fitProp: the first orientation that fits the surface.
+  const firstFit = (sf, options) => options.find(v => fitsSurface(sf, v));
+  // Where an item fits and how far it sticks out at the front: {where: 'compartment' | 'top' | 'none', overhang}.
+  function fitDetail(design, kind) {
+    const spec = PROPS[kind]; if (!spec) return { where: 'none', overhang: 0 };
     const options = orientations(spec), all = surfaces(design), top = design.levels.length - 1;
-    if (all.some(sf => sf.level < top && options.some(v => fitsSurface(sf, v)))) return 'compartment';
-    return all.some(sf => sf.level === top && options.some(v => fitsSurface(sf, v))) ? 'top' : 'none';
+    const best = list => list.reduce((m, sf) => { const v = firstFit(sf, options); if (!v) return m; const o = overhangOf(sf, v); return m === null || o < m ? o : m; }, null);
+    const inside = best(all.filter(sf => sf.level < top));
+    if (inside !== null) return { where: 'compartment', overhang: inside };
+    const onTop = best(all.filter(sf => sf.level === top));
+    return onTop !== null ? { where: 'top', overhang: onTop } : { where: 'none', overhang: 0 };
   }
+  const fitLocation = (design, kind) => fitDetail(design, kind).where;
+  // Short wording for a protruding item, e.g. "sticks out 2 cm" or, for items with a handle, "handle sticks out 2 cm".
+  const stickOut = (kind, overhang) => `${PROPS[kind] && PROPS[kind].turned ? 'handle ' : ''}sticks out ${overhang} cm`;
 
   // Where would `kind` stand if the user clicked at hit {x, y, z?, level?} on the furniture `design`?
   // existing = items already placed [{x, y, z, w, d}]. Returns {ok:true, x, y, z, w, d, h, rot, level} or {ok:false, reason, message}.
@@ -78,7 +94,7 @@
       if (free(want)) x = want;
       else for (let k = .25; k <= hi - lo + .25 && x === null; k += .25) { for (const c of [want - k, want + k]) if (c >= lo - 1e-9 && c <= hi + 1e-9 && free(c)) { x = c; break; } }
       if (x === null) return { ok: false, reason: 'full', message: MESSAGES.full };
-      return { ok: true, kind, x: round(x), y: best.y, z: round(z), w: v.w, d: v.d, h: v.h, rot: v.rot, level: best.level };
+      return { ok: true, kind, x: round(x), y: best.y, z: round(z), w: v.w, d: v.d, h: v.h, rot: v.rot, level: best.level, overhang: overhangOf(best, v) };
     }
     return { ok: false, reason: failure, message: MESSAGES[failure] };
   }
@@ -98,7 +114,7 @@
   // Axis-aligned box of an item in furniture-local coordinates (x, y, z from the front), for collision checks.
   function itemBox(p) { return { x0: p.x - p.w / 2, x1: p.x + p.w / 2, y0: p.y, y1: p.y + p.h, z0: p.z - p.d / 2, z1: p.z + p.d / 2 }; }
 
-  const pure = { PROPS, KINDS, PERSON, MAX_ITEMS, MESSAGES, size, surfaces, fitProp, fitLocation, resnap, itemBox };
+  const pure = { PROPS, KINDS, PERSON, MAX_ITEMS, MESSAGES, size, surfaces, fitProp, fitLocation, fitDetail, stickOut, resnap, itemBox };
 
   // ---------- 3D models (browser only). Group origin: centre of the footprint, y = 0 on the supporting surface. ----------
   const BOOK_COLORS = ['#8C3B32', '#2F4858', '#3E5544', '#B08D57', '#5B4A7A', '#C26A3D'];
@@ -120,6 +136,24 @@
       add(lathe([[0, 1], [1.8, 1], [3.1, 2.6], [3.1, 6.5], [2.8, 6.5], [2.8, 2.9], [1.6, 1.4], [0, 1.4]]), white);
       const coffee = add(new THREE.CircleGeometry(2.75, 28), std('#4A2C1C', { rough: .2 }), 0, 5.6, 0); coffee.rotation.x = -Math.PI / 2;
       const h = add(new THREE.TorusGeometry(1.5, .4, 8, 18, Math.PI), white, 3.2, 4.2, 0); h.rotation.z = -Math.PI / 2;
+    } else if (kind === 'espresso' || kind === 'standard_mug' || kind === 'large_mug') {
+      const spec = PROPS[kind], r = spec.d / 2, h = spec.h;
+      const ceramic = std(kind === 'large_mug' ? '#789398' : '#F1ECE0', { rough: .35, side: THREE.DoubleSide });
+      const body = new THREE.Group(); g.add(body);
+      const cup = new THREE.Mesh(lathe([[0, 0], [r * .82, 0], [r, h * .12], [r, h], [r - .35, h], [r - .35, .6], [0, .6]]), ceramic); cup.castShadow = true; cup.receiveShadow = true; body.add(cup);
+      const coffee = new THREE.Mesh(new THREE.CircleGeometry(r - .4, 32), std('#4A2C1C', { rough: .2 })); coffee.rotation.x = -Math.PI / 2; coffee.position.y = h * .86; body.add(coffee);
+      const handle = new THREE.Mesh(new THREE.TorusGeometry(h * .23, .4, 10, 24, Math.PI), ceramic); handle.rotation.z = -Math.PI / 2; handle.position.set(r, h * .52, 0); handle.castShadow = true; body.add(handle);
+      if (opts.rot === 1) g.rotation.y = -Math.PI / 2;
+    } else if (kind === 'cappuccino') {
+      const white = std('#F7F5F0', { rough: .3, side: THREE.DoubleSide });
+      add(lathe([[0, 0], [4.6, 0], [7, .6], [7, .95], [6.7, .95], [4.4, .5], [0, .5]]), white);
+      add(lathe([[0, .8], [2.5, .8], [3.8, 2], [4.2, 6.8], [3.8, 6.8], [3.4, 2.2], [2.4, 1.2], [0, 1.2]]), white);
+      const coffee = add(new THREE.CircleGeometry(3.75, 32), std('#C79D75', { rough: .3 }), 0, 6.1, 0); coffee.rotation.x = -Math.PI / 2;
+      const h = add(new THREE.TorusGeometry(1.25, .38, 8, 20, Math.PI), white, 4.1, 4, 0); h.rotation.z = -Math.PI / 2;
+    } else if (kind === 'latte') {
+      add(lathe([[0, 0], [3, 0], [4, 15], [3.7, 15], [2.7, .6], [0, .6]]), glass());
+      add(lathe([[0, .65], [2.65, .65], [3.65, 13.3], [0, 13.3]]), std('#B98255', { rough: .35 }));
+      const foam = add(new THREE.CircleGeometry(3.65, 32), std('#EFE1CC', { rough: .65 }), 0, 13.35, 0); foam.rotation.x = -Math.PI / 2;
     } else if (kind === 'wine') {
       add(new THREE.CylinderGeometry(3.6, 3.7, .35, 28), glass(), 0, .17, 0);
       add(new THREE.CylinderGeometry(.35, .35, 9, 10), glass(), 0, 4.7, 0);
