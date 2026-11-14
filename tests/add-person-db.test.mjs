@@ -13,7 +13,7 @@ async function base(extra=false){
  await db.exec('CREATE ROLE hp_auth_owner NOLOGIN; CREATE ROLE hp_auth_runtime NOLOGIN; CREATE ROLE hp_app_owner NOLOGIN; CREATE ROLE hp_app_runtime NOLOGIN; CREATE ROLE hp_photo_maintenance NOLOGIN; CREATE ROLE hp_access_public NOLOGIN; CREATE ROLE hp_mail_worker NOLOGIN;');
  for(const f of ['001_auth.sql','002_business.sql','003_photos.sql','004_photo_maintenance.sql','005_shelf_documents.sql']) await db.exec('BEGIN;\n'+await mig(f)+'\nCOMMIT;');
  for(const [u,s,subject] of [[owner,os,'owner-sub'],[user,us,'user-sub']]) {
-  await db.query('INSERT INTO hp_auth."user"(id,name,email,"emailVerified","updatedAt") VALUES ($1,$2,$3,true,now())',[u,subject,u===owner?'jacob@appelbaums.com':subject+'@example.invalid']);
+  await db.query('INSERT INTO hp_auth."user"(id,name,email,"emailVerified","updatedAt") VALUES ($1,$2,$3,true,now())',[u,subject,u===owner?'owner@example.com':subject+'@example.invalid']);
   await db.query('INSERT INTO hp_auth.account("accountId","providerId","userId","updatedAt") VALUES ($1,\'google\',$2,now())',[subject,u]);
   await db.query('INSERT INTO hp_auth.session(id,token,"userId","expiresAt","updatedAt") VALUES ($1,$2,$3,now()+interval \'1 day\',now())',[s,'cookie-'+subject,u]);
  }
