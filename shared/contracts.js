@@ -22,14 +22,15 @@
   if (!validators || !geometry) throw new Error('Load schema validators and bookshelf geometry first');
   const LIMITS = Object.freeze({ payloadBytes: 1048576, proposalBytes: 65536, maxBoards: 800, maxPhotos: 100,
     photoBytes: 10485760, promptCharacters: 2000, proposalTimeoutMs: 25000, maxOutputTokens: 4000 });
-  const legacyBounds = 'Use width 20–1000 cm, height 20–800 cm, depth 10–100 cm and board thickness 0.9–6 cm.';
+  // geometry.validate words this per template (SÆTTER allows a smaller depth): match the stable start of the message.
+  const isLegacyBounds = message => message.startsWith('Use width 20–1000 cm, height 20–800 cm, depth ');
   function bytes(value) {
     const json = JSON.stringify(value);
     if (typeof json !== 'string') throw new Error('Not JSON');
     return new TextEncoder().encode(json).byteLength;
   }
   function shelfErrors(shelf) {
-    const errors = geometry.validate(shelf).errors.filter(message => message !== legacyBounds);
+    const errors = geometry.validate(shelf).errors.filter(message => !isLegacyBounds(message));
     if (shelf.levels.at(-1).dividers.length) errors.push('The top shelf cannot have dividers above it.');
     if (shelf.levels.some(level => level.right <= level.left)) errors.push('Shelf spans must be positive.');
     if (geometry.boards(shelf).length > LIMITS.maxBoards) errors.push('Too many boards.');

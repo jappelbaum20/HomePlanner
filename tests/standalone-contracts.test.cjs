@@ -17,3 +17,16 @@ test('strict shelf document rejects malformed dimensions, color, placement and u
   const overflow = doc(); overflow.wall.widthCm = 10;
   assert.ok(validate('shelfDocument', overflow).valid, 'overflow remains saveable and must be reported by the editor');
 });
+
+test('SÆTTER shelves keep passing shared validation, including scaled depths and schema-valid small sizes', () => {
+  for (const pct of [-20, 0, 10, 50]) {
+    assert.deepEqual(validate('shelf', B.saetter3(pct)).errors, [], `shelf ${pct}`);
+    assert.ok(validate('shelfDocument', { ...doc(), shelf: B.saetter3(pct) }).valid, `document ${pct}`);
+    assert.ok(validate('writeDesign', body(B.saetter3(pct))).valid, `writeDesign ${pct}`);
+  }
+  assert.equal(B.saetter3(-20).depth, 8.5);
+  const small = { version: 1, template: 'saetter3', width: 15, height: 15, depth: 6, thickness: .6, separatorHeight: 3, backThickness: .5,
+    levels: [{ y: 0, left: 0, right: 15, dividers: [] }, { y: 14.4, left: 0, right: 15, dividers: [] }] };
+  assert.deepEqual(validate('shelf', small).errors, [], 'a schema-valid SÆTTER outside the legacy bounds still validates');
+  assert.ok(validate('writeDesign', body(small)).valid);
+});

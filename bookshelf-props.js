@@ -66,6 +66,16 @@
     return onTop !== null ? { where: 'top', overhang: onTop } : { where: 'none', overhang: 0 };
   }
   const fitLocation = (design, kind) => fitDetail(design, kind).where;
+  // The cups and mugs the owner wants to see fit (every cup, mug and coffee glass in the catalogue).
+  const CUP_KINDS = ['mug', 'cup', 'espresso', 'cappuccino', 'standard_mug', 'large_mug', 'latte'];
+  // How many cups and mugs fit inside a compartment: {total, fit, stickOut, names: [fitting], missing: [not fitting]}.
+  // stickOut counts the fitting ones that still protrude at the front (e.g. a handle).
+  function cupSummary(design, kinds = CUP_KINDS) {
+    const rows = kinds.map(k => ({ kind: k, name: PROPS[k].name, ...fitDetail(design, k) }));
+    const fitting = rows.filter(r => r.where === 'compartment');
+    return { total: rows.length, fit: fitting.length, stickOut: fitting.filter(r => r.overhang > 0).length,
+      names: fitting.map(r => r.name), missing: rows.filter(r => r.where !== 'compartment').map(r => r.name) };
+  }
   // Short wording for a protruding item, e.g. "sticks out 2 cm" or, for items with a handle, "handle sticks out 2 cm".
   const stickOut = (kind, overhang) => `${PROPS[kind] && PROPS[kind].turned ? 'handle ' : ''}sticks out ${overhang} cm`;
 
@@ -114,7 +124,7 @@
   // Axis-aligned box of an item in furniture-local coordinates (x, y, z from the front), for collision checks.
   function itemBox(p) { return { x0: p.x - p.w / 2, x1: p.x + p.w / 2, y0: p.y, y1: p.y + p.h, z0: p.z - p.d / 2, z1: p.z + p.d / 2 }; }
 
-  const pure = { PROPS, KINDS, PERSON, MAX_ITEMS, MESSAGES, size, surfaces, fitProp, fitLocation, fitDetail, stickOut, resnap, itemBox };
+  const pure = { PROPS, KINDS, PERSON, MAX_ITEMS, MESSAGES, CUP_KINDS, size, surfaces, fitProp, fitLocation, fitDetail, cupSummary, stickOut, resnap, itemBox };
 
   // ---------- 3D models (browser only). Group origin: centre of the footprint, y = 0 on the supporting surface. ----------
   const BOOK_COLORS = ['#8C3B32', '#2F4858', '#3E5544', '#B08D57', '#5B4A7A', '#C26A3D'];

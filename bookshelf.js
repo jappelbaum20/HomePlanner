@@ -18,27 +18,38 @@
       separatorHeight: number(s.separatorHeight, 3), backThickness: number(s.backThickness, .5) });
     return result;
   }
-  function saetter3() {
-    const width = 45.5, height = 40.6, thickness = 1.1;
-    const dividers = [.55, 11.65, 22.75, 33.85, 44.95];
-    return normalize({ template: 'saetter3', width, height, depth: 10.5, thickness,
-      separatorHeight: 3, backThickness: .5,
-      levels: Array.from({ length: 4 }, (_, i) => ({ y: round(i * (height - thickness) / 3),
-        left: 0, right: width, dividers: i < 3 ? [...dividers] : [] })) });
-  }
-  // Real SÆTTER sizes from saetter.dk (walnut): rows x columns of 10 x 12 cm compartments. Comparison previews only.
+  // Real SÆTTER sizes from saetter.dk (walnut): rows x columns of 10 x 12 cm compartments.
   const SAETTER_VARIANTS = [
-    { id: '3', label: 'SÆTTER 3', rows: 3, cols: 4, width: 45.5, height: 40.6, depth: 10.5 },
-    { id: '5', label: 'SÆTTER 5', rows: 5, cols: 4, width: 45.5, height: 66.7, depth: 11.2 },
-    { id: '7', label: 'SÆTTER 7', rows: 7, cols: 4, width: 45.5, height: 92.4, depth: 11.2 },
-    { id: '15', label: 'SÆTTER 15', rows: 5, cols: 3, width: 34.4, height: 66.7, depth: 11.2 }
+    { id: '3', label: 'SÆTTER 3', rows: 3, cols: 4, width: 45.5, height: 40.6, depth: 10.5, back: .5 },
+    { id: '5', label: 'SÆTTER 5', rows: 5, cols: 4, width: 45.5, height: 66.7, depth: 11.2, back: 1.2 },
+    { id: '7', label: 'SÆTTER 7', rows: 7, cols: 4, width: 45.5, height: 92.4, depth: 11.2, back: 1.2 },
+    { id: '15', label: 'SÆTTER 15', rows: 5, cols: 3, width: 34.4, height: 66.7, depth: 11.2, back: 1.2 }
   ];
-  function saetterVariant(id) {
-    const v = SAETTER_VARIANTS.find(x => x.id === String(id)) || SAETTER_VARIANTS[0];
-    if (v.id === '3') return saetter3();
-    const t = 1.1, dividers = Array.from({ length: v.cols + 1 }, (_, j) => round(t / 2 + j * (10 + t)));
-    return normalize({ template: 'saetter3', width: v.width, height: v.height, depth: v.depth, thickness: t, separatorHeight: 3, backThickness: round(v.depth - 10),
-      levels: Array.from({ length: v.rows + 1 }, (_, i) => ({ y: round(i * (v.height - t) / v.rows), left: 0, right: v.width, dividers: i < v.rows ? [...dividers] : [] })) });
+  // Custom size: scale the compartment openings (width, height and depth) by a percentage, keep the number of
+  // compartments, and keep every board (shelf, divider, back, separator) at its real thickness. 0 returns the
+  // catalogue geometry exactly.
+  const SAETTER_SCALE = { min: -20, max: 50 };
+  const clampScale = pct => Math.min(SAETTER_SCALE.max, Math.max(SAETTER_SCALE.min, Number.isFinite(Number(pct)) ? Number(pct) : 0));
+  const OPENING_W = 10, SAETTER_T = 1.1;
+  function saetterVariant(id, pct = 0) {
+    const v = SAETTER_VARIANTS.find(x => x.id === String(id)) || SAETTER_VARIANTS[0], t = SAETTER_T, g = clampScale(pct) / 100;
+    const width = round(v.width + v.cols * OPENING_W * g), height = round(v.height + (v.height - (v.rows + 1) * t) * g);
+    const depth = round(v.depth + (v.depth - v.back) * g), pitch = OPENING_W * (1 + g) + t;
+    const dividers = Array.from({ length: v.cols + 1 }, (_, j) => round(t / 2 + j * pitch));
+    return normalize({ template: 'saetter3', width, height, depth, thickness: t, separatorHeight: 3, backThickness: v.back,
+      levels: Array.from({ length: v.rows + 1 }, (_, i) => ({ y: round(i * (height - t) / v.rows), left: 0, right: width, dividers: i < v.rows ? [...dividers] : [] })) });
+  }
+  const saetter3 = (pct = 0) => saetterVariant('3', pct);
+  // Which scale a SÆTTER 3 design has: {pct, exact}. exact is false when boards were edited by hand, so the design is
+  // no longer the plain scaled catalogue shape (pct is then only an estimate from the width). null if not a SÆTTER.
+  function saetterScale(design) {
+    const s = normalize(design);
+    if (s.template !== 'saetter3' || !s.levels.length) return null;
+    const cols = s.levels[0].dividers.length - 1;
+    if (cols < 1) return null;
+    const pct = Math.round(((s.width - (cols + 1) * s.thickness) / (cols * OPENING_W) - 1) * 10000) / 100;
+    const ref = pct >= SAETTER_SCALE.min && pct <= SAETTER_SCALE.max ? saetter3(pct) : null;
+    return { pct, exact: !!ref && cols === 4 && JSON.stringify(ref) === JSON.stringify(s) };
   }
   function preset(kind = 'staggered', width = 240, height = 200, depth = 30, thickness = 2.4, rows = 5) {
     const levels = [];
@@ -86,8 +97,9 @@
   }
   function validate(s) {
     const errors = [], warnings = [], t = s.thickness;
-    if (!(s.width >= 20 && s.width <= 1000 && s.height >= 20 && s.height <= 800 && s.depth >= 10 && s.depth <= 100 && t >= .9 && t <= 6))
-      errors.push('Use width 20–1000 cm, height 20–800 cm, depth 10–100 cm and board thickness 0.9–6 cm.');
+    const minDepth = s.template === 'saetter3' ? 5 : 10; // a SÆTTER scaled down 20 % is 8.5 cm deep
+    if (!(s.width >= 20 && s.width <= 1000 && s.height >= 20 && s.height <= 800 && s.depth >= minDepth && s.depth <= 100 && t >= .9 && t <= 6))
+      errors.push(`Use width 20–1000 cm, height 20–800 cm, depth ${minDepth}–100 cm and board thickness 0.9–6 cm.`);
     if (s.levels.length < 2) errors.push('Add at least a bottom and a top shelf.');
     if (s.template === 'saetter3') {
       if (!(s.backThickness > 0 && s.backThickness < s.depth)) errors.push('Back thickness must be positive and less than the overall depth.');
@@ -159,7 +171,7 @@
     });
     return [...new Set(errors)];
   }
-  const api = { normalize, preset, saetter3, saetterVariant, SAETTER_VARIANTS, boards, visualBoards, validate, resize, dividerPosition, placement, fit, round };
+  const api = { normalize, preset, saetter3, saetterVariant, saetterScale, SAETTER_VARIANTS, SAETTER_SCALE, clampScale, boards, visualBoards, validate, resize, dividerPosition, placement, fit, round };
   root.Bookshelf = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
