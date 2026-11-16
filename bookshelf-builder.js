@@ -12,7 +12,8 @@ window.BookshelfBuilder = (() => {
   const Scene = window.BookshelfScene, Props = window.BookshelfProps;
   // Comparison preview of another real SÆTTER size. Never saved, never used for fit checks.
   // The comparison models use the same scale as the design, so the cup fit labels answer "what if I order this one 10 % bigger".
-  const scaleInfo = () => draft.tab === 'saetter' ? B.saetterScale(draft.design) : null;
+  // The estimate for hand-edited shelves is clamped, so labels, field and comparison models never show a value outside the range.
+  const scaleInfo = () => { const sc = draft.tab === 'saetter' ? B.saetterScale(draft.design) : null; return sc && { ...sc, pct: B.clampScale(sc.pct) }; };
   const scalePct = () => scaleInfo()?.pct ?? 0;
   const displayDesign = () => draft.tab === 'saetter' && variant && variant !== '3' ? B.saetterVariant(variant, scalePct()) : draft.design;
   const pctText = p => p === 0 ? '0 %' : `${p > 0 ? '+' : '−'}${B.round(Math.abs(p))} %`;
@@ -290,7 +291,7 @@ window.BookshelfBuilder = (() => {
     host.querySelector('[data-bs-action="propose"]').disabled = !api.canPropose?.();
     if (api.canPropose?.() && host.querySelector('#bsProposalStatus').textContent.startsWith('AI edits are unavailable')) host.querySelector('#bsProposalStatus').textContent = '';
   }
-  const planScaleNote = s => { const sc = B.saetterScale(s); return sc && (sc.pct !== 0 || !sc.exact) ? ` Scaled ${pctText(sc.pct)}${sc.exact ? '' : ' (about)'}: custom size, not a SÆTTER catalogue size. The compartment openings are enlarged; board, back and separator thickness are unchanged, so the numbers in the table above are for this custom size.` : ''; };
+  const planScaleNote = s => { const raw = B.saetterScale(s), sc = raw && { ...raw, pct: B.clampScale(raw.pct) }; return sc && (sc.pct !== 0 || !sc.exact) ? ` Scaled ${pctText(sc.pct)}${sc.exact ? '' : ' (about)'}: custom size, not a SÆTTER catalogue size. The compartment openings are enlarged; board, back and separator thickness are unchanged, so the numbers in the table above are for this custom size.` : ''; };
   const scaleLabel = () => { const sc = scaleInfo(); return sc && (sc.pct !== 0 || !sc.exact) ? ` · ${sc.exact ? 'custom size' : 'edited, about'} ${pctText(sc.pct)}` : ''; };
   // Scale control text: size, compartments, honesty note, and how many cups and mugs fit (same fit function as the labels).
   function refreshScale(s, shown, previewing) {
@@ -308,10 +309,11 @@ window.BookshelfBuilder = (() => {
   }
   function applyScale(raw) {
     const pct = Number(raw);
-    if (raw === '' || raw === null || !Number.isFinite(pct) || pct < B.SAETTER_SCALE.min || pct > B.SAETTER_SCALE.max) { api.toast(`Enter a percentage from ${B.SAETTER_SCALE.min} to +${B.SAETTER_SCALE.max}.`); return refresh(); }
-    const rounded = B.round(pct), cur = B.saetterScale(draft.design);
+    if (raw === '' || raw === null || !Number.isFinite(pct) || pct < B.SAETTER_SCALE.min || pct > B.SAETTER_SCALE.max) { api.toast(`Enter a percentage from ${B.SAETTER_SCALE.min} to +${B.SAETTER_SCALE.max}.`); const field = host.querySelector('[data-bs-scale-input]'); if (field) field.value = scalePct(); return refresh(); }
+    const rounded = Math.round(pct * 100) / 100, cur = B.saetterScale(draft.design);
     if (cur && cur.exact && cur.pct === rounded) return refresh();
     checkpoint(); draft.design = B.saetter3(rounded); changed(false, true);
+    const field = host.querySelector('[data-bs-scale-input]'); if (field) field.value = scalePct(); // the focused field is skipped by refresh()
     api.toast(`Scale ${pctText(rounded)}: ${fmt(draft.design.width)} × ${fmt(draft.design.height)} × ${fmt(draft.design.depth)} cm${cur && !cur.exact ? '. Boards you edited by hand were reset to the SÆTTER 3 sizes' : ''}. Undo reverts.`);
   }
   function update3D(reset = false) {

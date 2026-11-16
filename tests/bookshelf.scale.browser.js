@@ -48,6 +48,10 @@ async page => {
     await input.fill('80'); await input.press('Tab'); await page.waitForTimeout(100);
     check(await readout().then(t => t.includes('37.5 × 33.36 × 8.5')), `${label}: 80 % is refused and the last size is kept`);
 
+    await input.fill('12.345'); await input.press('Enter'); await page.waitForTimeout(100);
+    check(await text('#bsScaleInfo').then(t => t.startsWith('Scale +12.35 %:') && !t.includes('edited')) && await input.inputValue() === '12.35', `${label}: 12.345 is stored as 12.35 and not reported as edited`);
+    await input.fill('80'); await input.press('Enter'); await page.waitForTimeout(100);
+    check(await input.inputValue() === '12.35', `${label}: a rejected entry confirmed with Enter returns to the current percentage`);
     // comparison model follows the scale; the main design is not touched
     await press(10);
     const variant5 = page.locator('[data-bs-variant="5"]');

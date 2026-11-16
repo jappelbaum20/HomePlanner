@@ -188,3 +188,7 @@ test('every scaled SÆTTER 3 fits the schema limits for saved shelves', () => {
     assert.ok(s.backThickness >= schema.backThickness.minimum);
   }
 });
+
+test('fractional percentages are stored and recovered the same way', () => {
+  for (const pct of [12.35, 0.01, -7.25]) assert.deepEqual(B.saetterScale(B.saetter3(pct)), { pct, exact: true }, String(pct));
+});
