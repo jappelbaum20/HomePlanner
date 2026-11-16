@@ -124,3 +124,67 @@ test('all SÆTTER previews use the manufacturer dimensions and the same parts in
     assert.equal(B.visualBoards(s).filter(p => p.kind === 'Separator').length, rows * (cols - 1) * 2);
   }
 });
+
+// ---- SÆTTER scale: openings grow by a percentage, boards keep their thickness, compartment count stays ----
+test('scale 0 returns exactly the real SÆTTER dimensions for every model', () => {
+  const s = B.saetter3(0);
+  assert.deepEqual([s.width, s.height, s.depth, s.thickness, s.backThickness], [45.5, 40.6, 10.5, 1.1, .5]);
+  assert.deepEqual(s.levels[0].dividers, [.55, 11.65, 22.75, 33.85, 44.95]);
+  assert.deepEqual(B.saetter3(), B.saetter3(0));
+  for (const v of B.SAETTER_VARIANTS) {
+    const d = B.saetterVariant(v.id, 0);
+    assert.deepEqual([d.width, d.height, d.depth], [v.width, v.height, v.depth], v.label);
+    assert.equal(d.levels.length, v.rows + 1);
+    assert.equal(d.levels[0].dividers.length, v.cols + 1);
+  }
+});
+test('scaling up and back to 0 leaves no rounding drift', () => {
+  for (const pct of [5, 10, 17, 33.3, 50, -20, -7]) {
+    B.saetter3(pct);
+    assert.equal(JSON.stringify(B.saetter3(0)), JSON.stringify(B.saetter3()));
+  }
+  assert.deepEqual(B.saetterScale(B.saetter3(0)), { pct: 0, exact: true });
+});
+test('scale grows the compartment openings in all three directions and keeps boards and count fixed', () => {
+  const base = B.saetter3(0), s = B.saetter3(10);
+  assert.equal(s.levels.length, base.levels.length);
+  assert.equal(s.levels[0].dividers.length, base.levels[0].dividers.length);
+  assert.equal(s.thickness, base.thickness);
+  assert.equal(s.backThickness, base.backThickness);
+  assert.equal(s.separatorHeight, base.separatorHeight);
+  const open = d => ({ w: B.round(d.levels[0].dividers[1] - d.levels[0].dividers[0] - d.thickness), h: B.round(d.levels[1].y - d.levels[0].y - d.thickness), d: B.round(d.depth - d.backThickness) });
+  const a = open(base), b = open(s);
+  assert.equal(a.w, 10); assert.equal(a.d, 10); assert.ok(Math.abs(a.h - 12.067) < .001);
+  assert.ok(Math.abs(b.w - 11) < 1e-9 && Math.abs(b.d - 11) < 1e-9 && Math.abs(b.h - a.h * 1.1) < .002);
+  assert.deepEqual([s.width, s.height, s.depth], [49.5, 44.22, 11.5]);
+  assert.deepEqual(B.validate(s).errors, []);
+  const parts = B.boards(s), baseParts = B.boards(base);
+  assert.equal(parts.length, baseParts.length);
+  for (const p of parts) assert.equal(p.thickness, p.kind === 'Back' ? .5 : 1.1);
+});
+test('the whole allowed range builds valid shelves and is clamped outside it', () => {
+  for (const v of B.SAETTER_VARIANTS) for (const pct of [B.SAETTER_SCALE.min, 0, 25, B.SAETTER_SCALE.max])
+    assert.deepEqual(B.validate(B.saetterVariant(v.id, pct)).errors, [], `${v.label} ${pct}`);
+  assert.deepEqual(B.saetter3(500), B.saetter3(50));
+  assert.deepEqual(B.saetter3(-90), B.saetter3(-20));
+  assert.deepEqual(B.saetter3('abc'), B.saetter3(0));
+});
+test('the scale is recovered from the saved dimensions alone', () => {
+  for (const pct of [-20, -5, 0, 5, 10, 12.5, 20, 50]) {
+    const saved = JSON.parse(JSON.stringify(B.saetter3(pct)));
+    assert.deepEqual(B.saetterScale(saved), { pct, exact: true }, String(pct));
+  }
+  assert.equal(B.saetterScale(B.preset('framed')), null);
+  const edited = { ...B.saetter3(10), separatorHeight: 2.5 };
+  assert.deepEqual(B.saetterScale(edited), { pct: 10, exact: false });
+});
+test('every scaled SÆTTER 3 fits the schema limits for saved shelves', () => {
+  const schema = require('../shared/schema/shelf-v1.json').properties;
+  for (const pct of [-20, 0, 50]) {
+    const s = B.saetter3(pct);
+    assert.ok(s.width >= schema.width.minimum && s.width <= schema.width.maximum);
+    assert.ok(s.height >= schema.height.minimum && s.height <= schema.height.maximum);
+    assert.ok(s.depth >= schema.depth.minimum && s.depth <= schema.depth.maximum);
+    assert.ok(s.backThickness >= schema.backThickness.minimum);
+  }
+});

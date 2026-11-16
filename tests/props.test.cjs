@@ -189,3 +189,28 @@ test('an underside click lands on the shelf below, not on the board that was cli
   const top = P.fitProp(s, 'mug', { x: 20, y: l1.y + .5 }, []);
   assert.ok(top.ok && top.level === 1, 'a click on the board top still means that board');
 });
+
+// ---- cup and mug summary for the SÆTTER scale control ----
+test('cupSummary counts the cups and mugs that fit inside a compartment at 0, +10 and +20 percent', () => {
+  const at = pct => P.cupSummary(B.saetter3(pct));
+  assert.equal(P.CUP_KINDS.length, 7);
+  assert.deepEqual([0, 10, 20].map(p => at(p).fit), [4, 5, 5]);
+  assert.deepEqual(at(0).missing, ['Cappuccino cup & saucer', 'Large mug', 'Latte glass']);
+  assert.deepEqual(at(10).missing, ['Cappuccino cup & saucer', 'Latte glass']);
+  assert.ok(at(10).names.includes('Large mug'));
+  assert.equal(at(10).total, 7);
+});
+test('cupSummary agrees with fitDetail for every cup at every scale and never shrinks as the shelf grows', () => {
+  let last = 0;
+  for (let pct = -20; pct <= 50; pct += 5) {
+    const d = B.saetter3(pct), r = P.cupSummary(d);
+    assert.equal(r.fit, P.CUP_KINDS.filter(k => P.fitDetail(d, k).where === 'compartment').length, String(pct));
+    assert.equal(r.fit + r.missing.length, r.total);
+    assert.ok(r.fit >= last, `fit count drops at ${pct}`);
+    last = r.fit;
+  }
+  assert.equal(P.cupSummary(B.saetter3(50)).fit, 7);
+});
+test('the fit of a comparison model follows the same scale', () => {
+  assert.ok(P.cupSummary(B.saetterVariant('5', 20)).fit >= P.cupSummary(B.saetterVariant('5', 0)).fit);
+});

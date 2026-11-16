@@ -11,7 +11,11 @@ window.BookshelfBuilder = (() => {
   let items = [], selected = null, person = false, itemsOn = null, itemSeq = 0;
   const Scene = window.BookshelfScene, Props = window.BookshelfProps;
   // Comparison preview of another real SÆTTER size. Never saved, never used for fit checks.
-  const displayDesign = () => draft.tab === 'saetter' && variant && variant !== '3' ? B.saetterVariant(variant) : draft.design;
+  // The comparison models use the same scale as the design, so the cup fit labels answer "what if I order this one 10 % bigger".
+  const scaleInfo = () => draft.tab === 'saetter' ? B.saetterScale(draft.design) : null;
+  const scalePct = () => scaleInfo()?.pct ?? 0;
+  const displayDesign = () => draft.tab === 'saetter' && variant && variant !== '3' ? B.saetterVariant(variant, scalePct()) : draft.design;
+  const pctText = p => p === 0 ? '0 %' : `${p > 0 ? '+' : '−'}${B.round(Math.abs(p))} %`;
   const room = () => api.rooms().find(r => r.id === draft.target.roomId) || api.rooms()[0];
   const standalone = () => api.mode === 'standalone';
   // A wall is a rendering/fit context, independent of room membership.
@@ -129,12 +133,17 @@ window.BookshelfBuilder = (() => {
   };
   const propsFoot = () => `<div class="bs-props-foot"><p class="bs-prop-help" id="bsPropHelp" role="status"></p><button type="button" class="btn light small" data-bs-action="clearItems">Clear items</button></div>`;
   const sizeHtml = undo => `<div class="bs-size" id="bsSize" role="group" aria-label="${draft.tab === 'saetter' ? 'Compare models' : 'Size'}" data-group>${draft.tab === 'saetter' ? `<span class="bs-size-label">Compare models <em class="bs-badge">Preview only · not saved</em></span><span class="bs-chips">${B.SAETTER_VARIANTS.map(v => `<button type="button" class="btn light small" data-bs-variant="${v.id}" aria-pressed="false">${v.label}</button>`).join('')}</span>` : `<span class="bs-size-label">Size</span><span class="bs-chips">${[-10, -5, 5, 10].map(p => `<button type="button" class="btn light small" data-bs-size="${p}" aria-label="Make the bookshelf ${Math.abs(p)} percent ${p < 0 ? 'smaller' : 'bigger'}">${p < 0 ? '−' : '+'}${Math.abs(p)}%</button>`).join('')}</span>`}${undo ? `<button class="btn light small" data-bs-action="undo" ${history.length ? '' : 'disabled'}>Undo</button>` : ''}</div>`;
+  const scaleHtml = () => draft.tab !== 'saetter' ? '' : `<div class="bs-scale" id="bsScale" role="group" aria-labelledby="bsScaleLabel" data-group>
+      <span class="bs-size-label" id="bsScaleLabel">Scale: make it bigger <em class="bs-scale-badge">Same number of compartments</em></span>
+      <span class="bs-chips">${[0, 5, 10, 15, 20].map(p => `<button type="button" class="btn light small" data-bs-scale="${p}" aria-pressed="false" aria-label="${p ? `Make it ${p} percent bigger` : 'Original size'}">${p ? `+${p}%` : 'Original'}</button>`).join('')}</span>
+      <label class="bs-scale-field"><span>Any percentage</span><input type="number" inputmode="decimal" min="${B.SAETTER_SCALE.min}" max="${B.SAETTER_SCALE.max}" step="1" data-bs-scale-input aria-label="Scale in percent, ${B.SAETTER_SCALE.min} to ${B.SAETTER_SCALE.max}" aria-describedby="bsScaleInfo bsScaleFit"><b aria-hidden="true">%</b></label>
+      <p class="bs-scale-info" id="bsScaleInfo"></p><p class="bs-scale-fit" id="bsScaleFit" role="status"></p></div>`;
   const levelsHtml = () => `${draft.tab === 'custom' ? '<div class="bs-presets"><button class="btn light small" data-preset="framed">Framed</button><button class="btn light small" data-preset="staggered">Staggered</button><button class="btn light small" data-preset="stepped">Stepped edges</button></div>' : ''}
         <div class="sec-head"><h3>Individual shelves · bottom to top</h3><button class="btn light small" data-bs-action="addLevel">+ Shelf</button></div><div id="bsLevels"></div>
         <p class="note">Select a board in the drawing or 3D view. Drag a divider in the drawing, or enter exact values below. All editing values are cm.</p>
         <p class="note bs-edit-feedback" id="bsEditFeedback" role="status"></p><div id="bsRowEditor"></div>`;
   const aiHtml = () => `<h3>AI shelf edit</h3><p class="note">Only the current shelf geometry and your prompt are sent for a proposal. Nothing changes until you apply it.</p><button class="btn light" data-bs-action="propose" ${api.canPropose?.() ? '' : 'disabled'}>Request AI preview</button><p class="note" id="bsProposalStatus" role="status">${api.canPropose?.() ? '' : 'AI edits are unavailable until sign-in, model configuration and shared validation are ready.'}</p><div id="bsProposal"></div>`;
-  const planHtml = () => { const s = draft.design; return `<h3>Workshop plan</h3><p class="note">${s.template === 'saetter3' ? 'Inferred square-cut shelves, back and paired short separators, as shown in the 3D view, drawing and list. Construction and material thicknesses are estimates, not manufacturer plans.' : 'Square-cut boards, full depth. Dividers fit between horizontal shelves with butt joints. The drawing and list use the same geometry as 3D.'}</p>
+  const planHtml = () => { const s = draft.design; return `<h3>Workshop plan</h3><p class="note">${s.template === 'saetter3' ? 'Inferred square-cut shelves, back and paired short separators, as shown in the 3D view, drawing and list. Construction and material thicknesses are estimates, not manufacturer plans.<span id="bsPlanScale"></span>' : 'Square-cut boards, full depth. Dividers fit between horizontal shelves with butt joints. The drawing and list use the same geometry as 3D.'}</p>
         <div id="bsCutSummary"></div><div class="bs-table-wrap"><table class="bs-cut"><thead><tr><th>Board</th><th>Length × depth × thickness, mm</th></tr></thead><tbody id="bsCutList"></tbody></table></div>
         <div class="bs-save-actions"><button class="btn light" data-bs-action="csv">Download cut list</button><button class="btn light" data-bs-action="plan">Download build plan</button><button class="btn light" data-bs-action="print">Print / save PDF</button><button class="btn light" data-bs-action="json">Export design JSON</button></div>`; };
   const storageNote = () => `<p class="note">${api.cloudWorkspace?.() ? 'Cloud edits stay in this tab until saved through Private designs. Export a backup before leaving.' : standalone() ? 'Drafts autosave in this browser. Use My designs to reopen saved shelves, or export JSON as a backup.' : 'Drafts autosave in this browser. Saved designs are in My pieces, versions, and full-plan backups.'}</p>
@@ -143,7 +152,7 @@ window.BookshelfBuilder = (() => {
   // Standalone page: a calm first screen, everything else under "More details".
   function simpleTemplate() {
     const s = draft.design, saet = draft.tab === 'saetter';
-    const sizeFields = `<div class="row3">${numeric('width', 'Width, cm', s.width, 20)}${numeric('height', 'Height, cm', s.height, 20, 800)}${numeric('depth', 'Depth, cm', s.depth, 10, 100)}</div>`;
+    const sizeFields = `<div class="row3">${numeric('width', 'Width, cm', s.width, 20)}${numeric('height', 'Height, cm', s.height, 20, 800)}${numeric('depth', 'Depth, cm', s.depth, s.template === 'saetter3' ? 5 : 10, 100)}</div>`;
     return `<div class="bs-heading"><div><h1 tabindex="-1">Bookshelf builder</h1><p class="note">Pick a shelf, enter your wall, and see how it looks at real size.</p></div></div>
       <div class="bs-layout bs-simple" id="bs-tabpanel" role="tabpanel" aria-labelledby="bs-tab-${draft.tab}" data-sheet="${sheet || ''}">
       <aside class="bs-controls">
@@ -152,7 +161,7 @@ window.BookshelfBuilder = (() => {
         <h2>2. Your wall</h2>
         <div class="row2">${numeric('wallWidth', 'Wall width, cm', draft.wall.widthCm, 10, 2000)}${numeric('wallHeight', 'Wall height, cm', draft.wall.heightCm, 10, 2000)}</div>
         <h2>3. ${saet ? 'SÆTTER 3 size' : 'Bookshelf size'}</h2>
-        ${saet ? `<p class="bs-fixed" id="bsFixedSize">Your SÆTTER 3 design: ${fmt(s.width)} × ${fmt(s.height)} × ${fmt(s.depth)} cm. Compare other models under the 3D view; the comparison is not saved.</p>` : `${sizeFields}<p class="note">Or make it bigger or smaller with the Size buttons under the 3D view.</p>`}
+        ${saet ? `<p class="bs-fixed" id="bsFixedSize">Your SÆTTER 3 design: ${fmt(s.width)} × ${fmt(s.height)} × ${fmt(s.depth)} cm. Use the Scale buttons above the 3D view to make it bigger; the model comparison is not saved.</p>` : `${sizeFields}<p class="note">Or make it bigger or smaller with the Size buttons under the 3D view.</p>`}
         <h2>4. Color</h2>${field('color', 'Wood color', draft.color, 'type="color"')}
         <h2>5. Save</h2>
         <div class="bs-save-actions"><button class="btn bs-save" data-bs-action="save">Save design</button></div><p class="note" id="bsSaveNote"></p>
@@ -174,7 +183,7 @@ window.BookshelfBuilder = (() => {
       </aside>
       <div class="bs-preview">
         <p class="bs-wallname" id="bsPreviewTitle"></p>
-        ${propsHtml()}${propsFoot()}<div id="bs3d" role="img" aria-label="Orbitable 3D bookshelf against the selected wall"></div>
+        ${scaleHtml()}${propsHtml()}${propsFoot()}<div id="bs3d" role="img" aria-label="Orbitable 3D bookshelf against the selected wall"></div>
         <div class="bs-viewbar"><div class="bs-seg" role="group" aria-label="3D view" data-group><button type="button" class="btn light small" data-bs-view="close" aria-pressed="true">Close-up</button><button type="button" class="btn light small" data-bs-view="wall" aria-pressed="false">Whole wall</button></div><p class="bs-readout" id="bsReadout" role="status"></p></div>
         <p class="bs-note-grey" id="bsPreviewNote"></p>
         <div class="bs-tools">${sizeHtml(true)}</div>
@@ -195,14 +204,14 @@ window.BookshelfBuilder = (() => {
         <p class="note" id="bsWallNote">Ceiling ${r.height} cm. Wall sides match the floor plan. Offset is from its left corner (north/south) or top corner (east/west).</p>
         <div class="row3">${numeric('offset', 'Wall offset, cm', draft.target.offset, 0, 1000)}${numeric('gap', 'Wall gap, cm', draft.target.gap, 0, 1000)}${numeric('elev', 'Above floor, cm', draft.target.elev, 0, 1000)}</div>
         <h2>2. Shape the bookshelf</h2>${field('name', 'Design name', draft.name, 'maxlength="100"')}
-        <div class="row3">${numeric('width', 'Width, cm', s.width, 20)}${numeric('height', 'Height, cm', s.height, 20, 800)}${numeric('depth', 'Depth, cm', s.depth, 10, 100)}</div>
+        <div class="row3">${numeric('width', 'Width, cm', s.width, 20)}${numeric('height', 'Height, cm', s.height, 20, 800)}${numeric('depth', 'Depth, cm', s.depth, s.template === 'saetter3' ? 5 : 10, 100)}</div>
         <div class="row2">${numeric('thickness', 'Board thickness, cm', s.thickness, .9, 6)}${field('color', 'Wood / finish color', draft.color, 'type="color"')}</div>
         ${s.template === 'saetter3' ? `<div class="row2">${numeric('separatorHeight', 'Separator height, cm (inferred)', s.separatorHeight, .1, 100)}${numeric('backThickness', 'Back thickness, cm (inferred)', s.backThickness, .1, 10)}</div>` : ''}
         <p class="note">Width and height changes scale the layout. Board thickness stays exact.</p>
         ${levelsHtml()}
       </aside><div class="bs-preview"><div class="bs-preview-head"><h2 id="bsPreviewTitle"></h2><div class="btnrow"><button class="btn light small" data-bs-action="undo" ${history.length ? '' : 'disabled'}>Undo</button><button class="btn light small" data-bs-action="resetCamera">Reset 3D view</button></div></div>
         <div class="bs-viewbar"><div class="bs-seg" role="group" aria-label="3D view"><button type="button" class="btn light small" data-bs-view="close" aria-pressed="true">Close-up</button><button type="button" class="btn light small" data-bs-view="wall" aria-pressed="false">Whole wall</button></div><label class="bs-switch"><input type="checkbox" data-bs-sizes ${showSizes ? 'checked' : ''}> Show sizes</label></div>
-        ${propsHtml()}${propsFoot()}<div id="bs3d" role="img" aria-label="Orbitable 3D bookshelf against the selected wall"></div>${sizeHtml(false)}
+        ${scaleHtml()}${propsHtml()}${propsFoot()}<div id="bs3d" role="img" aria-label="Orbitable 3D bookshelf against the selected wall"></div>${sizeHtml(false)}
         <p class="bs-readout" id="bsReadout" role="status"></p><p class="bs-note-grey" id="bsPreviewNote"></p>
         <p class="note">Drag to orbit · scroll to zoom · click a board to edit its level, or pick an item above and click to place it</p>
         <div id="bsDrawing" class="bs-drawing"></div><div id="bsProblems" aria-live="polite"></div>
@@ -258,8 +267,9 @@ window.BookshelfBuilder = (() => {
     host.querySelectorAll('[data-bs-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.bsView === view)));
     host.querySelectorAll('[data-bs-variant]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.bsVariant === (variant || '3'))));
     const shown = displayDesign(), previewing = shown !== s, dims = d => `${fmt(d.width)} × ${fmt(d.height)} × ${fmt(d.depth)} cm`;
-    const fixed = host.querySelector('#bsFixedSize'); if (fixed) fixed.textContent = `Your SÆTTER 3 design: ${dims(s)}. Compare other models under the 3D view; the comparison is not saved.`;
-    host.querySelector('#bsReadout').textContent = previewing ? `Comparison preview ${B.SAETTER_VARIANTS.find(v => v.id === variant).label}: ${dims(shown)}. Your design and fit checks stay at ${dims(s)}.` : `Bookshelf ${dims(s)} (width × height × depth)`;
+    const fixed = host.querySelector('#bsFixedSize'); if (fixed) fixed.textContent = `Your SÆTTER 3 design: ${dims(s)}${scaleLabel()}. Use the Scale buttons above the 3D view to make it bigger; the model comparison is not saved.`;
+    refreshScale(s, shown, previewing);
+    host.querySelector('#bsReadout').textContent = previewing ? `Comparison preview ${B.SAETTER_VARIANTS.find(v => v.id === variant).label}: ${dims(shown)}. Your design and fit checks stay at ${dims(s)}.` : `Bookshelf ${dims(s)} (width × height × depth)${scaleLabel()}`;
     const over = previewing ? (standalone() ? [...(draft.target.offset + shown.width > draft.wall.widthCm ? ['wider than the wall'] : []), ...(draft.target.elev + shown.height > draft.wall.heightCm ? ['taller than the wall'] : [])] : B.fit(shown, room(), draft.target).length ? ['too big for this spot'] : []) : [];
     host.querySelector('#bsPreviewNote').textContent = over.length ? `At this comparison size it would be ${over.join(' and ')}. Preview only.` : '';
     host.querySelector('#bsPreviewTitle').textContent = standalone() ? `Your wall: ${fmt(draft.wall.widthCm)} × ${fmt(draft.wall.heightCm)} cm` : getWall().name;
@@ -279,6 +289,30 @@ window.BookshelfBuilder = (() => {
     host.querySelector('[data-bs-action="undo"]').disabled = !history.length;
     host.querySelector('[data-bs-action="propose"]').disabled = !api.canPropose?.();
     if (api.canPropose?.() && host.querySelector('#bsProposalStatus').textContent.startsWith('AI edits are unavailable')) host.querySelector('#bsProposalStatus').textContent = '';
+  }
+  const planScaleNote = s => { const sc = B.saetterScale(s); return sc && (sc.pct !== 0 || !sc.exact) ? ` Scaled ${pctText(sc.pct)}${sc.exact ? '' : ' (about)'}: custom size, not a SÆTTER catalogue size. The compartment openings are enlarged; board, back and separator thickness are unchanged, so the numbers in the table above are for this custom size.` : ''; };
+  const scaleLabel = () => { const sc = scaleInfo(); return sc && (sc.pct !== 0 || !sc.exact) ? ` · ${sc.exact ? 'custom size' : 'edited, about'} ${pctText(sc.pct)}` : ''; };
+  // Scale control text: size, compartments, honesty note, and how many cups and mugs fit (same fit function as the labels).
+  function refreshScale(s, shown, previewing) {
+    const box = host.querySelector('#bsScale'); if (!box) return;
+    const sc = scaleInfo() || { pct: 0, exact: true }, pct = sc.pct, dims = d => `${fmt(d.width)} × ${fmt(d.height)} × ${fmt(d.depth)} cm`;
+    box.querySelectorAll('[data-bs-scale]').forEach(b => b.setAttribute('aria-pressed', String(sc.exact && +b.dataset.bsScale === pct)));
+    const input = box.querySelector('[data-bs-scale-input]'); if (input !== document.activeElement) input.value = pct;
+    const one = n => fmt(Math.round(n * 10) / 10), cell = d => `${one(d.levels[0].dividers.length > 1 ? d.levels[0].dividers[1] - d.levels[0].dividers[0] - d.thickness : 0)} × ${one(d.levels[1].y - d.levels[0].y - d.thickness)} × ${one(d.depth - d.backThickness)} cm`;
+    const custom = !sc.exact || pct !== 0;
+    box.querySelector('#bsScaleInfo').textContent = `Scale ${pctText(pct)}${sc.exact ? '' : ' (about, boards edited by hand)'}: outer size ${dims(s)}; each compartment ${cell(s)} inside. ${custom ? 'Custom size, not a SÆTTER catalogue size: the openings grow, board, back and separator thickness stay as in the original.' : 'This is the real SÆTTER 3 size.'}`;
+    if (!Props || !Props.cupSummary) { box.querySelector('#bsScaleFit').textContent = ''; return; }
+    const r = Props.cupSummary(shown), who = previewing ? `${B.SAETTER_VARIANTS.find(v => v.id === variant).label} at ${pctText(pct)}` : !custom ? 'At the original size' : `At ${pctText(pct)}`;
+    box.querySelector('#bsScaleFit').textContent = `${who}: ${r.fit === r.total ? `all ${r.total}` : `${r.fit} of ${r.total}`} cups and mugs fit inside a compartment${r.stickOut ? ` (${r.stickOut} stick out at the front)` : ''}${r.missing.length ? `. Do not fit: ${r.missing.join(', ')}.` : '.'}`;
+    const plan = host.querySelector('#bsPlanScale'); if (plan) plan.textContent = custom ? ` Scaled ${pctText(pct)}: custom size, not a SÆTTER catalogue size.` : '';
+  }
+  function applyScale(raw) {
+    const pct = Number(raw);
+    if (raw === '' || raw === null || !Number.isFinite(pct) || pct < B.SAETTER_SCALE.min || pct > B.SAETTER_SCALE.max) { api.toast(`Enter a percentage from ${B.SAETTER_SCALE.min} to +${B.SAETTER_SCALE.max}.`); return refresh(); }
+    const rounded = B.round(pct), cur = B.saetterScale(draft.design);
+    if (cur && cur.exact && cur.pct === rounded) return refresh();
+    checkpoint(); draft.design = B.saetter3(rounded); changed(false, true);
+    api.toast(`Scale ${pctText(rounded)}: ${fmt(draft.design.width)} × ${fmt(draft.design.height)} × ${fmt(draft.design.depth)} cm${cur && !cur.exact ? '. Boards you edited by hand were reset to the SÆTTER 3 sizes' : ''}. Undo reverts.`);
   }
   function update3D(reset = false) {
     const el = host.querySelector('#bs3d');
@@ -376,7 +410,7 @@ window.BookshelfBuilder = (() => {
   }
   function buildPlan() {
     const s = draft.design, wall = getWall();
-    return `<!doctype html><html lang="en"><meta charset="utf-8"><title>${esc(draft.name)} · build plan</title><style>body{font:14px system-ui;color:#222;max-width:900px;margin:30px auto;padding:0 20px}svg{width:100%;max-height:480px}table{border-collapse:collapse;width:100%;font-size:12px}td,th{border:1px solid #ccc;padding:6px;text-align:left}tr{break-inside:avoid}p{line-height:1.5}@media print{button{display:none}body{margin:0}thead{display:table-header-group}}</style><button onclick="window.print()">Print / save PDF</button><h1>${esc(draft.name)}</h1><p>${mm(s.width)} × ${mm(s.height)} × ${mm(s.depth)} mm overall · ${mm(s.thickness)} mm timber<br>${esc(wall.name)}; wall ${mm(wall.width)} × ${mm(wall.height)} mm, color ${esc(wall.color)}; offset ${mm(draft.target.offset)} mm, wall gap ${mm(draft.target.gap)} mm, base ${mm(draft.target.elev)} mm above floor.</p>${drawing(false)}<p>Front elevation. Drawing labels are board IDs; dimensions on the drawing are cm. Table dimensions are mm. X = board left edge from bookshelf left; Y = underside from bookshelf base. Shelf lengths run horizontally; divider lengths run vertically.</p><table><thead><tr><th>Board</th><th>Part</th><th>Length × depth × thickness, mm</th><th>X, mm</th><th>Y, mm</th></tr></thead><tbody>${B.boards(s).map(b => `<tr><td>${b.id}</td><td>${b.kind}</td><td>${mm(b.length)} × ${mm(b.depth)} × ${mm(b.thickness)}</td><td>${mm(b.x)}</td><td>${mm(b.y)}</td></tr>`).join('')}</tbody></table><p>${s.template === 'saetter3' ? `SÆTTER 3-inspired approximation: board thickness, ${mm(s.backThickness)} mm back and ${mm(s.separatorHeight)} mm short separators are inferred; this is not the manufacturer's construction plan. Board depth excludes the back. Back dimensions are height × width × thickness. The initial reference dimensions are 455 × 406 × 105 mm with nominal 100 × 120 × 100 mm compartments.` : 'Assembly assumption: square-cut full-depth boards, with dividers butt-jointed between horizontal shelves. No back panel.'} Joint hardware and fastening locations must be chosen separately. Sizes exclude saw kerf and machining allowances. Measure actual wall and board thickness before cutting; review sag, stability and wall anchoring for the selected wood and loads.</p>${B.validate(s).warnings.map(w => `<p>${esc(w)}</p>`).join('')}</html>`;
+    return `<!doctype html><html lang="en"><meta charset="utf-8"><title>${esc(draft.name)} · build plan</title><style>body{font:14px system-ui;color:#222;max-width:900px;margin:30px auto;padding:0 20px}svg{width:100%;max-height:480px}table{border-collapse:collapse;width:100%;font-size:12px}td,th{border:1px solid #ccc;padding:6px;text-align:left}tr{break-inside:avoid}p{line-height:1.5}@media print{button{display:none}body{margin:0}thead{display:table-header-group}}</style><button onclick="window.print()">Print / save PDF</button><h1>${esc(draft.name)}</h1><p>${mm(s.width)} × ${mm(s.height)} × ${mm(s.depth)} mm overall · ${mm(s.thickness)} mm timber<br>${esc(wall.name)}; wall ${mm(wall.width)} × ${mm(wall.height)} mm, color ${esc(wall.color)}; offset ${mm(draft.target.offset)} mm, wall gap ${mm(draft.target.gap)} mm, base ${mm(draft.target.elev)} mm above floor.</p>${drawing(false)}<p>Front elevation. Drawing labels are board IDs; dimensions on the drawing are cm. Table dimensions are mm. X = board left edge from bookshelf left; Y = underside from bookshelf base. Shelf lengths run horizontally; divider lengths run vertically.</p><table><thead><tr><th>Board</th><th>Part</th><th>Length × depth × thickness, mm</th><th>X, mm</th><th>Y, mm</th></tr></thead><tbody>${B.boards(s).map(b => `<tr><td>${b.id}</td><td>${b.kind}</td><td>${mm(b.length)} × ${mm(b.depth)} × ${mm(b.thickness)}</td><td>${mm(b.x)}</td><td>${mm(b.y)}</td></tr>`).join('')}</tbody></table><p>${s.template === 'saetter3' ? `SÆTTER 3-inspired approximation: board thickness, ${mm(s.backThickness)} mm back and ${mm(s.separatorHeight)} mm short separators are inferred; this is not the manufacturer's construction plan. Board depth excludes the back. Back dimensions are height × width × thickness. The initial reference dimensions are 455 × 406 × 105 mm with nominal 100 × 120 × 100 mm compartments.${planScaleNote(s)}` : 'Assembly assumption: square-cut full-depth boards, with dividers butt-jointed between horizontal shelves. No back panel.'} Joint hardware and fastening locations must be chosen separately. Sizes exclude saw kerf and machining allowances. Measure actual wall and board thickness before cutting; review sag, stability and wall anchoring for the selected wood and loads.</p>${B.validate(s).warnings.map(w => `<p>${esc(w)}</p>`).join('')}</html>`;
   }
   function init(element, bridge) {
     host = element; api = bridge;
@@ -401,6 +435,7 @@ window.BookshelfBuilder = (() => {
     host.addEventListener('change', e => {
       const t = e.target, key = t.dataset.bs;
       if (t.matches('[data-bs-sizes]')) { showSizes = t.checked; update3D(false); return; }
+      if (t.matches('[data-bs-scale-input]')) return applyScale(t.value.trim());
       if (!key) return;
       if (key === 'saved') { const p = api.pieces().find(p => p.id === t.value); if (p) open(p, api.findPlacement(p.id)); return; }
       if (t.matches('input[data-bs]')) {
@@ -427,6 +462,7 @@ window.BookshelfBuilder = (() => {
       if (t.dataset.bsPerson !== undefined) { person = !person; if (person) selected = null; help(person ? 'A 175 cm person stands next to the furniture.' : 'Person hidden.'); update3D(true); return; }
       if (t.dataset.bsView) { view = t.dataset.bsView; refresh(); return update3D(true); }
       if (t.dataset.bsVariant) { variant = t.dataset.bsVariant === '3' ? null : t.dataset.bsVariant; refresh(); return update3D(true); }
+      if (t.dataset.bsScale !== undefined) return applyScale(t.dataset.bsScale);
       if (t.dataset.bsSize) {
         const step = Scene.applySizeStep(B, draft.design, +t.dataset.bsSize);
         if (step.clamped || !step.changed) return api.toast(`Size limit reached: width and height stay between ${Scene.LIMITS.width[0]} and ${Scene.LIMITS.width[1]} cm, depth between ${Scene.LIMITS.depth[0]} and ${Scene.LIMITS.depth[1]} cm.`);

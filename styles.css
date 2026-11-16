@@ -336,7 +336,14 @@ dialog::backdrop { background: rgba(29,33,36,.55); }
 .bs-size { margin: 10px 0 4px; }
 .bs-size-label { font-size: 13px; font-weight: 600; }
 .bs-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; }
-.bs-badge { font-style: normal; font-weight: 600; font-size: 11px; background: #EDEEEA; color: #4A524D; border-radius: 10px; padding: 2px 8px; margin-left: 6px; }
+.bs-scale { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.bs-scale-field { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
+.bs-scale-field input { width: 84px; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; font-size: 14px; min-height: 36px; }
+.bs-scale-field input:focus { border-color: var(--ink); outline: none; }
+body.bs-page .bs-scale-field input { min-height: 44px; }
+.bs-scale-info, .bs-scale-fit { flex: 1 1 100%; margin: 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.bs-scale-fit { font-size: 14px; font-weight: 600; color: var(--ink); }
+.bs-badge, .bs-scale-badge { font-style: normal; font-weight: 600; font-size: 11px; background: #EDEEEA; color: #4A524D; border-radius: 10px; padding: 2px 8px; margin-left: 6px; }
 .bs-readout { margin: 6px 0 2px; font-size: 13px; font-variant-numeric: tabular-nums; }
 .bs-note-grey { margin: 0 0 6px; font-size: 12px; color: #6B716C; }
 .bs-note-grey:empty { display: none; }
@@ -420,6 +427,10 @@ body.bs-page .toast { bottom: 84px; z-index: 60; }
   .bs-cards { gap: 8px; }
   .bs-card svg { max-width: 100px; }
   .bs-tools .bs-size { display: none; }
+  /* On a phone the 3D view stays near the top: the Scale card sits under it, before the size tools. */
+  .bs-simple .bs-preview { display: flex; flex-direction: column; }
+  .bs-simple .bs-preview > .bs-scale { order: 1; margin: 12px 0 0; }
+  .bs-simple .bs-preview > .bs-tools, .bs-simple .bs-preview > #bsProblems, .bs-simple .bs-preview > .bs-hint { order: 2; }
   .bs-simple[data-sheet="size"] .bs-size { display: flex; position: fixed; left: 0; right: 0; bottom: calc(64px + env(safe-area-inset-bottom)); z-index: 45; margin: 0; padding: 12px 14px; background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -10px 28px rgba(0, 0, 0, .16); }
   .bs-simple[data-sheet="size"] .bs-size { flex-wrap: wrap; justify-content: space-between; }
   .bs-simple .bs-readout { text-align: left; }
